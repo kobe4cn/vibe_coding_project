@@ -1,0 +1,11 @@
+# .cursorrules
+rules:
+  - "@rust/main"          # Core Rust standards
+  - "@rust/axum"          # Web development with Axum
+  - "@rust/database"      # Database patterns with SQLx
+  - "@rust/cli"           # CLI applications with clap
+  - "@rust/concurrency"   # Async and concurrency patterns
+  - "@rust/configuration" # Configuration management patterns
+  - "@rust/observability" # Metrics, tracing, and health checks
+  - "@rust/utilities"     # Utility libraries and CLI tools
+  - "@rust/workspace"     # Multi-crate workspace organization

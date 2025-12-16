@@ -1,0 +1,5 @@
+[test]
+# Run tests sequentially to avoid database race conditions
+# Tests share the same test database and cleanup can interfere with parallel execution
+threads = 1
+

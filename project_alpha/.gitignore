@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+target/
+
+# Build output
+dist/
+*.pdb
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime
+uploads/
+*.lock
+!Cargo.lock
+
+# Test
+coverage/
+.nyc_output/
+
