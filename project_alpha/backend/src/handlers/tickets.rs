@@ -315,10 +315,7 @@ pub async fn update_status(
 
     // Validate resolution for completed status
     if target_status == TicketStatus::Completed
-        && req
-            .resolution
-            .as_ref()
-            .is_none_or(|r| r.trim().is_empty())
+        && req.resolution.as_ref().is_none_or(|r| r.trim().is_empty())
     {
         return Err(AppError::Validation(
             "Resolution is required when completing a ticket".into(),
