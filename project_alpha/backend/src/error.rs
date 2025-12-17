@@ -100,11 +100,9 @@ impl IntoResponse for AppError {
             "message": message
         });
 
-        if let Some(extra) = extra {
-            if let serde_json::Value::Object(map) = extra {
-                for (k, v) in map {
-                    body[k] = v;
-                }
+        if let Some(serde_json::Value::Object(map)) = extra {
+            for (k, v) in map {
+                body[k] = v;
             }
         }
 

@@ -5,6 +5,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TicketCreatePage } from './TicketCreatePage';
 import * as useTicketsHook from '@/hooks/useTickets';
+import type { UseMutationResult } from '@tanstack/react-query';
+import type { TicketWithTags, CreateTicketRequest } from '@/types';
 
 vi.mock('@/hooks/useTickets');
 vi.mock('react-router-dom', async () => {
@@ -35,7 +37,7 @@ describe('TicketCreatePage', () => {
     vi.mocked(useTicketsHook.useCreateTicket).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<TicketWithTags, Error, CreateTicketRequest>> as UseMutationResult<TicketWithTags, Error, CreateTicketRequest>);
 
     render(
       <BrowserRouter>
@@ -58,7 +60,7 @@ describe('TicketCreatePage', () => {
     vi.mocked(useTicketsHook.useCreateTicket).mockReturnValue({
       mutateAsync: mockCreate,
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<TicketWithTags, Error, CreateTicketRequest>> as UseMutationResult<TicketWithTags, Error, CreateTicketRequest>);
 
     render(
       <BrowserRouter>
@@ -92,7 +94,7 @@ describe('TicketCreatePage', () => {
     vi.mocked(useTicketsHook.useCreateTicket).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<TicketWithTags, Error, CreateTicketRequest>> as UseMutationResult<TicketWithTags, Error, CreateTicketRequest>);
 
     render(
       <BrowserRouter>
@@ -109,7 +111,7 @@ describe('TicketCreatePage', () => {
     vi.mocked(useTicketsHook.useCreateTicket).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: true,
-    } as any);
+    } as Partial<UseMutationResult<TicketWithTags, Error, CreateTicketRequest>> as UseMutationResult<TicketWithTags, Error, CreateTicketRequest>);
 
     render(
       <BrowserRouter>
@@ -126,7 +128,7 @@ describe('TicketCreatePage', () => {
     vi.mocked(useTicketsHook.useCreateTicket).mockReturnValue({
       mutateAsync: mockCreate,
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<TicketWithTags, Error, CreateTicketRequest>> as UseMutationResult<TicketWithTags, Error, CreateTicketRequest>);
 
     render(
       <BrowserRouter>

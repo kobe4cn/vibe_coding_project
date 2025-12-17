@@ -4,7 +4,7 @@ import { server } from '@/test/mocks/server';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch as any;
+global.fetch = mockFetch as typeof fetch;
 
 describe('ApiClient', () => {
   // Disable MSW for these tests since we're mocking fetch directly

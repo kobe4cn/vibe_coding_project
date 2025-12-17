@@ -5,6 +5,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TicketsPage } from './TicketsPage';
 import * as useTicketsHook from '@/hooks/useTickets';
+import type { UseQueryResult } from '@tanstack/react-query';
+import type { PaginatedResponse, TicketWithTags } from '@/types';
 
 vi.mock('@/hooks/useTickets');
 
@@ -62,7 +64,7 @@ describe('TicketsPage', () => {
       data: mockTickets,
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -80,7 +82,7 @@ describe('TicketsPage', () => {
       data: undefined,
       isLoading: true,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -96,8 +98,8 @@ describe('TicketsPage', () => {
     vi.mocked(useTicketsHook.useTickets).mockReturnValue({
       data: undefined,
       isLoading: false,
-      error: { message: 'Network error' } as any,
-    } as any);
+      error: { message: 'Network error' } as Error,
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -114,7 +116,7 @@ describe('TicketsPage', () => {
       data: mockTickets,
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -132,7 +134,7 @@ describe('TicketsPage', () => {
       data: { ...mockTickets, data: [], total: 0 },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -215,7 +217,7 @@ describe('TicketsPage', () => {
       data: { ...mockTickets, total_pages: 3, page: 2 },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -234,7 +236,7 @@ describe('TicketsPage', () => {
       data: { ...mockTickets, total_pages: 2, page: 1 },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>
@@ -252,7 +254,7 @@ describe('TicketsPage', () => {
       data: { ...mockTickets, total_pages: 2, page: 2 },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<PaginatedResponse<TicketWithTags>>> as UseQueryResult<PaginatedResponse<TicketWithTags>>);
 
     render(
       <BrowserRouter>

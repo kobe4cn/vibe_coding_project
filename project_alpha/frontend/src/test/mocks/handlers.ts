@@ -110,7 +110,7 @@ export const handlers = [
       id: 'ticket-new',
       title: body.title,
       description: body.description || null,
-      priority: (body.priority as any) || 'medium',
+      priority: (body.priority as 'low' | 'medium' | 'high' | 'urgent') || 'medium',
       status: 'open',
       resolution: null,
       completed_at: null,

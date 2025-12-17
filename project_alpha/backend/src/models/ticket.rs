@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::error::{AppError, Result};
@@ -25,13 +26,7 @@ impl TicketStatus {
     }
 
     pub fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "open" => Ok(TicketStatus::Open),
-            "in_progress" => Ok(TicketStatus::InProgress),
-            "completed" => Ok(TicketStatus::Completed),
-            "cancelled" => Ok(TicketStatus::Cancelled),
-            _ => Err(AppError::Validation(format!("Invalid status: {}", s))),
-        }
+        s.parse()
     }
 
     pub fn allowed_transitions(&self) -> Vec<TicketStatus> {
@@ -52,10 +47,25 @@ impl TicketStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl FromStr for TicketStatus {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "open" => Ok(TicketStatus::Open),
+            "in_progress" => Ok(TicketStatus::InProgress),
+            "completed" => Ok(TicketStatus::Completed),
+            "cancelled" => Ok(TicketStatus::Cancelled),
+            _ => Err(AppError::Validation(format!("Invalid status: {}", s))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Priority {
     Low,
+    #[default]
     Medium,
     High,
     Urgent,
@@ -72,6 +82,14 @@ impl Priority {
     }
 
     pub fn from_str(s: &str) -> Result<Self> {
+        s.parse()
+    }
+}
+
+impl FromStr for Priority {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "low" => Ok(Priority::Low),
             "medium" => Ok(Priority::Medium),
@@ -79,12 +97,6 @@ impl Priority {
             "urgent" => Ok(Priority::Urgent),
             _ => Err(AppError::Validation(format!("Invalid priority: {}", s))),
         }
-    }
-}
-
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::Medium
     }
 }
 

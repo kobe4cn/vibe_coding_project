@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TicketHistory } from './TicketHistory';
 import * as useTicketHistoryHook from '@/hooks/useTicketHistory';
+import type { UseQueryResult } from '@tanstack/react-query';
+import type { TicketHistoryResponse } from '@/types';
 
 vi.mock('@/hooks/useTicketHistory');
 
@@ -61,7 +63,7 @@ describe('TicketHistory', () => {
       data: undefined,
       isLoading: true,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -74,7 +76,7 @@ describe('TicketHistory', () => {
       data: undefined,
       isLoading: false,
       error: new Error('Failed to load'),
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -86,7 +88,7 @@ describe('TicketHistory', () => {
       data: { data: [], total: 0 },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -98,7 +100,7 @@ describe('TicketHistory', () => {
       data: mockHistoryData,
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -127,7 +129,7 @@ describe('TicketHistory', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -155,7 +157,7 @@ describe('TicketHistory', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -183,7 +185,7 @@ describe('TicketHistory', () => {
       },
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" />, { wrapper: createWrapper() });
 
@@ -198,7 +200,7 @@ describe('TicketHistory', () => {
       data: mockHistoryData,
       isLoading: false,
       error: null,
-    } as any);
+    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
 
     render(<TicketHistory ticketId="ticket-1" changeType="status" />, {
       wrapper: createWrapper(),

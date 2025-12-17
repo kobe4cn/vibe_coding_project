@@ -172,7 +172,7 @@ pub async fn update_ticket(
                 .resolution
                 .as_ref()
                 .or(current_ticket.resolution.as_ref());
-            if resolution.map_or(true, |r| r.trim().is_empty()) {
+            if resolution.is_none_or(|r| r.trim().is_empty()) {
                 return Err(AppError::Validation(
                     "Resolution is required when completing a ticket".into(),
                 ));
@@ -314,16 +314,15 @@ pub async fn update_status(
     }
 
     // Validate resolution for completed status
-    if target_status == TicketStatus::Completed {
-        if req
+    if target_status == TicketStatus::Completed
+        && req
             .resolution
             .as_ref()
-            .map_or(true, |r| r.trim().is_empty())
-        {
-            return Err(AppError::Validation(
-                "Resolution is required when completing a ticket".into(),
-            ));
-        }
+            .is_none_or(|r| r.trim().is_empty())
+    {
+        return Err(AppError::Validation(
+            "Resolution is required when completing a ticket".into(),
+        ));
     }
 
     // Prepare completed_at

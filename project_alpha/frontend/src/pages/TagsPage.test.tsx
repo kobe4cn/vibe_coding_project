@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TagsPage } from './TagsPage';
 import * as useTagsHook from '@/hooks/useTags';
+import type { UseQueryResult, UseMutationResult } from '@tanstack/react-query';
+import type { Tag } from '@/types';
 
 vi.mock('@/hooks/useTags');
 
@@ -47,15 +49,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>> as UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<void, Error, string>> as UseMutationResult<void, Error, string>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -67,15 +69,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>> as UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<void, Error, string>> as UseMutationResult<void, Error, string>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -88,15 +90,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>> as UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<void, Error, string>> as UseMutationResult<void, Error, string>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -110,15 +112,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>> as UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<void, Error, string>> as UseMutationResult<void, Error, string>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -133,15 +135,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: mockCreate,
       isPending: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -166,15 +168,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>> as UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<void, Error, string>> as UseMutationResult<void, Error, string>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -192,15 +194,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: mockDelete,
       isPending: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 
@@ -222,15 +224,15 @@ describe('TagsPage', () => {
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: onlyPredefinedTags,
       isLoading: false,
-    } as any);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useTagsHook.useCreateTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>> as UseMutationResult<Tag, Error, { name: string; color?: string; icon?: string }>);
     vi.mocked(useTagsHook.useDeleteTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as any);
+    } as Partial<UseMutationResult<void, Error, string>> as UseMutationResult<void, Error, string>);
 
     render(<TagsPage />, { wrapper: createWrapper() });
 

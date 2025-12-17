@@ -7,7 +7,8 @@ describe('cn', () => {
   });
 
   it('handles conditional classes', () => {
-    expect(cn('foo', false && 'bar', 'baz')).toBe('foo baz');
+    const condition = false;
+    expect(cn('foo', condition ? 'bar' : undefined, 'baz')).toBe('foo baz');
   });
 
   it('handles array of classes', () => {

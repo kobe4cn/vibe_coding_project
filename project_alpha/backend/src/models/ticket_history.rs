@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::error::{AppError, Result};
@@ -26,7 +27,16 @@ impl ChangeType {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_str(s: &str) -> Result<Self> {
+        s.parse()
+    }
+}
+
+impl FromStr for ChangeType {
+    type Err = AppError;
+
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "status" => Ok(ChangeType::Status),
             "priority" => Ok(ChangeType::Priority),
