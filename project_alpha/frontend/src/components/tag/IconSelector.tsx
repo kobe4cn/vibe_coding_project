@@ -12,6 +12,25 @@ const COMMON_ICONS = [
   'settings', 'wrench', 'zap', 'shield', 'lock',
 ];
 
+// Convert kebab-case to PascalCase for Lucide icons
+const getIconComponent = (iconName: string): React.ElementType | undefined => {
+  const pascalCase = iconName
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('');
+  return (Icons as unknown as Record<string, React.ElementType>)[pascalCase];
+};
+
+// Pre-create icon component map to avoid creating components during render
+const iconComponentMap = new Map<string, React.ElementType>();
+COMMON_ICONS.forEach((iconName) => {
+  const Icon = getIconComponent(iconName);
+  if (Icon) {
+    iconComponentMap.set(iconName, Icon);
+  }
+});
+
+
 interface IconSelectorProps {
   value?: string;
   onChange: (icon: string | undefined) => void;
@@ -22,20 +41,9 @@ export function IconSelector({ value, onChange, disabled }: IconSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Convert kebab-case to PascalCase for Lucide icons
-  const getIconComponent = (iconName: string): React.ElementType | undefined => {
-    const pascalCase = iconName
-      .split('-')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
-    return (Icons as unknown as Record<string, React.ElementType>)[pascalCase];
-  };
-
   const filteredIcons = COMMON_ICONS.filter((icon) =>
     icon.toLowerCase().includes(search.toLowerCase())
   );
-
-  const CurrentIcon = value ? getIconComponent(value) : null;
 
   return (
     <div className="relative">
@@ -49,9 +57,12 @@ export function IconSelector({ value, onChange, disabled }: IconSelectorProps) {
           isOpen && 'ring-2 ring-blue-500 border-blue-500'
         )}
       >
-        {CurrentIcon ? (
+        {value && iconComponentMap.has(value) ? (
           <>
-            <CurrentIcon className="w-4 h-4" />
+            {(() => {
+              const Icon = iconComponentMap.get(value)!;
+              return <Icon className="w-4 h-4" />;
+            })()}
             <span className="text-sm">{value}</span>
           </>
         ) : (
@@ -92,7 +103,7 @@ export function IconSelector({ value, onChange, disabled }: IconSelectorProps) {
             <div className="p-2 max-h-48 overflow-y-auto">
               <div className="grid grid-cols-6 gap-1">
                 {filteredIcons.map((iconName) => {
-                  const Icon = getIconComponent(iconName);
+                  const Icon = iconComponentMap.get(iconName);
                   if (!Icon) return null;
                   const isSelected = value === iconName;
                   return (

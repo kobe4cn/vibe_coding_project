@@ -31,7 +31,7 @@ export function TicketEditPage() {
 
   // Update form state when ticket changes
   // This is necessary to sync form state with ticket data
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // We need to update form state when ticket data loads/changes
   useEffect(() => {
     if (ticket) {
       setTitle(ticket.title);
@@ -40,6 +40,7 @@ export function TicketEditPage() {
       setStatus(ticket.status);
       setResolution(ticket.resolution || '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket?.id]); // Only depend on ticket ID to avoid cascading renders
 
   if (isLoading || !ticket) {
