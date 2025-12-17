@@ -116,3 +116,19 @@ jobs:
       - name: Build frontend image
         run: docker build -t ticket-frontend ./project_alpha/frontend
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push backend image
+        run: |
+          docker tag ticket-backend ghcr.io/${{ github.repository_owner }}/ticket-backend:latest
+          docker push ghcr.io/${{ github.repository_owner }}/ticket-backend:latest
+
+      - name: Push frontend image
+        run: |
+          docker tag ticket-frontend ghcr.io/${{ github.repository_owner }}/ticket-frontend:latest
+          docker push ghcr.io/${{ github.repository_owner }}/ticket-frontend:latest
