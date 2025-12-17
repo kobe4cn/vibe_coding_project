@@ -31,4 +31,3 @@ pub struct UpdateTagRequest {
 pub struct AddTagRequest {
     pub tag_id: Uuid,
 }
-

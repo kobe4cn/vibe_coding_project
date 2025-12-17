@@ -61,4 +61,3 @@ pub struct HistoryResponse {
     pub data: Vec<TicketHistory>,
     pub total: i64,
 }
-

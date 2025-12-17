@@ -15,9 +15,7 @@ impl Config {
             database_url: env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/ticket_db".into()),
             host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into()),
-            port: env::var("PORT")
-                .unwrap_or_else(|_| "3000".into())
-                .parse()?,
+            port: env::var("PORT").unwrap_or_else(|_| "3000".into()).parse()?,
             upload_dir: env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()),
             max_file_size: env::var("MAX_FILE_SIZE")
                 .unwrap_or_else(|_| "10485760".into()) // 10MB
@@ -25,4 +23,3 @@ impl Config {
         })
     }
 }
-

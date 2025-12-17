@@ -3,9 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     error::Result,
-    models::{
-        ticket_history::{ChangeType, HistoryQuery, HistoryResponse, TicketHistory},
-    },
+    models::ticket_history::{ChangeType, HistoryQuery, HistoryResponse, TicketHistory},
 };
 
 pub async fn list_history(
@@ -17,12 +15,11 @@ pub async fn list_history(
     let offset = query.offset.unwrap_or(0).max(0);
 
     // Verify ticket exists first
-    let ticket_exists: Option<(bool,)> = sqlx::query_as(
-        "SELECT EXISTS(SELECT 1 FROM tickets WHERE id = $1)"
-    )
-    .bind(ticket_id)
-    .fetch_optional(pool)
-    .await?;
+    let ticket_exists: Option<(bool,)> =
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM tickets WHERE id = $1)")
+            .bind(ticket_id)
+            .fetch_optional(pool)
+            .await?;
 
     if ticket_exists.is_none() || !ticket_exists.unwrap().0 {
         return Ok(HistoryResponse {
@@ -35,27 +32,23 @@ pub async fn list_history(
     let total = if let Some(ref change_type) = query.change_type {
         if !change_type.trim().is_empty() {
             sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM ticket_history WHERE ticket_id = $1 AND change_type = $2"
+                "SELECT COUNT(*) FROM ticket_history WHERE ticket_id = $1 AND change_type = $2",
             )
             .bind(ticket_id)
             .bind(change_type.as_str())
             .fetch_one(pool)
             .await?
         } else {
-            sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM ticket_history WHERE ticket_id = $1"
-            )
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ticket_history WHERE ticket_id = $1")
+                .bind(ticket_id)
+                .fetch_one(pool)
+                .await?
+        }
+    } else {
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ticket_history WHERE ticket_id = $1")
             .bind(ticket_id)
             .fetch_one(pool)
             .await?
-        }
-    } else {
-        sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM ticket_history WHERE ticket_id = $1"
-        )
-        .bind(ticket_id)
-        .fetch_one(pool)
-        .await?
     };
 
     // Build fetch query
@@ -121,4 +114,3 @@ pub async fn create_history_entry(
 
     Ok(())
 }
-

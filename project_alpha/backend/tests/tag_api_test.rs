@@ -259,7 +259,9 @@ async fn test_remove_tag_from_ticket() {
     let tag = tags::create_tag(&pool, tag_req).await.unwrap();
 
     // Add then remove tag
-    tickets::add_tag(&pool, ticket.ticket.id, tag.id).await.unwrap();
+    tickets::add_tag(&pool, ticket.ticket.id, tag.id)
+        .await
+        .unwrap();
     let result = tickets::remove_tag(&pool, ticket.ticket.id, tag.id).await;
     assert!(result.is_ok());
 
@@ -268,4 +270,3 @@ async fn test_remove_tag_from_ticket() {
 
     cleanup_test_data(&pool).await;
 }
-

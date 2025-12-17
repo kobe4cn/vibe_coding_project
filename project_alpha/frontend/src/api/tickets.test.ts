@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ticketApi } from './tickets';
 import * as client from './client';
+import type { Priority, TicketStatus } from '@/types';
 
 vi.mock('./client', () => ({
   apiClient: {
@@ -86,7 +87,7 @@ describe('ticketApi', () => {
   describe('create', () => {
     it('creates ticket', async () => {
       const mockTicket = { id: 'ticket-1', title: 'New Ticket' };
-      const createData = { title: 'New Ticket', priority: 'high' };
+      const createData = { title: 'New Ticket', priority: 'high' as Priority };
       vi.mocked(client.apiClient.post).mockResolvedValueOnce(mockTicket);
 
       const result = await ticketApi.create(createData);
@@ -119,7 +120,7 @@ describe('ticketApi', () => {
   describe('updateStatus', () => {
     it('updates ticket status', async () => {
       const mockTicket = { id: 'ticket-1', status: 'completed' };
-      const statusData = { status: 'completed', resolution: 'Fixed' };
+      const statusData = { status: 'completed' as TicketStatus, resolution: 'Fixed' };
       vi.mocked(client.apiClient.patch).mockResolvedValueOnce(mockTicket);
 
       const result = await ticketApi.updateStatus('ticket-1', statusData);

@@ -15,10 +15,10 @@ pub fn init_test_logging() {
 
 pub async fn setup_test_db() -> PgPool {
     dotenvy::dotenv().ok();
-    
+
     let database_url = std::env::var("TEST_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/ticket_db_test".into());
-    
+
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -35,21 +35,33 @@ pub async fn setup_test_db() -> PgPool {
 }
 
 pub async fn cleanup_test_data(pool: &PgPool) {
-    sqlx::query("DELETE FROM ticket_history").execute(pool).await.ok();
-    sqlx::query("DELETE FROM ticket_tags").execute(pool).await.ok();
-    sqlx::query("DELETE FROM attachments").execute(pool).await.ok();
+    sqlx::query("DELETE FROM ticket_history")
+        .execute(pool)
+        .await
+        .ok();
+    sqlx::query("DELETE FROM ticket_tags")
+        .execute(pool)
+        .await
+        .ok();
+    sqlx::query("DELETE FROM attachments")
+        .execute(pool)
+        .await
+        .ok();
     sqlx::query("DELETE FROM tickets").execute(pool).await.ok();
-    sqlx::query("DELETE FROM tags WHERE is_predefined = false").execute(pool).await.ok();
+    sqlx::query("DELETE FROM tags WHERE is_predefined = false")
+        .execute(pool)
+        .await
+        .ok();
 }
 
 pub fn test_config() -> Config {
     Config {
-        database_url: std::env::var("TEST_DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/ticket_db_test".into()),
+        database_url: std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:postgres@localhost:5432/ticket_db_test".into()
+        }),
         host: "127.0.0.1".into(),
         port: 3001,
         upload_dir: "/tmp/ticket_test_uploads".into(),
         max_file_size: 1024 * 1024, // 1MB for tests
     }
 }
-

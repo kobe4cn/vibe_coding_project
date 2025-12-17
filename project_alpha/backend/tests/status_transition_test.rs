@@ -49,10 +49,13 @@ async fn test_open_to_cancelled() {
     };
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_ok());
-    
+
     let ticket = result.unwrap();
     assert_eq!(ticket.ticket.status, "cancelled");
-    assert_eq!(ticket.ticket.resolution.as_deref(), Some("No longer needed"));
+    assert_eq!(
+        ticket.ticket.resolution.as_deref(),
+        Some("No longer needed")
+    );
 
     cleanup_test_data(&pool).await;
 }
@@ -75,7 +78,9 @@ async fn test_in_progress_to_completed_requires_resolution() {
         status: "in_progress".into(),
         resolution: None,
     };
-    tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
 
     // Try to complete without resolution - should fail
     let status_req = UpdateStatusRequest {
@@ -92,7 +97,7 @@ async fn test_in_progress_to_completed_requires_resolution() {
     };
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_ok());
-    
+
     let ticket = result.unwrap();
     assert_eq!(ticket.ticket.status, "completed");
     assert!(ticket.ticket.completed_at.is_some());
@@ -143,13 +148,17 @@ async fn test_completed_to_open_clears_completed_at() {
         status: "in_progress".into(),
         resolution: None,
     };
-    tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
 
     let status_req = UpdateStatusRequest {
         status: "completed".into(),
         resolution: Some("Done".into()),
     };
-    let completed = tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    let completed = tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
     assert!(completed.ticket.completed_at.is_some());
 
     // Reopen the ticket
@@ -157,7 +166,9 @@ async fn test_completed_to_open_clears_completed_at() {
         status: "open".into(),
         resolution: None,
     };
-    let reopened = tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    let reopened = tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
     assert_eq!(reopened.ticket.status, "open");
     assert!(reopened.ticket.completed_at.is_none());
 
@@ -182,7 +193,9 @@ async fn test_cancelled_to_open() {
         status: "cancelled".into(),
         resolution: None,
     };
-    tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
 
     // Reactivate it
     let status_req = UpdateStatusRequest {
@@ -214,7 +227,9 @@ async fn test_invalid_transition_cancelled_to_completed() {
         status: "cancelled".into(),
         resolution: None,
     };
-    tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
 
     // Try to complete directly - should fail
     let status_req = UpdateStatusRequest {
@@ -245,7 +260,9 @@ async fn test_in_progress_to_open() {
         status: "in_progress".into(),
         resolution: None,
     };
-    tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
 
     // Move back to open
     let status_req = UpdateStatusRequest {
@@ -277,7 +294,9 @@ async fn test_in_progress_to_cancelled() {
         status: "in_progress".into(),
         resolution: None,
     };
-    tickets::update_status(&pool, created.ticket.id, status_req).await.unwrap();
+    tickets::update_status(&pool, created.ticket.id, status_req)
+        .await
+        .unwrap();
 
     // Cancel
     let status_req = UpdateStatusRequest {
@@ -290,4 +309,3 @@ async fn test_in_progress_to_cancelled() {
 
     cleanup_test_data(&pool).await;
 }
-

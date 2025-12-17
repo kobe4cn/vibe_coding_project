@@ -3,8 +3,8 @@ mod common;
 use common::{cleanup_test_data, init_test_logging, setup_test_db};
 use ticket_backend::{
     handlers::{
-        tickets::{add_tag, create_ticket, remove_tag, update_status, update_ticket},
         ticket_history::list_history,
+        tickets::{add_tag, create_ticket, remove_tag, update_status, update_ticket},
     },
     models::{
         ChangeType, CreateTicketRequest, HistoryQuery, UpdateStatusRequest, UpdateTicketRequest,
@@ -428,4 +428,3 @@ async fn test_edit_with_invalid_status_transition() {
 
     assert!(result.is_err());
 }
-

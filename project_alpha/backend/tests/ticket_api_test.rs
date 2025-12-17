@@ -2,9 +2,7 @@ mod common;
 
 use common::{cleanup_test_data, init_test_logging, setup_test_db};
 use ticket_backend::handlers::tickets;
-use ticket_backend::models::{
-    CreateTicketRequest, TicketQuery, UpdateTicketRequest,
-};
+use ticket_backend::models::{CreateTicketRequest, TicketQuery, UpdateTicketRequest};
 
 #[tokio::test]
 async fn test_create_ticket() {
@@ -23,7 +21,10 @@ async fn test_create_ticket() {
 
     let ticket = result.unwrap();
     assert_eq!(ticket.ticket.title, "Test Ticket");
-    assert_eq!(ticket.ticket.description.as_deref(), Some("Test description"));
+    assert_eq!(
+        ticket.ticket.description.as_deref(),
+        Some("Test description")
+    );
     assert_eq!(ticket.ticket.priority, "high");
     assert_eq!(ticket.ticket.status, "open");
     assert!(ticket.tags.is_empty());
@@ -130,7 +131,10 @@ async fn test_update_ticket() {
 
     let updated = result.unwrap();
     assert_eq!(updated.ticket.title, "Updated Title");
-    assert_eq!(updated.ticket.description.as_deref(), Some("New description"));
+    assert_eq!(
+        updated.ticket.description.as_deref(),
+        Some("New description")
+    );
     assert_eq!(updated.ticket.priority, "urgent");
 
     cleanup_test_data(&pool).await;
@@ -267,4 +271,3 @@ async fn test_list_tickets_with_search() {
 
     cleanup_test_data(&pool).await;
 }
-

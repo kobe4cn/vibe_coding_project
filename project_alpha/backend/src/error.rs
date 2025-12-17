@@ -47,9 +47,12 @@ impl IntoResponse for AppError {
                 (StatusCode::BAD_REQUEST, "bad_request", msg.clone(), None)
             }
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone(), None),
-            AppError::Validation(msg) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, "validation_error", msg.clone(), None)
-            }
+            AppError::Validation(msg) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "validation_error",
+                msg.clone(),
+                None,
+            ),
             AppError::InvalidTransition { from, to, allowed } => (
                 StatusCode::BAD_REQUEST,
                 "invalid_transition",
@@ -110,4 +113,3 @@ impl IntoResponse for AppError {
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
-

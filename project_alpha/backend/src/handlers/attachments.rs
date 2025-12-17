@@ -116,13 +116,13 @@ pub async fn upload_attachment(
     let storage_path = storage_dir.join(&storage_filename);
 
     // Write file
-    let mut file = fs::File::create(&storage_path).await.map_err(|e| {
-        AppError::Internal(anyhow::anyhow!("Failed to create file: {}", e))
-    })?;
+    let mut file = fs::File::create(&storage_path)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to create file: {}", e)))?;
 
-    file.write_all(&data).await.map_err(|e| {
-        AppError::Internal(anyhow::anyhow!("Failed to write file: {}", e))
-    })?;
+    file.write_all(&data)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to write file: {}", e)))?;
 
     // Create database record
     let attachment = sqlx::query_as::<_, Attachment>(
@@ -171,9 +171,9 @@ pub async fn get_attachment_file(
 
     // 根据存储路径从文件系统读取文件内容
     // 如果文件不存在或读取失败，返回 Internal 错误
-    let file_bytes = fs::read(&attachment.storage_path).await.map_err(|e| {
-        AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e))
-    })?;
+    let file_bytes = fs::read(&attachment.storage_path)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to read file: {}", e)))?;
 
     Ok((attachment, file_bytes))
 }
@@ -220,4 +220,3 @@ pub async fn delete_attachment(pool: &PgPool, _config: &Config, id: Uuid) -> Res
 
     Ok(())
 }
-

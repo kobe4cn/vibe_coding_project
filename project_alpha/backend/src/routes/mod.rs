@@ -3,10 +3,10 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 
-pub mod health;
-pub mod tickets;
-pub mod tags;
 pub mod attachments;
+pub mod health;
+pub mod tags;
+pub mod tickets;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,4 +20,3 @@ pub fn api_router() -> Router<AppState> {
         .merge(tags::router())
         .merge(attachments::router())
 }
-

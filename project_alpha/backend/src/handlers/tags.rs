@@ -22,7 +22,10 @@ pub async fn create_tag(pool: &PgPool, req: CreateTagRequest) -> Result<Tag> {
     // Validate color format
     let color = req.color.as_deref().unwrap_or("#6B7280");
     if !is_valid_hex_color(color) {
-        return Err(AppError::Validation(format!("Invalid color format: {}", color)));
+        return Err(AppError::Validation(format!(
+            "Invalid color format: {}",
+            color
+        )));
     }
 
     // Check for duplicate name
@@ -86,7 +89,10 @@ pub async fn update_tag(pool: &PgPool, id: Uuid, req: UpdateTagRequest) -> Resul
     // 如果提供了颜色值，验证颜色格式（必须是 #RRGGBB 格式的十六进制颜色）
     if let Some(ref color) = req.color {
         if !is_valid_hex_color(color) {
-            return Err(AppError::Validation(format!("Invalid color format: {}", color)));
+            return Err(AppError::Validation(format!(
+                "Invalid color format: {}",
+                color
+            )));
         }
     }
 
@@ -134,9 +140,7 @@ pub async fn delete_tag(pool: &PgPool, id: Uuid) -> Result<()> {
     let tag = get_tag(pool, id).await?;
 
     if tag.is_predefined {
-        return Err(AppError::BadRequest(
-            "Cannot delete predefined tags".into(),
-        ));
+        return Err(AppError::BadRequest("Cannot delete predefined tags".into()));
     }
 
     sqlx::query("DELETE FROM tags WHERE id = $1")
@@ -153,4 +157,3 @@ fn is_valid_hex_color(color: &str) -> bool {
     }
     color[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
-

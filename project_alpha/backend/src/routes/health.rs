@@ -19,10 +19,7 @@ async fn health_check() -> Json<Value> {
 async fn readiness_check(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Json<Value> {
-    let db_check = sqlx::query("SELECT 1")
-        .execute(&state.db)
-        .await
-        .is_ok();
+    let db_check = sqlx::query("SELECT 1").execute(&state.db).await.is_ok();
 
     let status = if db_check { "ok" } else { "degraded" };
 
@@ -33,4 +30,3 @@ async fn readiness_check(
         }
     }))
 }
-

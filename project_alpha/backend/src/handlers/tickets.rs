@@ -21,17 +21,17 @@ pub async fn list_tickets(
 
     // Build dynamic query
     let mut conditions = vec!["1=1".to_string()];
-    
+
     if let Some(ref search) = query.search {
         if !search.trim().is_empty() {
             conditions.push(format!("title ILIKE '%{}%'", search.replace('\'', "''")));
         }
     }
-    
+
     if let Some(ref status) = query.status {
         conditions.push(format!("status = '{}'", status.replace('\'', "''")));
     }
-    
+
     if let Some(ref priority_str) = query.priority {
         // Validate priority format
         let _ = Priority::from_str(priority_str)?;
@@ -43,7 +43,10 @@ pub async fn list_tickets(
     let sort_order = query.sort_order.as_deref().unwrap_or("desc");
 
     // Count total
-    let count_sql = format!("SELECT COUNT(*) as count FROM tickets WHERE {}", where_clause);
+    let count_sql = format!(
+        "SELECT COUNT(*) as count FROM tickets WHERE {}",
+        where_clause
+    );
     let total: (i64,) = sqlx::query_as(&count_sql).fetch_one(pool).await?;
 
     // Fetch tickets
@@ -65,7 +68,11 @@ pub async fn list_tickets(
         if !tag_ids.is_empty() {
             result
                 .into_iter()
-                .filter(|t| tag_ids.iter().all(|tid| t.tags.iter().any(|tag| &tag.id == tid)))
+                .filter(|t| {
+                    tag_ids
+                        .iter()
+                        .all(|tid| t.tags.iter().any(|tag| &tag.id == tid))
+                })
                 .collect()
         } else {
             result
@@ -161,7 +168,10 @@ pub async fn update_ticket(
 
         // Validate resolution for completed status
         if new_status == TicketStatus::Completed {
-            let resolution = req.resolution.as_ref().or(current_ticket.resolution.as_ref());
+            let resolution = req
+                .resolution
+                .as_ref()
+                .or(current_ticket.resolution.as_ref());
             if resolution.map_or(true, |r| r.trim().is_empty()) {
                 return Err(AppError::Validation(
                     "Resolution is required when completing a ticket".into(),
@@ -188,7 +198,7 @@ pub async fn update_ticket(
 
     // Build update query
     let status_value = target_status.as_ref().map(|s| s.as_str());
-    
+
     let ticket = sqlx::query_as::<_, Ticket>(
         r#"
         UPDATE tickets
@@ -252,7 +262,11 @@ pub async fn update_ticket(
                 id,
                 ChangeType::Resolution,
                 Some("resolution"),
-                if old_resolution.is_empty() { None } else { Some(old_resolution) },
+                if old_resolution.is_empty() {
+                    None
+                } else {
+                    Some(old_resolution)
+                },
                 Some(new_resolution_str),
             )
             .await?;
@@ -301,7 +315,11 @@ pub async fn update_status(
 
     // Validate resolution for completed status
     if target_status == TicketStatus::Completed {
-        if req.resolution.as_ref().map_or(true, |r| r.trim().is_empty()) {
+        if req
+            .resolution
+            .as_ref()
+            .map_or(true, |r| r.trim().is_empty())
+        {
             return Err(AppError::Validation(
                 "Resolution is required when completing a ticket".into(),
             ));
@@ -319,11 +337,12 @@ pub async fn update_status(
 
     // Update resolution if provided or keep existing
     let old_resolution = current.ticket.resolution.clone();
-    let resolution = if target_status == TicketStatus::Completed || target_status == TicketStatus::Cancelled {
-        req.resolution.or_else(|| old_resolution.clone())
-    } else {
-        old_resolution.clone()
-    };
+    let resolution =
+        if target_status == TicketStatus::Completed || target_status == TicketStatus::Cancelled {
+            req.resolution.or_else(|| old_resolution.clone())
+        } else {
+            old_resolution.clone()
+        };
 
     let ticket = sqlx::query_as::<_, Ticket>(
         r#"
@@ -363,8 +382,16 @@ pub async fn update_status(
             id,
             ChangeType::Resolution,
             Some("resolution"),
-            if old_resolution_str.is_empty() { None } else { Some(old_resolution_str) },
-            if new_resolution_str.is_empty() { None } else { Some(new_resolution_str) },
+            if old_resolution_str.is_empty() {
+                None
+            } else {
+                Some(old_resolution_str)
+            },
+            if new_resolution_str.is_empty() {
+                None
+            } else {
+                Some(new_resolution_str)
+            },
         )
         .await?;
     }
@@ -457,4 +484,3 @@ async fn get_ticket_tags(pool: &PgPool, ticket_id: Uuid) -> Result<Vec<Tag>> {
 
     Ok(tags)
 }
-
