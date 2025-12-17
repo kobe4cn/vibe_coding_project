@@ -238,7 +238,7 @@ describe('TicketDetailPage', () => {
       data: mockTicket,
       isLoading: false,
       error: null,
-    } as Partial<UseQueryResult<TicketHistoryResponse>> as UseQueryResult<TicketHistoryResponse>);
+    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
     vi.mocked(useTicketsHook.useDeleteTicket).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,

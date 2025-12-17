@@ -181,31 +181,31 @@ describe('TicketEditPage', () => {
     vi.mocked(useTicketsHook.useUpdateTicket).mockReturnValue({
       mutateAsync: mockUpdate,
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>> as UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>);
     vi.mocked(useTicketsHook.useAddTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTicketsHook.useRemoveTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useAttachmentsHook.useAttachments).mockReturnValue({
       data: [],
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Attachment[]>> as UseQueryResult<Attachment[]>);
     vi.mocked(useAttachmentsHook.useUploadAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<Attachment, Error, { ticketId: string; file: File }>> as UseMutationResult<Attachment, Error, { ticketId: string; file: File }>);
     vi.mocked(useAttachmentsHook.useDeleteAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<void, Error, { id: string; ticketId: string }>> as UseMutationResult<void, Error, { id: string; ticketId: string }>);
 
     render(
       <BrowserRouter>
@@ -299,31 +299,31 @@ describe('TicketEditPage', () => {
     vi.mocked(useTicketsHook.useUpdateTicket).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>> as UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>);
     vi.mocked(useTicketsHook.useAddTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTicketsHook.useRemoveTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useAttachmentsHook.useAttachments).mockReturnValue({
       data: mockAttachments,
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Attachment[]>> as UseQueryResult<Attachment[]>);
     vi.mocked(useAttachmentsHook.useUploadAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<Attachment, Error, { ticketId: string; file: File }>> as UseMutationResult<Attachment, Error, { ticketId: string; file: File }>);
     vi.mocked(useAttachmentsHook.useDeleteAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<void, Error, { id: string; ticketId: string }>> as UseMutationResult<void, Error, { id: string; ticketId: string }>);
 
     render(
       <BrowserRouter>
@@ -395,31 +395,31 @@ describe('TicketEditPage', () => {
     vi.mocked(useTicketsHook.useUpdateTicket).mockReturnValue({
       mutateAsync: mockUpdate,
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>> as UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>);
     vi.mocked(useTicketsHook.useAddTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTicketsHook.useRemoveTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useAttachmentsHook.useAttachments).mockReturnValue({
       data: [],
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Attachment[]>> as UseQueryResult<Attachment[]>);
     vi.mocked(useAttachmentsHook.useUploadAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<Attachment, Error, { ticketId: string; file: File }>> as UseMutationResult<Attachment, Error, { ticketId: string; file: File }>);
     vi.mocked(useAttachmentsHook.useDeleteAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<void, Error, { id: string; ticketId: string }>> as UseMutationResult<void, Error, { id: string; ticketId: string }>);
 
     render(
       <BrowserRouter>
@@ -458,31 +458,31 @@ describe('TicketEditPage', () => {
     vi.mocked(useTicketsHook.useUpdateTicket).mockReturnValue({
       mutateAsync: mockUpdate,
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>> as UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>);
     vi.mocked(useTicketsHook.useAddTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTicketsHook.useRemoveTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useAttachmentsHook.useAttachments).mockReturnValue({
       data: [],
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Attachment[]>> as UseQueryResult<Attachment[]>);
     vi.mocked(useAttachmentsHook.useUploadAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<Attachment, Error, { ticketId: string; file: File }>> as UseMutationResult<Attachment, Error, { ticketId: string; file: File }>);
     vi.mocked(useAttachmentsHook.useDeleteAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<void, Error, { id: string; ticketId: string }>> as UseMutationResult<void, Error, { id: string; ticketId: string }>);
 
     render(
       <BrowserRouter>
@@ -518,31 +518,31 @@ describe('TicketEditPage', () => {
     vi.mocked(useTicketsHook.useUpdateTicket).mockReturnValue({
       mutateAsync: mockUpdate,
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>> as UseMutationResult<TicketWithTags, Error, { id: string; data: UpdateTicketRequest }>);
     vi.mocked(useTicketsHook.useAddTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTicketsHook.useRemoveTag).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>> as UseMutationResult<TicketWithTags, Error, { ticketId: string; tagId: string }>);
     vi.mocked(useTagsHook.useTags).mockReturnValue({
       data: mockTags,
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Tag[]>> as UseQueryResult<Tag[]>);
     vi.mocked(useAttachmentsHook.useAttachments).mockReturnValue({
       data: [],
       isLoading: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseQueryResult<Attachment[]>> as UseQueryResult<Attachment[]>);
     vi.mocked(useAttachmentsHook.useUploadAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<Attachment, Error, { ticketId: string; file: File }>> as UseMutationResult<Attachment, Error, { ticketId: string; file: File }>);
     vi.mocked(useAttachmentsHook.useDeleteAttachment).mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
-    } as Partial<UseQueryResult<TicketWithTags>> as UseQueryResult<TicketWithTags>);
+    } as Partial<UseMutationResult<void, Error, { id: string; ticketId: string }>> as UseMutationResult<void, Error, { id: string; ticketId: string }>);
 
     render(
       <BrowserRouter>
