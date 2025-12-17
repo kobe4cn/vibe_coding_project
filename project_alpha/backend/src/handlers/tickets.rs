@@ -34,7 +34,7 @@ pub async fn list_tickets(
 
     if let Some(ref priority_str) = query.priority {
         // Validate priority format
-        let _ = Priority::from_str(priority_str)?;
+        let _ = priority_str.parse::<Priority>()?;
         conditions.push(format!("priority = '{}'", priority_str.replace('\'', "''")));
     }
 
@@ -99,7 +99,7 @@ pub async fn create_ticket(pool: &PgPool, req: CreateTicketRequest) -> Result<Ti
 
     // Validate and parse priority
     let priority = if let Some(ref priority_str) = req.priority {
-        Priority::from_str(priority_str)?
+        priority_str.parse::<Priority>()?
     } else {
         Priority::default()
     };
@@ -150,8 +150,8 @@ pub async fn update_ticket(
     let mut final_resolution = current_ticket.resolution.clone();
 
     if let Some(ref status_str) = req.status {
-        let new_status = TicketStatus::from_str(status_str)?;
-        let current_status = TicketStatus::from_str(&current_ticket.status)?;
+        let new_status = status_str.parse::<TicketStatus>()?;
+        let current_status = current_ticket.status.parse::<TicketStatus>()?;
 
         // Check if transition is allowed
         if !current_status.can_transition_to(&new_status) {
@@ -191,7 +191,7 @@ pub async fn update_ticket(
 
     // Validate priority if provided
     let priority_value = if let Some(ref priority_str) = req.priority {
-        Some(Priority::from_str(priority_str)?.as_str())
+        Some(priority_str.parse::<Priority>()?.as_str())
     } else {
         None
     };
@@ -225,7 +225,7 @@ pub async fn update_ticket(
 
     // Record history for changes
     if let Some(ref new_status) = target_status {
-        let old_status = TicketStatus::from_str(&current_ticket.status)?;
+        let old_status = current_ticket.status.parse::<TicketStatus>()?;
         if old_status != *new_status {
             create_history_entry(
                 pool,
@@ -297,8 +297,8 @@ pub async fn update_status(
     req: UpdateStatusRequest,
 ) -> Result<TicketWithTags> {
     let current = get_ticket(pool, id).await?;
-    let current_status = TicketStatus::from_str(&current.ticket.status)?;
-    let target_status = TicketStatus::from_str(&req.status)?;
+    let current_status = current.ticket.status.parse::<TicketStatus>()?;
+    let target_status = req.status.parse::<TicketStatus>()?;
 
     // Check if transition is allowed
     if !current_status.can_transition_to(&target_status) {

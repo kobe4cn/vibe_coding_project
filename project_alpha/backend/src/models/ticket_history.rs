@@ -26,11 +26,6 @@ impl ChangeType {
             ChangeType::TagRemoved => "tag_removed",
         }
     }
-
-    #[allow(dead_code)]
-    pub fn from_str(s: &str) -> Result<Self> {
-        s.parse()
-    }
 }
 
 impl FromStr for ChangeType {

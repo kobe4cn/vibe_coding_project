@@ -25,10 +25,6 @@ impl TicketStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Result<Self> {
-        s.parse()
-    }
-
     pub fn allowed_transitions(&self) -> Vec<TicketStatus> {
         match self {
             TicketStatus::Open => vec![TicketStatus::InProgress, TicketStatus::Cancelled],
@@ -79,10 +75,6 @@ impl Priority {
             Priority::High => "high",
             Priority::Urgent => "urgent",
         }
-    }
-
-    pub fn from_str(s: &str) -> Result<Self> {
-        s.parse()
     }
 }
 
