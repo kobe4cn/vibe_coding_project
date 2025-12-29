@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Alpha | 标签驱动票据系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="nav__logo">
+        <span class="duck">🦆</span>
+        <div>
+          <p class="nav__title">Project Alpha</p>
+          <p class="nav__subtitle">标签驱动票据系统</p>
+        </div>
+      </div>
+      <nav class="nav__links" id="nav-links">
+        <a href="#features">特性</a>
+        <a href="#flow">状态流转</a>
+        <a href="#playground">交互体验</a>
+        <a href="#stack">技术栈</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <button class="nav__cta" id="nav-cta">立即体验</button>
+      <button class="nav__toggle" id="nav-toggle" aria-label="展开菜单">
+        ☰
+      </button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero__content">
+          <p class="eyebrow">可视 · 可控 · 可协作</p>
+          <h1>让标签系统驱动票据流转与协作</h1>
+          <p class="hero__desc">
+            基于 Rust + PostgreSQL 的高性能后端，配合 React + Vite +
+            Tailwind 的现代前端，Project Alpha
+            为团队提供可搜索、可追踪、可视化的票据管理体验。
+          </p>
+          <div class="hero__actions">
+            <a class="btn btn--primary" href="#playground">查看交互演示</a>
+            <a class="btn btn--ghost" href="#getting-started">快速开始</a>
+          </div>
+          <div class="hero__stats">
+            <div>
+              <p class="stat__value">16</p>
+              <p class="stat__label">内置标签</p>
+            </div>
+            <div>
+              <p class="stat__value">4</p>
+              <p class="stat__label">状态节点</p>
+            </div>
+            <div>
+              <p class="stat__value">10MB</p>
+              <p class="stat__label">单文件上传上限</p>
+            </div>
+          </div>
+        </div>
+        <div class="hero__panel">
+          <div class="panel__header">
+            <span class="pill pill--info">实时</span>
+            <span class="pill pill--success">无阻塞</span>
+            <span class="pill pill--ghost">可审计</span>
+          </div>
+          <div class="panel__body">
+            <div class="ticket">
+              <div class="ticket__head">
+                <p class="ticket__title">修复登录页面 Bug</p>
+                <span class="badge badge--critical">Critical</span>
+              </div>
+              <p class="ticket__desc">用户无法在移动端登录，影响转化率。</p>
+              <div class="ticket__meta">
+                <span class="chip chip--blue">API</span>
+                <span class="chip chip--yellow">Frontend</span>
+                <span class="chip chip--gray">Needs Review</span>
+              </div>
+              <div class="ticket__flow" role="group" aria-label="状态切换">
+                <div class="flow__step active" data-step="open">open</div>
+                <div class="flow__step" data-step="in_progress">in_progress</div>
+                <div class="flow__step" data-step="completed">completed</div>
+                <div class="flow__step" data-step="cancelled">cancelled</div>
+              </div>
+            </div>
+          </div>
+          <div class="panel__footer">
+            <p class="footer__title">Tag Graph</p>
+            <div class="footer__tags">
+              <span class="chip chip--soft">Bug</span>
+              <span class="chip chip--soft">In Testing</span>
+              <span class="chip chip--soft">Ready for Deploy</span>
+              <span class="chip chip--soft">UI/UX</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="section__header">
+          <p class="eyebrow">核心能力</p>
+          <h2>可组合的标签与票据操作</h2>
+          <p class="section__desc">
+            票据 CRUD、标签体系、状态机、搜索筛选与附件上传，全部一键可用。
+          </p>
+        </div>
+        <div class="feature-tabs" id="feature-tabs">
+          <div class="feature-tabs__nav" id="feature-nav">
+            <button class="tab active" data-tab="tickets">票据流</button>
+            <button class="tab" data-tab="tags">标签矩阵</button>
+            <button class="tab" data-tab="workflow">状态机</button>
+            <button class="tab" data-tab="search">搜索与附件</button>
+          </div>
+          <div class="feature-tabs__panes">
+            <div class="tab-pane active" id="tab-tickets">
+              <h3>票据生命周期全覆盖</h3>
+              <ul>
+                <li>创建、编辑、删除、完成、取消完成一气呵成。</li>
+                <li>支持分页排序，列表秒开，适配移动端。</li>
+                <li>状态流转记录可审计，团队协作更透明。</li>
+              </ul>
+            </div>
+            <div class="tab-pane" id="tab-tags">
+              <h3>16 预设标签 + 自定义扩展</h3>
+              <ul>
+                <li>状态、优先级、模块、工作流多维度组合。</li>
+                <li>标签可设置颜色与图标，兼容自定义。</li>
+                <li>标签-票据关联一键增删，聚类视图清晰。</li>
+              </ul>
+            </div>
+            <div class="tab-pane" id="tab-workflow">
+              <h3>安全的有限状态机</h3>
+              <ul>
+                <li>open → in_progress → completed/cancelled 路径受控。</li>
+                <li>完成需要填写处理结果，避免信息缺失。</li>
+                <li>任意状态可 reopen 到 open，方便回溯。</li>
+              </ul>
+            </div>
+            <div class="tab-pane" id="tab-search">
+              <h3>搜索、筛选与附件</h3>
+              <ul>
+                <li>按标题搜索，状态/优先级/标签多维筛选。</li>
+                <li>附件多格式上传，单文件 10MB 内自动校验。</li>
+                <li>多字段排序 + 分页，列表操作流畅。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="flow">
+        <div class="section__header">
+          <p class="eyebrow">流转演示</p>
+          <h2>点击节点，查看允许的下一步</h2>
+          <p class="section__desc">
+            状态机的规则在这里一目了然，团队更快对齐协作节奏。
+          </p>
+        </div>
+        <div class="flow-board" id="flow-board">
+          <div class="flow-node" data-status="open">
+            <p class="node__title">open</p>
+            <p class="node__desc">待处理</p>
+          </div>
+          <div class="flow-node" data-status="in_progress">
+            <p class="node__title">in_progress</p>
+            <p class="node__desc">处理中</p>
+          </div>
+          <div class="flow-node" data-status="completed">
+            <p class="node__title">completed</p>
+            <p class="node__desc">已完成</p>
+          </div>
+          <div class="flow-node" data-status="cancelled">
+            <p class="node__title">cancelled</p>
+            <p class="node__desc">已取消</p>
+          </div>
+        </div>
+        <div class="flow-detail" id="flow-detail">
+          <p class="detail__title">状态说明</p>
+          <p class="detail__desc">点击任意状态节点查看可达路径。</p>
+          <div class="detail__list" id="detail-list"></div>
+        </div>
+      </section>
+
+      <section class="section section--grid" id="playground">
+        <div class="section__header">
+          <p class="eyebrow">交互体验</p>
+          <h2>玩一玩标签与筛选</h2>
+          <p class="section__desc">
+            即时筛选演示模拟真实看板，让你预览 Project Alpha 的标签驱动体验。
+          </p>
+        </div>
+        <div class="playground">
+          <div class="filter-panel">
+            <p class="panel__title">选择标签</p>
+            <div class="filter-tags" id="filter-tags"></div>
+            <p class="panel__hint">点击标签以筛选，支持多选。</p>
+          </div>
+          <div class="ticket-list" id="ticket-list"></div>
+        </div>
+      </section>
+
+      <section class="section" id="stack">
+        <div class="section__header">
+          <p class="eyebrow">技术栈</p>
+          <h2>后端高性能，前端高体验</h2>
+          <p class="section__desc">
+            Rust + Axum + PostgreSQL 的稳定性，React + Vite +
+            Tailwind 的敏捷性，共同支撑票据全链路。
+          </p>
+        </div>
+        <div class="stack-grid">
+          <div class="stack-card">
+            <p class="stack__label">后端</p>
+            <h3>Rust · Axum · SQLx</h3>
+            <ul>
+              <li>Tokio 异步，Tracing 链路日志。</li>
+              <li>SQLx + PostgreSQL，类型安全的查询。</li>
+              <li>健康检查/就绪检查开箱即用。</li>
+            </ul>
+          </div>
+          <div class="stack-card">
+            <p class="stack__label">前端</p>
+            <h3>React 19 · Vite 7 · Tailwind 4</h3>
+            <ul>
+              <li>TanStack Query 管理异步数据。</li>
+              <li>React Router 7 路由与数据协同。</li>
+              <li>Shadcn 组件 & Zod 表单校验。</li>
+            </ul>
+          </div>
+          <div class="stack-card stack-card--cta">
+            <p class="stack__label">部署</p>
+            <h3>Docker Compose 一键启动</h3>
+            <ul>
+              <li>内置 docker-compose，前后端 + 数据库一键拉起。</li>
+              <li>环境变量模板随附，复制即用。</li>
+              <li>产出 dist & 镜像，适配反向代理。</li>
+            </ul>
+            <a class="btn btn--primary" href="#getting-started">开始部署</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section cta" id="getting-started">
+        <div class="cta__content">
+          <p class="eyebrow">快速开始</p>
+          <h2>两种方式，10 分钟跑起来</h2>
+          <div class="cta__grid">
+            <div>
+              <p class="cta__label">方式一：Docker 推荐</p>
+              <div class="code-block">
+                <code>docker compose up -d</code>
+                <code>open http://localhost</code>
+              </div>
+            </div>
+            <div>
+              <p class="cta__label">方式二：本地开发</p>
+              <div class="code-block">
+                <code>cd backend && cp env.template .env && cargo run</code>
+                <code>cd frontend && npm install && npm run dev</code>
+              </div>
+            </div>
+          </div>
+          <div class="cta__actions">
+            <a class="btn btn--primary" href="#playground">体验标签筛选</a>
+            <a class="btn btn--ghost" href="#features">查看特性</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="faq">
+        <div class="section__header">
+          <p class="eyebrow">常见问题</p>
+          <h2>快速答疑</h2>
+          <p class="section__desc">点击问题展开详情。</p>
+        </div>
+        <div class="accordion" id="accordion">
+          <div class="accordion__item">
+            <button class="accordion__trigger">
+              是否必须使用 Docker？
+              <span class="accordion__icon">+</span>
+            </button>
+            <div class="accordion__panel">
+              <p>
+                不必须。后端可直接使用 cargo run，本地需准备 PostgreSQL；
+                前端使用 npm install + npm run dev 即可。Docker 仅为一键启动体验。
+              </p>
+            </div>
+          </div>
+          <div class="accordion__item">
+            <button class="accordion__trigger">
+              标签可以自定义吗？
+              <span class="accordion__icon">+</span>
+            </button>
+            <div class="accordion__panel">
+              <p>可以。系统内置 16 个标签，也支持自定义新增/编辑/删除。</p>
+            </div>
+          </div>
+          <div class="accordion__item">
+            <button class="accordion__trigger">
+              状态可以随意跳转吗？
+              <span class="accordion__icon">+</span>
+            </button>
+            <div class="accordion__panel">
+              <p>
+                有限状态机约束：open
+                只能到 in_progress/cancelled；in_progress 可到
+                open/completed/cancelled；completed/cancelled 可 reopen 到 open。
+              </p>
+            </div>
+          </div>
+          <div class="accordion__item">
+            <button class="accordion__trigger">
+              有哪些安全措施？
+              <span class="accordion__icon">+</span>
+            </button>
+            <div class="accordion__panel">
+              <p>
+                单文件上传 10MB 内自动校验，后端使用 Tracing
+                记录操作，API 带就绪检查保证可观测。
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Project Alpha · 标签驱动的票据系统 · Rust + React</p>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
+
