@@ -233,6 +233,27 @@ class A2UIBuilder:
         })
         return self
 
+    def multi_select(
+        self,
+        component_id: str,
+        label: Union[str, dict],
+        options: list[dict],  # List of {id, name, color?} dicts
+        selected_path: str,  # Path to comma-separated selected IDs
+        action_name: str = "toggle_multi_select",
+    ) -> "A2UIBuilder":
+        """Add a MultiSelect dropdown component."""
+        label_value = label if isinstance(label, dict) else self.literal_string(label)
+        self._components.append({
+            "id": component_id,
+            "component": {"MultiSelect": {
+                "label": label_value,
+                "options": options,
+                "selectedPath": selected_path,
+                "actionName": action_name,
+            }}
+        })
+        return self
+
     def add_component(self, component: dict) -> "A2UIBuilder":
         """Add a raw component dict."""
         self._components.append(component)

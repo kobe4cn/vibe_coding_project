@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ticket System - A2UI</title>
+    <title>Task System - A2UI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet" />
@@ -194,6 +194,46 @@
       a2ui-button[data-variant="danger"]:hover {
         background: var(--color-error);
         color: var(--color-white);
+      }
+
+      /* Small button variant for filters */
+      a2ui-button[data-size="small"] {
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--text-sm);
+        border-radius: var(--radius-full);
+      }
+
+      /* Search row styling */
+      #tickets-search-row {
+        gap: var(--space-6);
+      }
+
+      #tickets-search-row a2ui-textfield {
+        flex: 1;
+      }
+
+      /* Filter row styling */
+      #tickets-status-filters,
+      #tickets-priority-filters {
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+
+      #tickets-status-filters a2ui-button,
+      #tickets-priority-filters a2ui-button {
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--text-sm);
+        border-radius: var(--radius-full);
+        background: var(--color-gray-100);
+        color: var(--color-gray-700);
+        border: 1px solid var(--color-gray-300);
+      }
+
+      #tickets-status-filters a2ui-button:hover,
+      #tickets-priority-filters a2ui-button:hover {
+        background: var(--color-primary);
+        color: var(--color-secondary);
+        border-color: var(--color-primary);
       }
 
       /* Text Fields */

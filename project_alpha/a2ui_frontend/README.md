@@ -196,6 +196,12 @@ CORS_ORIGINS=["http://localhost:5173","http://localhost:8080"]
 2. 在 `server/a2ui_builder.py` 添加构建器方法
 3. 在 `client/index.html` 添加样式
 
+### 代码生成
+1. 代码完全使用 claude code 生成。
+2. vibe coding 使用 openspec 的 spec 文件生成代码，其中结合 claude skills 中的 a2ui 技能。
+3. 使用 claude code skills a2ui. skills 仓库： https://github.com/kobe4cn/claude_a2ui_skill
+ 
+
 ## License
 
 MIT

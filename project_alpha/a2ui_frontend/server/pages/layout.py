@@ -5,10 +5,10 @@ from a2ui_builder import A2UIBuilder
 def build_app_layout(builder: A2UIBuilder, content_id: str, active_nav: str = "tickets"):
     """Build the main app layout with navigation."""
     # Navigation header - simplified without icons
-    builder.text("nav-logo-text", "Ticket System", usage_hint="h2")
+    builder.text("nav-logo-text", "Task System", usage_hint="h2")
 
     # Nav items - simple text buttons
-    builder.text("nav-tickets-text", "票据管理")
+    builder.text("nav-tickets-text", "任务管理")
     builder.button(
         "nav-tickets",
         "nav-tickets-text",

@@ -30,7 +30,8 @@ class ApiClient:
                 timeout=30.0,
             )
             response.raise_for_status()
-            if response.status_code == 204:
+            # Handle empty responses (204 No Content or empty body)
+            if response.status_code == 204 or not response.content:
                 return None
             return response.json()
 
@@ -97,6 +98,12 @@ class ApiClient:
 
     async def delete_tag(self, tag_id: str) -> None:
         await self.delete(f"/api/tags/{tag_id}")
+
+    async def add_tag_to_ticket(self, ticket_id: str, tag_id: str) -> None:
+        await self.post(f"/api/tickets/{ticket_id}/tags", {"tag_id": tag_id})
+
+    async def remove_tag_from_ticket(self, ticket_id: str, tag_id: str) -> None:
+        await self.delete(f"/api/tickets/{ticket_id}/tags/{tag_id}")
 
 
 api_client = ApiClient()

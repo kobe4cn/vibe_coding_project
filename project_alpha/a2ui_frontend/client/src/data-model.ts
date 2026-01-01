@@ -5,15 +5,24 @@ import type { ValueMap, BoundValue } from './types';
 
 export class DataModel {
   private data: Map<string, unknown> = new Map();
+  private dirtyPaths: Set<string> = new Set(); // Paths modified by user input
 
   /**
-   * Update data model from ValueMap contents
+   * Update data model from ValueMap contents (from server)
+   * Skips paths marked as dirty by user input
    */
   update(path: string, contents: ValueMap[]): void {
     const basePath = path.startsWith('/') ? path : `/${path}`;
 
     for (const item of contents) {
       const fullPath = `${basePath}/${item.key}`;
+      
+      // Skip paths that have been modified by user input
+      if (this.dirtyPaths.has(fullPath)) {
+        console.log(`Skipping server update for dirty path: ${fullPath}`);
+        continue;
+      }
+      
       const value = this.extractValue(item);
       this.data.set(fullPath, value);
 
@@ -30,6 +39,13 @@ export class DataModel {
   private storeNestedPaths(basePath: string, contents: ValueMap[]): void {
     for (const item of contents) {
       const fullPath = `${basePath}/${item.key}`;
+      
+      // Skip paths that have been modified by user input
+      if (this.dirtyPaths.has(fullPath)) {
+        console.log(`Skipping server update for dirty path: ${fullPath}`);
+        continue;
+      }
+      
       const value = this.extractValue(item);
       this.data.set(fullPath, value);
 
@@ -41,6 +57,7 @@ export class DataModel {
 
   /**
    * Get value at path
+   * If the path has no direct value but has children, returns an object with all children
    */
   get(path: string): unknown {
     // Handle relative paths (starting with .)
@@ -49,7 +66,58 @@ export class DataModel {
     }
 
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return this.data.get(normalizedPath);
+    
+    // First, check if there's a direct value at this path
+    const directValue = this.data.get(normalizedPath);
+    if (directValue !== undefined) {
+      return directValue;
+    }
+    
+    // If no direct value, collect all children into an object
+    const prefix = normalizedPath + '/';
+    const result: Record<string, unknown> = {};
+    let hasChildren = false;
+    
+    for (const [key, value] of this.data.entries()) {
+      if (key.startsWith(prefix)) {
+        const relativePath = key.substring(prefix.length);
+        const parts = relativePath.split('/');
+        
+        // Only get immediate children (not nested paths)
+        if (parts.length === 1) {
+          result[parts[0]] = value;
+          hasChildren = true;
+        }
+      }
+    }
+    
+    return hasChildren ? result : undefined;
+  }
+
+  /**
+   * Set value at path (called by user input)
+   * Marks the path as dirty to prevent server updates from overwriting
+   */
+  set(path: string, value: unknown): void {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    this.data.set(normalizedPath, value);
+    this.dirtyPaths.add(normalizedPath);
+    console.log(`DataModel.set: ${normalizedPath} = ${value} (marked dirty)`);
+  }
+
+  /**
+   * Clear dirty flag for a path (called after submitting)
+   */
+  clearDirty(path: string): void {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    this.dirtyPaths.delete(normalizedPath);
+  }
+
+  /**
+   * Clear all dirty flags
+   */
+  clearAllDirty(): void {
+    this.dirtyPaths.clear();
   }
 
   /**
@@ -134,10 +202,11 @@ export class DataModel {
   }
 
   /**
-   * Clear all data
+   * Clear all data and dirty flags
    */
   clear(): void {
     this.data.clear();
+    this.dirtyPaths.clear();
   }
 
   /**

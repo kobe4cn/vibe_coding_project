@@ -10,8 +10,8 @@ from models import (
 def build_tickets_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
     """Build the tickets list page."""
     # Page header
-    builder.text("tickets-title", "票据列表", usage_hint="h1")
-    builder.text("tickets-add-text", "+ 新建票据")
+    builder.text("tickets-title", "任务列表", usage_hint="h1")
+    builder.text("tickets-add-text", "+ 新建任务")
     builder.button(
         "tickets-add-btn",
         "tickets-add-text",
@@ -21,51 +21,118 @@ def build_tickets_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
     builder.row("tickets-header", ["tickets-title", "tickets-add-btn"], distribution="spaceBetween", alignment="center")
 
     # Search
-    builder.text_field("tickets-search", "搜索票据...", builder.path("/app/tickets/query/search"))
+    builder.text_field("tickets-search", "搜索任务...", builder.path("/app/tickets/query/search"))
     builder.text("tickets-search-btn-text", "搜索")
     builder.button(
         "tickets-search-btn",
         "tickets-search-btn-text",
         "search_tickets",
-        [{"key": "search", "value": {"path": "/app/tickets/query/search"}}],
+        [
+            {"key": "search", "value": {"path": "/app/tickets/query/search"}},
+            {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+            {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+            {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+            {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+        ],
     )
     builder.row("tickets-search-row", ["tickets-search", "tickets-search-btn"], alignment="center")
 
     # Status filter buttons
     builder.text("filter-all-text", "全部")
-    builder.button("filter-all", "filter-all-text", "filter_status", [{"key": "status", "value": {"literalString": ""}}])
+    builder.button("filter-all", "filter-all-text", "filter_status", [
+        {"key": "status", "value": {"literalString": ""}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("filter-open-text", "待处理")
-    builder.button("filter-open", "filter-open-text", "filter_status", [{"key": "status", "value": {"literalString": "open"}}])
+    builder.button("filter-open", "filter-open-text", "filter_status", [
+        {"key": "status", "value": {"literalString": "open"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("filter-progress-text", "处理中")
-    builder.button("filter-progress", "filter-progress-text", "filter_status", [{"key": "status", "value": {"literalString": "in_progress"}}])
+    builder.button("filter-progress", "filter-progress-text", "filter_status", [
+        {"key": "status", "value": {"literalString": "in_progress"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("filter-completed-text", "已完成")
-    builder.button("filter-completed", "filter-completed-text", "filter_status", [{"key": "status", "value": {"literalString": "completed"}}])
+    builder.button("filter-completed", "filter-completed-text", "filter_status", [
+        {"key": "status", "value": {"literalString": "completed"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("filter-cancelled-text", "已取消")
-    builder.button("filter-cancelled", "filter-cancelled-text", "filter_status", [{"key": "status", "value": {"literalString": "cancelled"}}])
+    builder.button("filter-cancelled", "filter-cancelled-text", "filter_status", [
+        {"key": "status", "value": {"literalString": "cancelled"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.row("tickets-status-filters", ["filter-all", "filter-open", "filter-progress", "filter-completed", "filter-cancelled"], alignment="center")
 
     # Priority filter buttons
     builder.text("priority-all-text", "全部优先级")
-    builder.button("priority-all", "priority-all-text", "filter_priority", [{"key": "priority", "value": {"literalString": ""}}])
+    builder.button("priority-all", "priority-all-text", "filter_priority", [
+        {"key": "priority", "value": {"literalString": ""}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("priority-low-text", "低")
-    builder.button("priority-low", "priority-low-text", "filter_priority", [{"key": "priority", "value": {"literalString": "low"}}])
+    builder.button("priority-low", "priority-low-text", "filter_priority", [
+        {"key": "priority", "value": {"literalString": "low"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("priority-medium-text", "中")
-    builder.button("priority-medium", "priority-medium-text", "filter_priority", [{"key": "priority", "value": {"literalString": "medium"}}])
+    builder.button("priority-medium", "priority-medium-text", "filter_priority", [
+        {"key": "priority", "value": {"literalString": "medium"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("priority-high-text", "高")
-    builder.button("priority-high", "priority-high-text", "filter_priority", [{"key": "priority", "value": {"literalString": "high"}}])
+    builder.button("priority-high", "priority-high-text", "filter_priority", [
+        {"key": "priority", "value": {"literalString": "high"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.text("priority-urgent-text", "紧急")
-    builder.button("priority-urgent", "priority-urgent-text", "filter_priority", [{"key": "priority", "value": {"literalString": "urgent"}}])
+    builder.button("priority-urgent", "priority-urgent-text", "filter_priority", [
+        {"key": "priority", "value": {"literalString": "urgent"}},
+        {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+        {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+        {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+        {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+    ])
     builder.row("tickets-priority-filters", ["priority-all", "priority-low", "priority-medium", "priority-high", "priority-urgent"], alignment="center")
 
     builder.column("tickets-filters", ["tickets-search-row", "tickets-status-filters", "tickets-priority-filters"])
     builder.card("tickets-filters-card", "tickets-filters")
 
-    # Ticket list template - simplified without icons
+    # Ticket list template - with tags display
     builder.text("ticket-item-title", builder.path("title"), usage_hint="h3")
     builder.text("ticket-item-status", builder.path("statusLabel"))
     builder.text("ticket-item-priority", builder.path("priorityLabel"))
+    builder.text("ticket-item-tags", builder.path("tagsDisplay"))
     builder.text("ticket-item-date", builder.path("created_at"))
-    builder.row("ticket-item-meta", ["ticket-item-status", "ticket-item-priority", "ticket-item-date"], alignment="center")
+    builder.row("ticket-item-meta", ["ticket-item-status", "ticket-item-priority", "ticket-item-tags", "ticket-item-date"], alignment="center")
     builder.column("ticket-item-content", ["ticket-item-title", "ticket-item-meta"])
     builder.text("ticket-item-arrow", "→")
     builder.row("ticket-item-row", ["ticket-item-content", "ticket-item-arrow"], distribution="spaceBetween", alignment="center")
@@ -85,8 +152,8 @@ def build_tickets_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
     )
 
     # Empty state
-    builder.text("tickets-empty-title", "暂无票据", usage_hint="h3")
-    builder.text("tickets-empty-desc", "点击上方按钮创建第一个票据")
+    builder.text("tickets-empty-title", "暂无任务", usage_hint="h3")
+    builder.text("tickets-empty-desc", "点击上方按钮创建第一个任务")
     builder.column("tickets-empty", ["tickets-empty-title", "tickets-empty-desc"], alignment="center")
 
     # Pagination - use literalNumber for page values since they're numbers
@@ -95,7 +162,13 @@ def build_tickets_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
         "pagination-prev",
         "pagination-prev-text",
         "paginate",
-        [{"key": "page", "value": {"path": "/app/tickets/pagination/prevPage"}}],
+        [
+            {"key": "page", "value": {"path": "/app/tickets/pagination/prevPage"}},
+            {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+            {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+            {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+            {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+        ],
     )
     builder.text("pagination-info", builder.path("/app/tickets/pagination/info"))
     builder.text("pagination-next-text", "下一页 →")
@@ -103,7 +176,13 @@ def build_tickets_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
         "pagination-next",
         "pagination-next-text",
         "paginate",
-        [{"key": "page", "value": {"path": "/app/tickets/pagination/nextPage"}}],
+        [
+            {"key": "page", "value": {"path": "/app/tickets/pagination/nextPage"}},
+            {"key": "current_search", "value": {"path": "/app/tickets/query/search"}},
+            {"key": "current_status", "value": {"path": "/app/tickets/query/status"}},
+            {"key": "current_priority", "value": {"path": "/app/tickets/query/priority"}},
+            {"key": "current_page", "value": {"path": "/app/tickets/query/page"}},
+        ],
     )
     builder.row("tickets-pagination", ["pagination-prev", "pagination-info", "pagination-next"], distribution="center", alignment="center")
 
@@ -114,17 +193,17 @@ def build_tickets_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
     return "tickets-page", []
 
 
-def build_tickets_data(tickets_response: dict) -> list[str]:
+def build_tickets_data(tickets_response: dict, search: str = "", status: str = "", priority: str = "", page: int = 1) -> list[str]:
     """Build data model updates for tickets page."""
     messages = []
     builder = A2UIBuilder()
 
-    # Query state
+    # Query state - use actual values from URL params
     query_data = [
-        value_string("search", ""),
-        value_string("status", ""),
-        value_string("priority", ""),
-        value_number("page", tickets_response.get("page", 1)),
+        value_string("search", search),
+        value_string("status", status),
+        value_string("priority", priority),
+        value_number("page", page),
     ]
     messages.append(builder.build_data_model_update("/app/tickets/query", query_data))
 
@@ -132,6 +211,12 @@ def build_tickets_data(tickets_response: dict) -> list[str]:
     tickets = tickets_response.get("data", [])
     list_data = []
     for i, ticket in enumerate(tickets):
+        # Build tags display string
+        tags = ticket.get("tags", [])
+        tags_display = ", ".join([t.get("name", "") for t in tags[:3]])  # Show first 3 tags
+        if len(tags) > 3:
+            tags_display += f" +{len(tags) - 3}"
+        
         ticket_map = build_value_map_from_dict({
             "id": ticket["id"],
             "title": ticket["title"],
@@ -140,19 +225,31 @@ def build_tickets_data(tickets_response: dict) -> list[str]:
             "priority": ticket["priority"],
             "priorityLabel": PRIORITY_LABELS.get(Priority(ticket["priority"]), ticket["priority"]),
             "created_at": ticket["created_at"][:10],  # Date only
+            "tagsDisplay": tags_display,
+            "hasTags": len(tags) > 0,
         })
         list_data.append(value_map(f"ticket{i}", ticket_map))
     messages.append(builder.build_data_model_update("/app/tickets/list", list_data))
 
     # Pagination
     page = tickets_response.get("page", 1)
-    total_pages = tickets_response.get("total_pages", 1)
+    total_pages = tickets_response.get("total_pages", 0)
+    total_count = tickets_response.get("total", 0)
+    
+    # If no data, show "第0页/共0页"
+    if total_count == 0 or total_pages == 0:
+        display_page = 0
+        display_total = 0
+    else:
+        display_page = page
+        display_total = total_pages
+    
     pagination_data = [
-        value_number("page", page),
-        value_number("totalPages", total_pages),
-        value_number("prevPage", max(1, page - 1)),
-        value_number("nextPage", min(total_pages, page + 1)),
-        value_string("info", f"第 {page} 页 / 共 {total_pages} 页"),
+        value_number("page", display_page),
+        value_number("totalPages", display_total),
+        value_number("prevPage", max(1, page - 1) if total_pages > 0 else 0),
+        value_number("nextPage", min(total_pages, page + 1) if total_pages > 0 else 0),
+        value_string("info", f"第 {display_page} 页 / 共 {display_total} 页"),
     ]
     messages.append(builder.build_data_model_update("/app/tickets/pagination", pagination_data))
 
@@ -323,7 +420,7 @@ def build_ticket_detail_page(builder: A2UIBuilder, ticket: dict) -> tuple[str, l
 
     # Delete confirmation modal
     builder.text("delete-modal-title", "确认删除", usage_hint="h3")
-    builder.text("delete-modal-desc", "确定要删除这个票据吗？此操作无法撤销。")
+    builder.text("delete-modal-desc", "确定要删除这个任务吗？此操作无法撤销。")
     builder.text("delete-modal-cancel-text", "取消")
     builder.button("delete-modal-cancel", "delete-modal-cancel-text", "dismiss_dialog", [])
     builder.text("delete-modal-confirm-text", "确认删除")
@@ -408,7 +505,7 @@ def build_ticket_detail_data(ticket: dict, attachments: list, history: list) -> 
     return messages
 
 
-def build_ticket_create_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
+def build_ticket_create_page(builder: A2UIBuilder, tags: list) -> tuple[str, list[str]]:
     """Build the ticket create page."""
     # Back button
     builder.text("create-back-text", "← 返回列表")
@@ -419,12 +516,12 @@ def build_ticket_create_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
         [{"key": "to", "value": {"literalString": "/tickets"}}],
     )
 
-    builder.text("create-title", "新建票据", usage_hint="h1")
+    builder.text("create-title", "新建任务", usage_hint="h1")
     builder.row("create-header", ["create-back-btn", "create-title"], alignment="center")
 
     # Form
     builder.text("create-title-label", "标题 *", usage_hint="h4")
-    builder.text_field("create-title-input", "请输入票据标题", builder.path("/app/form/create/title"))
+    builder.text_field("create-title-input", "请输入任务标题", builder.path("/app/form/create/title"))
 
     builder.text("create-desc-label", "描述", usage_hint="h4")
     builder.text_field("create-desc-input", "请输入详细描述...", builder.path("/app/form/create/description"), text_field_type="multiline")
@@ -441,10 +538,24 @@ def build_ticket_create_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
     builder.button("create-priority-urgent", "create-priority-urgent-text", "set_form_priority", [{"key": "priority", "value": {"literalString": "urgent"}}])
     builder.row("create-priority-btns", ["create-priority-low", "create-priority-medium", "create-priority-high", "create-priority-urgent"], alignment="center")
 
+    # Tags selection - multi-select dropdown
+    tag_options = [
+        {"id": tag.get("id", ""), "name": tag.get("name", ""), "color": tag.get("color", "#3B82F6")}
+        for tag in tags
+    ]
+    builder.multi_select(
+        "create-tags-select",
+        "标签（可多选）",
+        tag_options,
+        "/app/form/create/selectedTagIds",
+        "toggle_multi_select",
+    )
+
     builder.column("create-form-fields", [
         "create-title-label", "create-title-input",
         "create-desc-label", "create-desc-input",
         "create-priority-label", "create-priority-btns",
+        "create-tags-select",
     ])
 
     # Actions
@@ -456,7 +567,7 @@ def build_ticket_create_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
         "navigate",
         [{"key": "to", "value": {"literalString": "/tickets"}}],
     )
-    builder.text("create-submit-text", "创建票据")
+    builder.text("create-submit-text", "创建任务")
     builder.button(
         "create-submit-btn",
         "create-submit-text",
@@ -472,7 +583,7 @@ def build_ticket_create_page(builder: A2UIBuilder) -> tuple[str, list[str]]:
     return "create-page", []
 
 
-def build_ticket_create_data() -> list[str]:
+def build_ticket_create_data(tags: list) -> list[str]:
     """Build data model updates for ticket create page."""
     messages = []
     builder = A2UIBuilder()
@@ -481,6 +592,7 @@ def build_ticket_create_data() -> list[str]:
         value_string("title", ""),
         value_string("description", ""),
         value_string("priority", "medium"),
+        value_string("selectedTagIds", ""),  # Comma-separated tag IDs
     ]
     messages.append(builder.build_data_model_update("/app/form/create", form_data))
 
@@ -500,12 +612,12 @@ def build_ticket_edit_page(builder: A2UIBuilder, ticket: dict) -> tuple[str, lis
         [{"key": "to", "value": {"literalString": f"/tickets/{ticket_id}"}}],
     )
 
-    builder.text("edit-title", "编辑票据", usage_hint="h1")
+    builder.text("edit-title", "编辑任务", usage_hint="h1")
     builder.row("edit-header", ["edit-back-btn", "edit-title"], alignment="center")
 
     # Form
     builder.text("edit-title-label", "标题 *", usage_hint="h4")
-    builder.text_field("edit-title-input", "请输入票据标题", builder.path("/app/form/edit/title"))
+    builder.text_field("edit-title-input", "请输入任务标题", builder.path("/app/form/edit/title"))
 
     builder.text("edit-desc-label", "描述", usage_hint="h4")
     builder.text_field("edit-desc-input", "请输入详细描述...", builder.path("/app/form/edit/description"), text_field_type="multiline")
