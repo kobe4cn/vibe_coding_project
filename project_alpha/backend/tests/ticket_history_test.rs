@@ -25,6 +25,7 @@ async fn test_status_change_history() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -66,6 +67,7 @@ async fn test_priority_change_history() {
             title: "Test Ticket".into(),
             description: None,
             priority: Some("medium".into()),
+            tag_ids: None,
         },
     )
     .await
@@ -110,6 +112,7 @@ async fn test_resolution_change_history() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -157,6 +160,7 @@ async fn test_tag_add_history() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -196,6 +200,7 @@ async fn test_tag_remove_history() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -239,6 +244,7 @@ async fn test_history_filter_by_type() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -301,6 +307,7 @@ async fn test_edit_with_status_change() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -357,6 +364,7 @@ async fn test_edit_with_completed_status() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await
@@ -407,6 +415,7 @@ async fn test_edit_with_invalid_status_transition() {
             title: "Test Ticket".into(),
             description: None,
             priority: None,
+            tag_ids: None,
         },
     )
     .await

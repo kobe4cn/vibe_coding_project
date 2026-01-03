@@ -29,6 +29,7 @@ async fn test_list_attachments_empty() {
         title: "Test Ticket".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -89,6 +90,7 @@ async fn test_attachment_cascade_delete() {
         title: "Cascade Delete Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -136,6 +138,7 @@ async fn test_multiple_attachments_per_ticket() {
         title: "Multiple Attachments Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, req).await.unwrap();
 

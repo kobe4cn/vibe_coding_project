@@ -215,6 +215,7 @@ async fn test_add_tag_to_ticket() {
         title: "Tagged Ticket".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, ticket_req).await.unwrap();
 
@@ -248,6 +249,7 @@ async fn test_remove_tag_from_ticket() {
         title: "Tag Remove Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, ticket_req).await.unwrap();
 

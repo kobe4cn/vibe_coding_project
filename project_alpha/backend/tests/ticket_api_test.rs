@@ -14,6 +14,7 @@ async fn test_create_ticket() {
         title: "Test Ticket".into(),
         description: Some("Test description".into()),
         priority: Some("high".into()),
+        tag_ids: None,
     };
 
     let result = tickets::create_ticket(&pool, req).await;
@@ -42,6 +43,7 @@ async fn test_create_ticket_with_default_priority() {
         title: "Default Priority Ticket".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
 
     let result = tickets::create_ticket(&pool, req).await;
@@ -62,6 +64,7 @@ async fn test_create_ticket_empty_title_fails() {
         title: "".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
 
     let result = tickets::create_ticket(&pool, req).await;
@@ -79,6 +82,7 @@ async fn test_get_ticket() {
         title: "Get Test".into(),
         description: Some("Description".into()),
         priority: Some("low".into()),
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -114,6 +118,7 @@ async fn test_update_ticket() {
         title: "Original Title".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -151,6 +156,7 @@ async fn test_delete_ticket() {
         title: "To Delete".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -177,6 +183,7 @@ async fn test_list_tickets_with_pagination() {
             title: format!("Ticket {}", i),
             description: None,
             priority: None,
+            tag_ids: None,
         };
         tickets::create_ticket(&pool, req).await.unwrap();
     }
@@ -210,6 +217,7 @@ async fn test_list_tickets_with_status_filter() {
         title: "Open Ticket".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -247,6 +255,7 @@ async fn test_list_tickets_with_search() {
         title: "Bug in login page".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -254,6 +263,7 @@ async fn test_list_tickets_with_search() {
         title: "Feature request".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     tickets::create_ticket(&pool, req).await.unwrap();
 

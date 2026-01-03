@@ -14,6 +14,7 @@ async fn test_open_to_in_progress() {
         title: "Status Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
     assert_eq!(created.ticket.status, "open");
@@ -40,6 +41,7 @@ async fn test_open_to_cancelled() {
         title: "Cancel Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -70,6 +72,7 @@ async fn test_in_progress_to_completed_requires_resolution() {
         title: "Complete Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -116,6 +119,7 @@ async fn test_invalid_transition_open_to_completed() {
         title: "Invalid Transition".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -140,6 +144,7 @@ async fn test_completed_to_open_clears_completed_at() {
         title: "Reopen Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -185,6 +190,7 @@ async fn test_cancelled_to_open() {
         title: "Reactivate Test".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -219,6 +225,7 @@ async fn test_invalid_transition_cancelled_to_completed() {
         title: "Invalid Cancel->Complete".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -252,6 +259,7 @@ async fn test_in_progress_to_open() {
         title: "Back to Open".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
@@ -286,6 +294,7 @@ async fn test_in_progress_to_cancelled() {
         title: "Cancel from Progress".into(),
         description: None,
         priority: None,
+        tag_ids: None,
     };
     let created = tickets::create_ticket(&pool, req).await.unwrap();
 
