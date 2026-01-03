@@ -40,6 +40,10 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2.0.17"
 anyhow = "1"
 
+# Async Streams (for A2UI SSE)
+tokio-stream = "0.1"
+futures = "0.3"
+
 # Validation
 validator = { version = "0.20.0", features = ["derive"] }
 

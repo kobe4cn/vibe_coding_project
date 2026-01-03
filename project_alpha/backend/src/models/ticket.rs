@@ -25,15 +25,29 @@ impl TicketStatus {
         }
     }
 
+    pub fn label(&self) -> &'static str {
+        match self {
+            TicketStatus::Open => "待处理",
+            TicketStatus::InProgress => "处理中",
+            TicketStatus::Completed => "已完成",
+            TicketStatus::Cancelled => "已取消",
+        }
+    }
+
     pub fn allowed_transitions(&self) -> Vec<TicketStatus> {
         match self {
-            TicketStatus::Open => vec![TicketStatus::InProgress, TicketStatus::Cancelled],
+            // 待处理可以转为：处理中、已完成、已取消
+            TicketStatus::Open => vec![TicketStatus::InProgress, TicketStatus::Completed, TicketStatus::Cancelled],
+            // 处理中可以转为：处理中（添加进度说明）、待处理、已完成、已取消
             TicketStatus::InProgress => vec![
+                TicketStatus::InProgress,
                 TicketStatus::Open,
                 TicketStatus::Completed,
                 TicketStatus::Cancelled,
             ],
+            // 已完成可以转为：待处理（重新打开）
             TicketStatus::Completed => vec![TicketStatus::Open],
+            // 已取消可以转为：待处理（重新打开）
             TicketStatus::Cancelled => vec![TicketStatus::Open],
         }
     }
@@ -74,6 +88,15 @@ impl Priority {
             Priority::Medium => "medium",
             Priority::High => "high",
             Priority::Urgent => "urgent",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Priority::Low => "低",
+            Priority::Medium => "中",
+            Priority::High => "高",
+            Priority::Urgent => "紧急",
         }
     }
 }
@@ -117,6 +140,8 @@ pub struct CreateTicketRequest {
     pub title: String,
     pub description: Option<String>,
     pub priority: Option<String>,
+    #[serde(default)]
+    pub tag_ids: Option<Vec<uuid::Uuid>>,
 }
 
 #[derive(Debug, Deserialize)]

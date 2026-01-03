@@ -1,3 +1,4 @@
+pub mod a2ui;
 pub mod config;
 pub mod db;
 pub mod error;

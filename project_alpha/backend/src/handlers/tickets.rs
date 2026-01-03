@@ -117,10 +117,33 @@ pub async fn create_ticket(pool: &PgPool, req: CreateTicketRequest) -> Result<Ti
     .fetch_one(pool)
     .await?;
 
-    Ok(TicketWithTags {
-        ticket,
-        tags: vec![],
-    })
+    // Add tags if provided
+    if let Some(ref tag_ids) = req.tag_ids {
+        for tag_id in tag_ids {
+            // Verify tag exists
+            sqlx::query("SELECT id FROM tags WHERE id = $1")
+                .bind(tag_id)
+                .fetch_optional(pool)
+                .await?
+                .ok_or_else(|| AppError::NotFound(format!("Tag {} not found", tag_id)))?;
+
+            // Add tag (ignore if already exists)
+            sqlx::query(
+                r#"
+                INSERT INTO ticket_tags (ticket_id, tag_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                "#,
+            )
+            .bind(ticket.id)
+            .bind(tag_id)
+            .execute(pool)
+            .await?;
+        }
+    }
+
+    // Fetch ticket with tags
+    get_ticket(pool, ticket.id).await
 }
 
 pub async fn get_ticket(pool: &PgPool, id: Uuid) -> Result<TicketWithTags> {

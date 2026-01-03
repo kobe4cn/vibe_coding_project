@@ -3,6 +3,7 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 
+pub mod a2ui;
 pub mod attachments;
 pub mod health;
 pub mod tags;
@@ -19,4 +20,5 @@ pub fn api_router() -> Router<AppState> {
         .merge(tickets::router())
         .merge(tags::router())
         .merge(attachments::router())
+        .merge(a2ui::router())
 }
