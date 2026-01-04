@@ -166,10 +166,10 @@ async fn build_tickets_ui(
     ];
 
     for (id, label, status) in &status_filters {
-        builder.text(&format!("{}-text", id), BoundValue::string(*label));
+        builder.text(format!("{}-text", id), BoundValue::string(*label));
         builder.button_with_variant(
             *id,
-            &format!("{}-text", id),
+            format!("{}-text", id),
             Action::new("filter_status")
                 .with_context("status", BoundValue::string(*status))
                 .with_context("search", BoundValue::path("/app/tickets/query/search")),
@@ -531,7 +531,7 @@ async fn fetch_tickets_with_details(
         let updated_at_display = format!("更新: {}", ticket.last_activity.format("%Y-%m-%d %H:%M"));
 
         items.push(ValueMap::map(
-            &ticket.id.to_string(),
+            ticket.id.to_string(),
             vec![
                 ValueMap::string("id", ticket.id.to_string()),
                 ValueMap::string("title", &ticket.title),
@@ -710,8 +710,8 @@ pub async fn tickets_action(
                     "page": 1,
                     "totalPages": total_pages,
                     "info": if total_pages == 0 { "无数据".to_string() } else { format!("第 1 页 / 共 {} 页", total_pages) },
-                    "prevEnabled": if total_pages == 0 || 1 <= 1 { "false" } else { "true" },
-                    "nextEnabled": if total_pages == 0 || 1 >= total_pages { "false" } else { "true" }
+                    "prevEnabled": if total_pages == 0 || 1 >= total_pages { "false" } else { "true" },
+                    "nextEnabled": if total_pages == 0 || 1 <= total_pages { "false" } else { "true" }
                 }
             })))
         }
@@ -1051,7 +1051,7 @@ async fn build_tags_ui_with_page(
     let mut items = Vec::new();
     for tag in tags {
         items.push(ValueMap::map(
-            &tag.id.to_string(),
+            tag.id.to_string(),
             vec![
                 ValueMap::string("id", tag.id.to_string()),
                 ValueMap::string("name", &tag.name),

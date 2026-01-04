@@ -22,10 +22,10 @@ pub async fn list_tickets(
     // Build dynamic query
     let mut conditions = vec!["1=1".to_string()];
 
-    if let Some(ref search) = query.search {
-        if !search.trim().is_empty() {
-            conditions.push(format!("title ILIKE '%{}%'", search.replace('\'', "''")));
-        }
+    if let Some(ref search) = query.search
+        && search.trim().is_empty()
+    {
+        conditions.push(format!("title ILIKE '%{}%'", search.replace('\'', "''")));
     }
 
     if let Some(ref status) = query.status {
@@ -262,18 +262,18 @@ pub async fn update_ticket(
         }
     }
 
-    if let Some(ref new_priority) = req.priority {
-        if current_ticket.priority != *new_priority {
-            create_history_entry(
-                pool,
-                id,
-                ChangeType::Priority,
-                Some("priority"),
-                Some(current_ticket.priority.as_str()),
-                Some(new_priority.as_str()),
-            )
-            .await?;
-        }
+    if let Some(ref new_priority) = req.priority
+        && current_ticket.priority != *new_priority
+    {
+        create_history_entry(
+            pool,
+            id,
+            ChangeType::Priority,
+            Some("priority"),
+            Some(current_ticket.priority.as_str()),
+            Some(new_priority.as_str()),
+        )
+        .await?;
     }
 
     if let Some(ref new_resolution) = req.resolution {

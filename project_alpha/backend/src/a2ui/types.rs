@@ -65,16 +65,20 @@ impl BoundValue {
 #[ts(export, export_to = "a2ui_types/")]
 pub struct ValueMap {
     pub key: String,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "valueString")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "valueString")]
     #[ts(rename = "valueString")]
     pub value_string: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "valueNumber")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "valueNumber")]
     #[ts(rename = "valueNumber")]
     pub value_number: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "valueBoolean")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "valueBoolean")]
     #[ts(rename = "valueBoolean")]
     pub value_boolean: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "valueMap")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "valueMap")]
     #[ts(rename = "valueMap")]
     pub value_map: Option<Vec<ValueMap>>,
 }

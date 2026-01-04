@@ -87,13 +87,13 @@ pub async fn update_tag(pool: &PgPool, id: Uuid, req: UpdateTagRequest) -> Resul
     let _current = get_tag(pool, id).await?;
 
     // 如果提供了颜色值，验证颜色格式（必须是 #RRGGBB 格式的十六进制颜色）
-    if let Some(ref color) = req.color {
-        if !is_valid_hex_color(color) {
-            return Err(AppError::Validation(format!(
-                "Invalid color format: {}",
-                color
-            )));
-        }
+    if let Some(ref color) = req.color
+        && !is_valid_hex_color(color)
+    {
+        return Err(AppError::Validation(format!(
+            "Invalid color format: {}",
+            color
+        )));
     }
 
     // 如果提供了名称，检查是否存在同名标签（排除当前标签）

@@ -48,7 +48,7 @@ futures = "0.3"
 validator = { version = "0.20.0", features = ["derive"] }
 
 # TypeScript type generation
-ts-rs = "10"
+ts-rs = "11.1.0"
 
 [dev-dependencies]
 # Testing
