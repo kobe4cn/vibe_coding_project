@@ -26,6 +26,7 @@ npm-debug.log*
 uploads/
 *.lock
 !Cargo.lock
+!yarn.lock
 
 # Test
 coverage/
