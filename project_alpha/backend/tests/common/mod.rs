@@ -1,6 +1,10 @@
 use sqlx::PgPool;
 use std::sync::Once;
 use ticket_backend::config::Config;
+use tokio::sync::Mutex;
+
+// 使用全局锁确保测试串行执行，避免数据库竞争
+static TEST_LOCK: Mutex<()> = Mutex::const_new(());
 
 static INIT: Once = Once::new();
 
@@ -34,24 +38,37 @@ pub async fn setup_test_db() -> PgPool {
     pool
 }
 
-pub async fn cleanup_test_data(pool: &PgPool) {
+pub async fn lock_and_cleanup_data(pool: &PgPool) -> Option<tokio::sync::MutexGuard<'static, ()>> {
+    // 使用锁确保 cleanup 操作的原子性，以及后续测试运行期间的独占访问
+    let lock = TEST_LOCK.lock().await;
+    
+    // 按照外键依赖顺序删除
     sqlx::query("DELETE FROM ticket_history")
         .execute(pool)
         .await
         .ok();
+    
     sqlx::query("DELETE FROM ticket_tags")
         .execute(pool)
         .await
         .ok();
+    
     sqlx::query("DELETE FROM attachments")
         .execute(pool)
         .await
         .ok();
-    sqlx::query("DELETE FROM tickets").execute(pool).await.ok();
+    
+    sqlx::query("DELETE FROM tickets")
+        .execute(pool)
+        .await
+        .ok();
+    
     sqlx::query("DELETE FROM tags WHERE is_predefined = false")
         .execute(pool)
         .await
         .ok();
+
+    Some(lock)
 }
 
 #[allow(dead_code)]

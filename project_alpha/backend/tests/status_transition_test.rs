@@ -1,6 +1,6 @@
 mod common;
 
-use common::{cleanup_test_data, init_test_logging, setup_test_db};
+use common::{init_test_logging, lock_and_cleanup_data, setup_test_db};
 use ticket_backend::handlers::tickets;
 use ticket_backend::models::{CreateTicketRequest, UpdateStatusRequest};
 
@@ -8,7 +8,7 @@ use ticket_backend::models::{CreateTicketRequest, UpdateStatusRequest};
 async fn test_open_to_in_progress() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Status Test".into(),
@@ -27,15 +27,13 @@ async fn test_open_to_in_progress() {
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().ticket.status, "in_progress");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_open_to_cancelled() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Cancel Test".into(),
@@ -58,15 +56,13 @@ async fn test_open_to_cancelled() {
         ticket.ticket.resolution.as_deref(),
         Some("No longer needed")
     );
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_in_progress_to_completed_requires_resolution() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Complete Test".into(),
@@ -105,15 +101,13 @@ async fn test_in_progress_to_completed_requires_resolution() {
     assert_eq!(ticket.ticket.status, "completed");
     assert!(ticket.ticket.completed_at.is_some());
     assert_eq!(ticket.ticket.resolution.as_deref(), Some("Fixed the issue"));
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_invalid_transition_open_to_completed() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Invalid Transition".into(),
@@ -130,15 +124,13 @@ async fn test_invalid_transition_open_to_completed() {
     };
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_err());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_completed_to_open_clears_completed_at() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Reopen Test".into(),
@@ -176,15 +168,13 @@ async fn test_completed_to_open_clears_completed_at() {
         .unwrap();
     assert_eq!(reopened.ticket.status, "open");
     assert!(reopened.ticket.completed_at.is_none());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_cancelled_to_open() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Reactivate Test".into(),
@@ -211,15 +201,13 @@ async fn test_cancelled_to_open() {
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().ticket.status, "open");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_invalid_transition_cancelled_to_completed() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Invalid Cancel->Complete".into(),
@@ -245,15 +233,13 @@ async fn test_invalid_transition_cancelled_to_completed() {
     };
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_err());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_in_progress_to_open() {
     init_test_logging();
     let pool = setup_test_db().await;
-    // cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Back to Open".into(),
@@ -280,15 +266,13 @@ async fn test_in_progress_to_open() {
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().ticket.status, "open");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_in_progress_to_cancelled() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let req = CreateTicketRequest {
         title: "Cancel from Progress".into(),
@@ -315,6 +299,4 @@ async fn test_in_progress_to_cancelled() {
     let result = tickets::update_status(&pool, created.ticket.id, status_req).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().ticket.status, "cancelled");
-
-    cleanup_test_data(&pool).await;
 }

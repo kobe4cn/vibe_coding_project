@@ -1,6 +1,6 @@
 mod common;
 
-use common::{cleanup_test_data, init_test_logging, setup_test_db, test_config};
+use common::{init_test_logging, lock_and_cleanup_data, setup_test_db, test_config};
 use std::path::PathBuf;
 use ticket_backend::handlers::{attachments, tickets};
 use ticket_backend::models::CreateTicketRequest;
@@ -24,7 +24,7 @@ async fn cleanup_test_upload_dir() {
 async fn test_list_attachments_empty() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -39,14 +39,13 @@ async fn test_list_attachments_empty() {
     let result = attachments::list_attachments(&pool, ticket.ticket.id).await;
     assert!(result.is_ok());
     assert!(result.unwrap().is_empty());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_list_attachments_for_nonexistent_ticket() {
     init_test_logging();
     let pool = setup_test_db().await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     let fake_id = Uuid::new_v4();
     let result = attachments::list_attachments(&pool, fake_id).await;
@@ -59,6 +58,7 @@ async fn test_list_attachments_for_nonexistent_ticket() {
 async fn test_delete_nonexistent_attachment() {
     init_test_logging();
     let pool = setup_test_db().await;
+    let _lock = lock_and_cleanup_data(&pool).await;
     let config = test_config();
 
     let fake_id = Uuid::new_v4();
@@ -70,6 +70,7 @@ async fn test_delete_nonexistent_attachment() {
 async fn test_get_attachment_file_nonexistent() {
     init_test_logging();
     let pool = setup_test_db().await;
+    let _lock = lock_and_cleanup_data(&pool).await;
     let config = test_config();
 
     let fake_id = Uuid::new_v4();
@@ -85,7 +86,7 @@ async fn test_get_attachment_file_nonexistent() {
 async fn test_attachment_cascade_delete() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -95,7 +96,7 @@ async fn test_attachment_cascade_delete() {
         tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, req).await.unwrap();
-
+    println!("ticket: {:?}", ticket);
     // Insert a mock attachment directly (bypassing file upload)
     sqlx::query(
         r#"
@@ -113,6 +114,7 @@ async fn test_attachment_cascade_delete() {
     let attachments_before = attachments::list_attachments(&pool, ticket.ticket.id)
         .await
         .unwrap();
+    println!("attachments_before: {:?}", attachments_before);
     assert_eq!(attachments_before.len(), 1);
 
     // Delete ticket (should cascade delete attachment)
@@ -125,15 +127,13 @@ async fn test_attachment_cascade_delete() {
         .await
         .unwrap();
     assert!(attachments_after.is_empty());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_multiple_attachments_per_ticket() {
     init_test_logging();
     let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let _lock = lock_and_cleanup_data(&pool).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -143,6 +143,7 @@ async fn test_multiple_attachments_per_ticket() {
         tag_ids: None,
     };
     let ticket = tickets::create_ticket(&pool, req).await.unwrap();
+    let ticket_id = ticket.ticket.id;
 
     // Insert multiple mock attachments
     for i in 1..=3 {
@@ -153,19 +154,17 @@ async fn test_multiple_attachments_per_ticket() {
             "#,
         )
         .bind(Uuid::new_v4())
-        .bind(ticket.ticket.id)
+        .bind(ticket_id)
         .bind(format!("file{}.txt", i))
         .bind(format!("/tmp/file{}.txt", i))
         .execute(&pool)
         .await
-        .unwrap();
+        .expect(&format!("Failed to insert attachment {} for ticket {}", i, ticket_id));
     }
 
     // List attachments
-    let attachments_list = attachments::list_attachments(&pool, ticket.ticket.id)
+    let attachments_list = attachments::list_attachments(&pool, ticket_id)
         .await
         .unwrap();
     assert_eq!(attachments_list.len(), 3);
-
-    cleanup_test_data(&pool).await;
 }
