@@ -1,16 +1,21 @@
 //! A2UI v0.8 Protocol Types
 //!
 //! Type definitions for the A2UI protocol messages.
+//!
+//! These types are exported to TypeScript using ts-rs.
+//! Run `cargo test export_bindings` to generate TypeScript definitions.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 
 // ============================================================================
 // Value Types
 // ============================================================================
 
 /// A bound value that can be a literal or a data binding path
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 #[serde(untagged)]
 pub enum BoundValue {
     LiteralString { #[serde(rename = "literalString")] literal_string: String },
@@ -42,16 +47,21 @@ impl BoundValue {
 // ============================================================================
 
 /// A value in the data model
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct ValueMap {
     pub key: String,
     #[serde(skip_serializing_if = "Option::is_none", rename = "valueString")]
+    #[ts(rename = "valueString")]
     pub value_string: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "valueNumber")]
+    #[ts(rename = "valueNumber")]
     pub value_number: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "valueBoolean")]
+    #[ts(rename = "valueBoolean")]
     pub value_boolean: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "valueMap")]
+    #[ts(rename = "valueMap")]
     pub value_map: Option<Vec<ValueMap>>,
 }
 
@@ -102,14 +112,17 @@ impl ValueMap {
 // ============================================================================
 
 /// A UI component definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct Component {
     pub id: String,
+    #[ts(type = "Record<string, unknown>")]
     pub component: HashMap<String, serde_json::Value>,
 }
 
 /// Children definition for container components
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 #[serde(untagged)]
 pub enum Children {
     Explicit {
@@ -138,11 +151,14 @@ impl Children {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct TemplateBinding {
     #[serde(rename = "componentId")]
+    #[ts(rename = "componentId")]
     pub component_id: String,
     #[serde(rename = "dataBinding")]
+    #[ts(rename = "dataBinding")]
     pub data_binding: String,
 }
 
@@ -151,7 +167,8 @@ pub struct TemplateBinding {
 // ============================================================================
 
 /// An action that can be triggered by user interaction
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct Action {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -176,7 +193,8 @@ impl Action {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct ActionContext {
     pub key: String,
     pub value: BoundValue,
@@ -187,7 +205,8 @@ pub struct ActionContext {
 // ============================================================================
 
 /// A2UI protocol message
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 #[serde(untagged)]
 pub enum A2UIMessage {
     SurfaceUpdate {
@@ -208,32 +227,40 @@ pub enum A2UIMessage {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct SurfaceUpdatePayload {
     #[serde(rename = "surfaceId")]
+    #[ts(rename = "surfaceId")]
     pub surface_id: String,
     pub components: Vec<Component>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct DataModelUpdatePayload {
     #[serde(rename = "surfaceId")]
+    #[ts(rename = "surfaceId")]
     pub surface_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     pub contents: Vec<ValueMap>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct BeginRenderingPayload {
     #[serde(rename = "surfaceId")]
+    #[ts(rename = "surfaceId")]
     pub surface_id: String,
     pub root: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct DeleteSurfacePayload {
     #[serde(rename = "surfaceId")]
+    #[ts(rename = "surfaceId")]
     pub surface_id: String,
 }
 
@@ -242,13 +269,17 @@ pub struct DeleteSurfacePayload {
 // ============================================================================
 
 /// A user action sent from the client
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "a2ui_types/")]
 pub struct UserAction {
     pub name: String,
     #[serde(rename = "surfaceId")]
+    #[ts(rename = "surfaceId")]
     pub surface_id: String,
     #[serde(rename = "sourceComponentId")]
+    #[ts(rename = "sourceComponentId")]
     pub source_component_id: String,
     pub timestamp: String,
+    #[ts(type = "Record<string, unknown>")]
     pub context: HashMap<String, serde_json::Value>,
 }

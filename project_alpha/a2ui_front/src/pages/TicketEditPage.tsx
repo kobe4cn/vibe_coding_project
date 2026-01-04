@@ -10,7 +10,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { A2UISurface, A2UISurfaceRef, useA2UIContext, useA2UIValue } from '@/a2ui';
+import { A2UISurface, A2UISurfaceRef, useA2UIContext } from '@/a2ui';
 import { TagSelector } from '@/components/tag/TagSelector';
 import { useTicket, useTags, useUpdateTicket, useUpdateTicketTags } from '@/hooks/useTicket';
 import { useToast } from '@/components/common/Toast';
@@ -34,10 +34,9 @@ export default function TicketEditPage() {
   // Local state for tags (React-managed)
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
-  // A2UI form values (synced via context)
-  const formTitle = useA2UIValue<string>('/app/form/edit/title');
-  const formDescription = useA2UIValue<string>('/app/form/edit/description');
-  const formPriority = useA2UIValue<string>('/app/form/edit/priority');
+  // Note: A2UI form values are accessed via getValue() in handleSave
+  // The useA2UIValue hook could be used for real-time display, but
+  // we use getValue for on-demand access when saving
 
   // Initialize form values when ticket loads
   useEffect(() => {
@@ -78,7 +77,7 @@ export default function TicketEditPage() {
       // Update ticket via React Query
       await updateTicket.mutateAsync({
         id,
-        data: { title: title.trim(), description: description?.trim() || null, priority },
+        data: { title: title.trim(), description: description?.trim() || undefined, priority },
       });
 
       // Update tags if changed

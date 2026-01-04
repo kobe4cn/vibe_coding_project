@@ -109,6 +109,7 @@ function LogEntry({ entry, isSelected, onClick }: {
     action: 'bg-yellow-100 text-yellow-800',
     response: 'bg-green-100 text-green-800',
     error: 'bg-red-100 text-red-800',
+    validation: 'bg-orange-100 text-orange-800',
   };
 
   const directionIcon = entry.direction === 'in' ? '⬅' : '➡';
@@ -124,6 +125,11 @@ function LogEntry({ entry, isSelected, onClick }: {
     if (entry.type === 'action') {
       const data = entry.data as { action?: { name?: string } };
       return data.action?.name || 'Action';
+    }
+    if (entry.type === 'validation') {
+      const data = entry.data as { issues?: Array<{ path: string }> };
+      const issueCount = data.issues?.length || 0;
+      return `Validation (${issueCount} issue${issueCount !== 1 ? 's' : ''})`;
     }
     return entry.type;
   };
@@ -181,7 +187,7 @@ function LogsPanel() {
       {/* Filter bar */}
       <div className="flex items-center gap-2 p-2 border-b bg-gray-50 flex-shrink-0">
         <span className="text-xs text-gray-500">Filter:</span>
-        {(['sse', 'action', 'response', 'error'] as const).map(type => (
+        {(['sse', 'action', 'response', 'error', 'validation'] as const).map(type => (
           <button
             key={type}
             className={`px-2 py-0.5 text-xs rounded ${

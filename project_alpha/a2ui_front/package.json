@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "generate:types": "cd ../backend && cargo test export_bindings -- --nocapture"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.12",
@@ -19,7 +20,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.10.1",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zod": "^4.3.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

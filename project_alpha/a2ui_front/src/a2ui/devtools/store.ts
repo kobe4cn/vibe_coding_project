@@ -6,10 +6,18 @@ import type { A2UIMessage, Action, Component } from '../types';
 export interface DevToolsLogEntry {
   id: string;
   timestamp: Date;
-  type: 'sse' | 'action' | 'response' | 'error';
+  type: 'sse' | 'action' | 'response' | 'error' | 'validation';
   direction: 'in' | 'out';
   surfaceId?: string;
   data: unknown;
+}
+
+export interface ValidationError {
+  rawData: unknown;
+  issues: Array<{
+    path: string;
+    message: string;
+  }>;
 }
 
 export interface DevToolsState {
@@ -34,7 +42,7 @@ class DevToolsStore {
     components: new Map(),
     selectedLogId: null,
     filter: {
-      types: new Set(['sse', 'action', 'response', 'error']),
+      types: new Set<DevToolsLogEntry['type']>(['sse', 'action', 'response', 'error', 'validation']),
       surfaceId: null,
     },
   };
@@ -148,6 +156,24 @@ class DevToolsStore {
         message: typeof error === 'string' ? error : error.message,
         stack: error instanceof Error ? error.stack : undefined,
       },
+    };
+
+    this.addLog(entry);
+  }
+
+  /**
+   * Log a validation error for A2UI message schema validation
+   */
+  logValidationError(surfaceId: string | undefined, validationError: ValidationError): void {
+    if (!this.state.enabled) return;
+
+    const entry: DevToolsLogEntry = {
+      id: this.generateId(),
+      timestamp: new Date(),
+      type: 'validation',
+      direction: 'in',
+      surfaceId,
+      data: validationError,
     };
 
     this.addLog(entry);

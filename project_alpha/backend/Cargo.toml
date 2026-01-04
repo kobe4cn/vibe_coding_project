@@ -47,6 +47,9 @@ futures = "0.3"
 # Validation
 validator = { version = "0.20.0", features = ["derive"] }
 
+# TypeScript type generation
+ts-rs = "10"
+
 [dev-dependencies]
 # Testing
 tokio-test = "0.4"

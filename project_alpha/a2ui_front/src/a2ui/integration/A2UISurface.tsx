@@ -142,15 +142,4 @@ export const A2UISurface = forwardRef<A2UISurfaceRef, A2UISurfaceProps>(
   }
 );
 
-// Type declarations for JSX
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace JSX {
-    interface IntrinsicElements {
-      'a2ui-surface': React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & { surfaceId?: string },
-        HTMLElement
-      >;
-    }
-  }
-}
+// Type declarations for JSX are in ../jsx.d.ts

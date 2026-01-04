@@ -4,6 +4,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useA2UIContext } from './A2UIContext';
 import { devToolsStore } from '../devtools/store';
+import { validateA2UIMessage } from '../schemas';
 import type { A2UIMessage, Action, UserAction, Component } from '../types';
 
 interface UseA2UIOptions {
@@ -70,7 +71,24 @@ export function useA2UI({
 
     eventSource.onmessage = (event) => {
       try {
-        const message = JSON.parse(event.data) as A2UIMessage;
+        const rawData = JSON.parse(event.data);
+
+        // Validate message schema
+        const validationResult = validateA2UIMessage(rawData);
+        if (!validationResult.success && validationResult.error) {
+          // Log validation error to DevTools
+          devToolsStore.logValidationError(surfaceId, {
+            rawData,
+            issues: validationResult.error.issues.map((issue) => ({
+              path: issue.path.length > 0 ? issue.path.join('.') : 'root',
+              message: issue.message,
+            })),
+          });
+          console.warn('A2UI message validation failed:', validationResult.error.issues);
+        }
+
+        // Proceed with processing (use validated data if available, fallback to raw)
+        const message = (validationResult.data || rawData) as A2UIMessage;
 
         // Log to DevTools
         devToolsStore.logSSEMessage(surfaceId, message);
