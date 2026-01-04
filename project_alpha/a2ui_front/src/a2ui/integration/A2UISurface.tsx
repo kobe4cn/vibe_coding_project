@@ -84,6 +84,7 @@ export const A2UISurface = forwardRef<A2UISurfaceRef, A2UISurfaceProps>(
       if (!surface) return;
 
       // Share data model with Lit surface
+      // eslint-disable-next-line
       surface.dataModel = dataModel;
 
       // Set action handler to bridge to React

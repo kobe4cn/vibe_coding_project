@@ -12,7 +12,7 @@ export default function TicketDetailPage() {
   const navigate = useNavigate();
   const surfaceRef = useRef<A2UISurfaceRef>(null);
 
-  const handleAction = (action: { name: string; context?: { key: string; value: unknown }[] }, _sourceId: string) => {
+  const handleAction = (action: { name: string; context?: { key: string; value: unknown }[] }) => {
     switch (action.name) {
       case 'navigate_back':
         navigate('/tickets');

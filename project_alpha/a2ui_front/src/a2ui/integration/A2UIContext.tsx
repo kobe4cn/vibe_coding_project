@@ -1,7 +1,7 @@
 /**
  * A2UI Context - State bridge between A2UI DataModel and React
  */
-import { createContext, useContext, useRef, useSyncExternalStore, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useRef, useSyncExternalStore, useCallback, useEffect, useState, ReactNode } from 'react';
 import { DataModel } from '../renderer/data-model';
 import type { DataModelSnapshot, Action } from '../types';
 
@@ -20,16 +20,17 @@ interface A2UIProviderProps {
 }
 
 export function A2UIProvider({ children }: A2UIProviderProps) {
-  const dataModelRef = useRef<DataModel>(new DataModel());
+  // Use useState to create stable instances that are safe to access during render
+  const [dataModel] = useState(() => new DataModel());
   const actionHandlersRef = useRef<Set<(action: Action, sourceId: string) => void>>(new Set());
 
   const getValue = useCallback((path: string): unknown => {
-    return dataModelRef.current.get(path);
-  }, []);
+    return dataModel.get(path);
+  }, [dataModel]);
 
   const setValue = useCallback((path: string, value: unknown): void => {
-    dataModelRef.current.set(path, value);
-  }, []);
+    dataModel.set(path, value);
+  }, [dataModel]);
 
   const dispatchAction = useCallback((action: Action, sourceId: string): void => {
     for (const handler of actionHandlersRef.current) {
@@ -49,7 +50,7 @@ export function A2UIProvider({ children }: A2UIProviderProps) {
   }, []);
 
   const value: A2UIContextValue = {
-    dataModel: dataModelRef.current,
+    dataModel,
     getValue,
     setValue,
     dispatchAction,

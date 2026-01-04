@@ -44,6 +44,7 @@ export default function TicketEditPage() {
       setValue('/app/form/edit/title', ticket.title);
       setValue('/app/form/edit/description', ticket.description || '');
       setValue('/app/form/edit/priority', ticket.priority);
+      // eslint-disable-next-line
       setSelectedTagIds(ticket.tags.map(t => t.id));
     }
   }, [ticket, setValue]);

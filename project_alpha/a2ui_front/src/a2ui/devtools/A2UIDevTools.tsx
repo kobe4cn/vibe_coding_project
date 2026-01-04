@@ -501,11 +501,6 @@ export function A2UIDevTools() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // Only show in development
-  if (!isDev) {
-    return null;
-  }
-
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.devtools-content')) return;
     setIsDragging(true);
@@ -537,6 +532,11 @@ export function A2UIDevTools() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging]);
+
+  // Only show in development
+  if (!isDev) {
+    return null;
+  }
 
   // Toggle button when closed
   if (!isOpen) {
