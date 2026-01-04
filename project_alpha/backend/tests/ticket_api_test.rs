@@ -1,14 +1,15 @@
 mod common;
 
-use common::{cleanup_test_data, init_test_logging, setup_test_db};
+use common::init_test_logging;
 use ticket_backend::handlers::tickets;
 use ticket_backend::models::{CreateTicketRequest, TicketQuery, UpdateTicketRequest};
+
+use crate::common::get_test_pool;
 
 #[tokio::test]
 async fn test_create_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTicketRequest {
         title: "Test Ticket".into(),
@@ -29,15 +30,12 @@ async fn test_create_ticket() {
     assert_eq!(ticket.ticket.priority, "high");
     assert_eq!(ticket.ticket.status, "open");
     assert!(ticket.tags.is_empty());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_create_ticket_with_default_priority() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTicketRequest {
         title: "Default Priority Ticket".into(),
@@ -51,14 +49,12 @@ async fn test_create_ticket_with_default_priority() {
 
     let ticket = result.unwrap();
     assert_eq!(ticket.ticket.priority, "medium");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_create_ticket_empty_title_fails() {
     init_test_logging();
-    let pool = setup_test_db().await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTicketRequest {
         title: "".into(),
@@ -74,8 +70,7 @@ async fn test_create_ticket_empty_title_fails() {
 #[tokio::test]
 async fn test_get_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket first
     let req = CreateTicketRequest {
@@ -93,14 +88,12 @@ async fn test_get_ticket() {
     let ticket = result.unwrap();
     assert_eq!(ticket.ticket.id, created.ticket.id);
     assert_eq!(ticket.ticket.title, "Get Test");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_get_nonexistent_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let fake_id = uuid::Uuid::new_v4();
     let result = tickets::get_ticket(&pool, fake_id).await;
@@ -110,8 +103,7 @@ async fn test_get_nonexistent_ticket() {
 #[tokio::test]
 async fn test_update_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -141,15 +133,12 @@ async fn test_update_ticket() {
         Some("New description")
     );
     assert_eq!(updated.ticket.priority, "urgent");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_delete_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -167,15 +156,12 @@ async fn test_delete_ticket() {
     // Verify it's deleted
     let get_result = tickets::get_ticket(&pool, created.ticket.id).await;
     assert!(get_result.is_err());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_list_tickets_with_pagination() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create multiple tickets
     for i in 1..=5 {
@@ -202,15 +188,12 @@ async fn test_list_tickets_with_pagination() {
     assert_eq!(response.data.len(), 2);
     assert_eq!(response.total, 5);
     assert_eq!(response.total_pages, 3);
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_list_tickets_with_status_filter() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create tickets
     let req = CreateTicketRequest {
@@ -240,15 +223,12 @@ async fn test_list_tickets_with_status_filter() {
     let result = tickets::list_tickets(&pool, query).await;
     assert!(result.is_ok());
     assert!(result.unwrap().data.is_empty());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_list_tickets_with_search() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create tickets
     let req = CreateTicketRequest {
@@ -278,6 +258,4 @@ async fn test_list_tickets_with_search() {
     let response = result.unwrap();
     assert_eq!(response.data.len(), 1);
     assert!(response.data[0].ticket.title.contains("Bug"));
-
-    cleanup_test_data(&pool).await;
 }

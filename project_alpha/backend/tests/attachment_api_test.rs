@@ -1,11 +1,13 @@
 mod common;
 
-use common::{init_test_logging, lock_and_cleanup_data, setup_test_db, test_config};
+use common::{init_test_logging, test_config};
 use std::path::PathBuf;
 use ticket_backend::handlers::{attachments, tickets};
 use ticket_backend::models::CreateTicketRequest;
 use tokio::fs;
 use uuid::Uuid;
+
+use crate::common::get_test_pool;
 
 #[allow(dead_code)]
 async fn setup_test_upload_dir() -> PathBuf {
@@ -23,8 +25,7 @@ async fn cleanup_test_upload_dir() {
 #[tokio::test]
 async fn test_list_attachments_empty() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    let _lock = lock_and_cleanup_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -44,8 +45,7 @@ async fn test_list_attachments_empty() {
 #[tokio::test]
 async fn test_list_attachments_for_nonexistent_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    let _lock = lock_and_cleanup_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let fake_id = Uuid::new_v4();
     let result = attachments::list_attachments(&pool, fake_id).await;
@@ -57,8 +57,7 @@ async fn test_list_attachments_for_nonexistent_ticket() {
 #[tokio::test]
 async fn test_delete_nonexistent_attachment() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    let _lock = lock_and_cleanup_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
     let config = test_config();
 
     let fake_id = Uuid::new_v4();
@@ -69,8 +68,7 @@ async fn test_delete_nonexistent_attachment() {
 #[tokio::test]
 async fn test_get_attachment_file_nonexistent() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    let _lock = lock_and_cleanup_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
     let config = test_config();
 
     let fake_id = Uuid::new_v4();
@@ -85,8 +83,7 @@ async fn test_get_attachment_file_nonexistent() {
 #[tokio::test]
 async fn test_attachment_cascade_delete() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    let _lock = lock_and_cleanup_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket
     let req = CreateTicketRequest {
@@ -132,8 +129,7 @@ async fn test_attachment_cascade_delete() {
 #[tokio::test]
 async fn test_multiple_attachments_per_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    let _lock = lock_and_cleanup_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket
     let req = CreateTicketRequest {

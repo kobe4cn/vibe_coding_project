@@ -23,7 +23,7 @@ pub async fn list_tickets(
     let mut conditions = vec!["1=1".to_string()];
 
     if let Some(ref search) = query.search
-        && search.trim().is_empty()
+        && !search.trim().is_empty()
     {
         conditions.push(format!("title ILIKE '%{}%'", search.replace('\'', "''")));
     }

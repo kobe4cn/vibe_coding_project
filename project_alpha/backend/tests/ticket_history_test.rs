@@ -1,6 +1,6 @@
 mod common;
 
-use common::{cleanup_test_data, init_test_logging, setup_test_db};
+use common::init_test_logging;
 use ticket_backend::{
     handlers::{
         ticket_history::list_history,
@@ -12,11 +12,12 @@ use ticket_backend::{
 };
 use uuid::Uuid;
 
+use crate::common::get_test_pool;
+
 #[tokio::test]
 async fn test_status_change_history() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -57,8 +58,7 @@ async fn test_status_change_history() {
 #[tokio::test]
 async fn test_priority_change_history() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -102,8 +102,7 @@ async fn test_priority_change_history() {
 #[tokio::test]
 async fn test_resolution_change_history() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -150,8 +149,7 @@ async fn test_resolution_change_history() {
 #[tokio::test]
 async fn test_tag_add_history() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -190,8 +188,7 @@ async fn test_tag_add_history() {
 #[tokio::test]
 async fn test_tag_remove_history() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -234,8 +231,7 @@ async fn test_tag_remove_history() {
 #[tokio::test]
 async fn test_history_filter_by_type() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -297,8 +293,7 @@ async fn test_history_filter_by_type() {
 #[tokio::test]
 async fn test_edit_with_status_change() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -354,8 +349,7 @@ async fn test_edit_with_status_change() {
 #[tokio::test]
 async fn test_edit_with_completed_status() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(
@@ -405,8 +399,7 @@ async fn test_edit_with_completed_status() {
 #[tokio::test]
 async fn test_edit_with_invalid_status_transition() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket
     let ticket = create_ticket(

@@ -1,14 +1,15 @@
 mod common;
 
-use common::{cleanup_test_data, init_test_logging, setup_test_db};
+use common::init_test_logging;
 use ticket_backend::handlers::{tags, tickets};
 use ticket_backend::models::{CreateTagRequest, CreateTicketRequest, UpdateTagRequest};
+
+use crate::common::get_test_pool;
 
 #[tokio::test]
 async fn test_create_tag() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "Test Tag".into(),
@@ -24,15 +25,12 @@ async fn test_create_tag() {
     assert_eq!(tag.color, "#FF5733");
     assert_eq!(tag.icon.as_deref(), Some("alert-circle"));
     assert!(!tag.is_predefined);
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_create_tag_with_default_color() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "Default Color Tag".into(),
@@ -45,14 +43,12 @@ async fn test_create_tag_with_default_color() {
 
     let tag = result.unwrap();
     assert_eq!(tag.color, "#6B7280"); // default color
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_create_tag_empty_name_fails() {
     init_test_logging();
-    let pool = setup_test_db().await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "".into(),
@@ -67,7 +63,7 @@ async fn test_create_tag_empty_name_fails() {
 #[tokio::test]
 async fn test_create_tag_invalid_color_fails() {
     init_test_logging();
-    let pool = setup_test_db().await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "Invalid Color".into(),
@@ -82,8 +78,7 @@ async fn test_create_tag_invalid_color_fails() {
 #[tokio::test]
 async fn test_create_duplicate_tag_fails() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "Unique Tag".into(),
@@ -100,15 +95,12 @@ async fn test_create_duplicate_tag_fails() {
     };
     let result = tags::create_tag(&pool, req).await;
     assert!(result.is_err());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_get_tag() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "Get Test Tag".into(),
@@ -120,15 +112,12 @@ async fn test_get_tag() {
     let result = tags::get_tag(&pool, created.id).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().name, "Get Test Tag");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_update_tag() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "Original Tag".into(),
@@ -149,15 +138,12 @@ async fn test_update_tag() {
     assert_eq!(updated.name, "Updated Tag");
     assert_eq!(updated.color, "#FFFFFF");
     assert_eq!(updated.icon.as_deref(), Some("star"));
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_delete_tag() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let req = CreateTagRequest {
         name: "To Delete Tag".into(),
@@ -171,14 +157,12 @@ async fn test_delete_tag() {
 
     let get_result = tags::get_tag(&pool, created.id).await;
     assert!(get_result.is_err());
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_cannot_delete_predefined_tag() {
     init_test_logging();
-    let pool = setup_test_db().await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Get a predefined tag
     let tags_list = tags::list_tags(&pool).await.unwrap();
@@ -193,7 +177,7 @@ async fn test_cannot_delete_predefined_tag() {
 #[tokio::test]
 async fn test_list_tags() {
     init_test_logging();
-    let pool = setup_test_db().await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     let result = tags::list_tags(&pool).await;
     assert!(result.is_ok());
@@ -207,8 +191,7 @@ async fn test_list_tags() {
 #[tokio::test]
 async fn test_add_tag_to_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create a ticket
     let ticket_req = CreateTicketRequest {
@@ -234,15 +217,12 @@ async fn test_add_tag_to_ticket() {
     let updated_ticket = result.unwrap();
     assert_eq!(updated_ticket.tags.len(), 1);
     assert_eq!(updated_ticket.tags[0].name, "Custom Tag");
-
-    cleanup_test_data(&pool).await;
 }
 
 #[tokio::test]
 async fn test_remove_tag_from_ticket() {
     init_test_logging();
-    let pool = setup_test_db().await;
-    cleanup_test_data(&pool).await;
+    let (_tdb, pool) = get_test_pool(None).await;
 
     // Create ticket and tag
     let ticket_req = CreateTicketRequest {
@@ -269,6 +249,4 @@ async fn test_remove_tag_from_ticket() {
 
     let updated_ticket = result.unwrap();
     assert!(updated_ticket.tags.is_empty());
-
-    cleanup_test_data(&pool).await;
 }
