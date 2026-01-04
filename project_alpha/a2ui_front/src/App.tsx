@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import { A2UIDevTools } from './a2ui/devtools';
 
 // Lazy load pages
 const TicketsPage = lazy(() => import('./pages/TicketsPage'));
@@ -29,6 +30,9 @@ export default function App() {
           <Route path="/tags" element={<TagsPage />} />
         </Routes>
       </Suspense>
+
+      {/* A2UI DevTools - only visible in development */}
+      <A2UIDevTools />
     </div>
   );
 }

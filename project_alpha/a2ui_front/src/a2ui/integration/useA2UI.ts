@@ -3,6 +3,7 @@
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useA2UIContext } from './A2UIContext';
+import { devToolsStore } from '../devtools/store';
 import type { A2UIMessage, Action, UserAction, Component } from '../types';
 
 interface UseA2UIOptions {
@@ -71,6 +72,9 @@ export function useA2UI({
       try {
         const message = JSON.parse(event.data) as A2UIMessage;
 
+        // Log to DevTools
+        devToolsStore.logSSEMessage(surfaceId, message);
+
         // Handle different message types
         if ('surfaceUpdate' in message) {
           const { surfaceId: msgSurfaceId, components: newComponents } = message.surfaceUpdate;
@@ -94,6 +98,7 @@ export function useA2UI({
         onMessage?.(message);
       } catch (err) {
         console.error('Failed to parse A2UI message:', err);
+        devToolsStore.logError(surfaceId, err instanceof Error ? err : String(err));
       }
     };
 
@@ -104,6 +109,7 @@ export function useA2UI({
       const err = new Error('SSE connection failed');
       setError(err);
       onError?.(err);
+      devToolsStore.logError(surfaceId, err);
 
       // Auto-reconnect after 3 seconds
       reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -156,6 +162,9 @@ export function useA2UI({
       })),
     };
 
+    // Log action to DevTools
+    devToolsStore.logAction(surfaceId, action, sourceId, resolvedContext);
+
     // Dispatch to React handlers
     dispatchAction(resolvedAction as Action, sourceId);
     onAction?.(resolvedAction as Action, sourceId);
@@ -174,6 +183,9 @@ export function useA2UI({
 
       // Parse response for follow-up actions
       const result = await response.json();
+
+      // Log response to DevTools
+      devToolsStore.logActionResponse(surfaceId, result);
 
       // If backend returns a ticketId, trigger success action
       if (result.success && result.ticketId) {
@@ -255,6 +267,7 @@ export function useA2UI({
       }
     } catch (err) {
       console.error('Failed to send action:', err);
+      devToolsStore.logError(surfaceId, err instanceof Error ? err : String(err));
       throw err;
     }
   }, [surfaceId, actionUrl, dataModel, dispatchAction, onAction]);

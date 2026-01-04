@@ -10,6 +10,7 @@ export class DataModel {
   private listeners: Set<DataModelListener> = new Set();
   private batchMode = false;
   private batchedPaths: Set<string> = new Set();
+  private cachedSnapshot: DataModelSnapshot | null = null;
 
   /**
    * Subscribe to data model changes (for React integration)
@@ -25,6 +26,9 @@ export class DataModel {
    * Notify all listeners of a change
    */
   private notify(path: string, value: unknown): void {
+    // Invalidate cached snapshot
+    this.cachedSnapshot = null;
+
     if (this.batchMode) {
       this.batchedPaths.add(path);
       return;
@@ -68,12 +72,18 @@ export class DataModel {
 
   /**
    * Get a snapshot of all data (for React state sync)
+   * Cached to work correctly with useSyncExternalStore
    */
   getSnapshot(): DataModelSnapshot {
+    if (this.cachedSnapshot !== null) {
+      return this.cachedSnapshot;
+    }
+
     const result: DataModelSnapshot = {};
     for (const [key, value] of this.data.entries()) {
       result[key] = value;
     }
+    this.cachedSnapshot = result;
     return result;
   }
 
@@ -335,6 +345,7 @@ export class DataModel {
   clear(): void {
     this.data.clear();
     this.dirtyPaths.clear();
+    this.cachedSnapshot = null;
   }
 
   /**
@@ -346,5 +357,20 @@ export class DataModel {
       result[key] = value;
     }
     return result;
+  }
+
+  /**
+   * Get all dirty paths (for DevTools)
+   */
+  getDirtyPaths(): string[] {
+    return Array.from(this.dirtyPaths);
+  }
+
+  /**
+   * Check if a path is dirty
+   */
+  isDirty(path: string): boolean {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return this.dirtyPaths.has(normalizedPath);
   }
 }
