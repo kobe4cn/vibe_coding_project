@@ -7,12 +7,14 @@ use ticket_backend::models::CreateTicketRequest;
 use tokio::fs;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 async fn setup_test_upload_dir() -> PathBuf {
     let dir = PathBuf::from("/tmp/ticket_test_uploads");
     fs::create_dir_all(&dir).await.ok();
     dir
 }
 
+#[allow(dead_code)]
 async fn cleanup_test_upload_dir() {
     let dir = PathBuf::from("/tmp/ticket_test_uploads");
     fs::remove_dir_all(&dir).await.ok();

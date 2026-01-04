@@ -8,11 +8,13 @@ use std::collections::HashMap;
 use super::types::*;
 
 /// Builder for creating A2UI components
+#[allow(dead_code)]
 pub struct ComponentBuilder {
     components: Vec<Component>,
     id_counter: u32,
 }
 
+#[allow(dead_code)]
 impl ComponentBuilder {
     pub fn new() -> Self {
         Self {
@@ -197,7 +199,10 @@ impl ComponentBuilder {
         distribution: Option<&str>,
     ) -> &mut Self {
         let mut props = HashMap::new();
-        props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
+        props.insert(
+            "children".to_string(),
+            serde_json::to_value(&children).unwrap(),
+        );
         if let Some(a) = alignment {
             props.insert("alignment".to_string(), json!(a));
         }
@@ -224,7 +229,10 @@ impl ComponentBuilder {
         distribution: Option<&str>,
     ) -> &mut Self {
         let mut props = HashMap::new();
-        props.insert("children".to_string(), serde_json::to_value(&children).unwrap());
+        props.insert(
+            "children".to_string(),
+            serde_json::to_value(&children).unwrap(),
+        );
         if let Some(a) = alignment {
             props.insert("alignment".to_string(), json!(a));
         }
@@ -263,7 +271,10 @@ impl ComponentBuilder {
         direction: &str,
     ) -> &mut Self {
         let props: HashMap<String, serde_json::Value> = [
-            ("children".to_string(), serde_json::to_value(&children).unwrap()),
+            (
+                "children".to_string(),
+                serde_json::to_value(&children).unwrap(),
+            ),
             ("direction".to_string(), json!(direction)),
         ]
         .into_iter()
@@ -283,9 +294,7 @@ impl ComponentBuilder {
     pub fn divider(&mut self, id: impl Into<String>) -> &mut Self {
         self.components.push(Component {
             id: id.into(),
-            component: [("Divider".to_string(), json!({}))]
-                .into_iter()
-                .collect(),
+            component: [("Divider".to_string(), json!({}))].into_iter().collect(),
         });
         self
     }
@@ -359,10 +368,12 @@ impl Default for ComponentBuilder {
 }
 
 /// Builder for creating A2UI messages
+#[allow(dead_code)]
 pub struct MessageBuilder {
     surface_id: String,
 }
 
+#[allow(dead_code)]
 impl MessageBuilder {
     pub fn new(surface_id: impl Into<String>) -> Self {
         Self {

@@ -3,9 +3,9 @@
 //! HTTP handlers for A2UI SSE streams and actions.
 
 use axum::{
+    Json,
     extract::{Path, Query, State},
     response::sse::Sse,
-    Json,
 };
 use futures::stream::Stream;
 use serde::Deserialize;
@@ -14,7 +14,7 @@ use tracing::info;
 
 use crate::a2ui::{
     builder::{ComponentBuilder, MessageBuilder},
-    sse::{create_channel, sse_from_channel, A2UISender},
+    sse::{A2UISender, create_channel, sse_from_channel},
     types::*,
 };
 use crate::error::AppError;
@@ -25,7 +25,7 @@ use crate::routes::AppState;
 fn valuemap_to_json(item: &ValueMap) -> serde_json::Value {
     let mut obj = serde_json::Map::new();
     obj.insert("id".to_string(), serde_json::json!(&item.key));
-    
+
     if let Some(ref v) = item.value_string {
         obj.insert(item.key.clone(), serde_json::json!(v));
     }
@@ -48,7 +48,7 @@ fn valuemap_to_json(item: &ValueMap) -> serde_json::Value {
             }
         }
     }
-    
+
     serde_json::Value::Object(obj)
 }
 
@@ -84,7 +84,10 @@ pub async fn tickets_stream(
     let search = query.search.clone().unwrap_or_default();
 
     // Debug logging
-    info!("tickets_stream: page={}, status='{}', search='{}'", page, status, search);
+    info!(
+        "tickets_stream: page={}, status='{}', search='{}'",
+        page, status, search
+    );
 
     let (tx, rx) = create_channel(32);
 
@@ -187,18 +190,38 @@ async fn build_tickets_ui(
     // Ticket item template - enhanced with more info
     // Title row
     builder.text_with_width("ticket-item-title", BoundValue::path("title"), "auto");
-    
+
     // Tags display (using color swatches in a row)
-    builder.text_with_hint("ticket-item-tags", BoundValue::path("tags_display"), Some("caption"));
-    
+    builder.text_with_hint(
+        "ticket-item-tags",
+        BoundValue::path("tags_display"),
+        Some("caption"),
+    );
+
     // Status and priority badges
-    builder.text_with_hint("ticket-item-status", BoundValue::path("status_label"), Some("badge"));
-    builder.text_with_hint("ticket-item-priority", BoundValue::path("priority_label"), Some("badge"));
-    
+    builder.text_with_hint(
+        "ticket-item-status",
+        BoundValue::path("status_label"),
+        Some("badge"),
+    );
+    builder.text_with_hint(
+        "ticket-item-priority",
+        BoundValue::path("priority_label"),
+        Some("badge"),
+    );
+
     // Time info
-    builder.text_with_hint("ticket-item-created", BoundValue::path("created_at_display"), Some("caption"));
-    builder.text_with_hint("ticket-item-updated", BoundValue::path("updated_at_display"), Some("caption"));
-    
+    builder.text_with_hint(
+        "ticket-item-created",
+        BoundValue::path("created_at_display"),
+        Some("caption"),
+    );
+    builder.text_with_hint(
+        "ticket-item-updated",
+        BoundValue::path("updated_at_display"),
+        Some("caption"),
+    );
+
     // Process button (only shown for non-completed tickets via process_btn_text binding)
     builder.text("process-btn-text", BoundValue::path("process_btn_text"));
     builder.button_with_variant(
@@ -207,17 +230,24 @@ async fn build_tickets_ui(
         Action::new("open_process_modal")
             .with_context("ticketId", BoundValue::path("id"))
             .with_context("currentStatus", BoundValue::path("status")),
-        Some("action"),  // Blue action button for visibility
+        Some("action"), // Blue action button for visibility
     );
 
     // Layout structure
-    builder.row("ticket-item-badges", Children::explicit(vec!["ticket-item-status", "ticket-item-priority"]));
-    
+    builder.row(
+        "ticket-item-badges",
+        Children::explicit(vec!["ticket-item-status", "ticket-item-priority"]),
+    );
+
     builder.column(
         "ticket-item-info",
-        Children::explicit(vec!["ticket-item-title", "ticket-item-tags", "ticket-item-badges"]),
+        Children::explicit(vec![
+            "ticket-item-title",
+            "ticket-item-tags",
+            "ticket-item-badges",
+        ]),
     );
-    
+
     builder.column(
         "ticket-item-times",
         Children::explicit(vec!["ticket-item-created", "ticket-item-updated"]),
@@ -227,8 +257,7 @@ async fn build_tickets_ui(
     builder.button_with_variant(
         "ticket-item-main-btn",
         "ticket-item-info",
-        Action::new("navigate_ticket_detail")
-            .with_context("ticketId", BoundValue::path("id")),
+        Action::new("navigate_ticket_detail").with_context("ticketId", BoundValue::path("id")),
         Some("ghost"),
     );
 
@@ -249,7 +278,10 @@ async fn build_tickets_ui(
     builder.card("ticket-item-card", "ticket-item-content");
 
     // Tickets list
-    builder.list("tickets-list", Children::template("ticket-item-card", "/app/tickets/items"));
+    builder.list(
+        "tickets-list",
+        Children::template("ticket-item-card", "/app/tickets/items"),
+    );
 
     // Pagination controls
     builder.text("prev-page-text", BoundValue::string("← 上一页"));
@@ -257,19 +289,34 @@ async fn build_tickets_ui(
         "prev-page-btn",
         "prev-page-text",
         Action::new("prev_page")
-            .with_context("currentPage", BoundValue::path("/app/tickets/pagination/page"))
-            .with_context("totalPages", BoundValue::path("/app/tickets/pagination/totalPages"))
+            .with_context(
+                "currentPage",
+                BoundValue::path("/app/tickets/pagination/page"),
+            )
+            .with_context(
+                "totalPages",
+                BoundValue::path("/app/tickets/pagination/totalPages"),
+            )
             .with_context("search", BoundValue::path("/app/tickets/query/search"))
             .with_context("status", BoundValue::path("/app/tickets/query/status")),
     );
-    builder.text("page-info", BoundValue::path("/app/tickets/pagination/info"));
+    builder.text(
+        "page-info",
+        BoundValue::path("/app/tickets/pagination/info"),
+    );
     builder.text("next-page-text", BoundValue::string("下一页 →"));
     builder.button(
         "next-page-btn",
         "next-page-text",
         Action::new("next_page")
-            .with_context("currentPage", BoundValue::path("/app/tickets/pagination/page"))
-            .with_context("totalPages", BoundValue::path("/app/tickets/pagination/totalPages"))
+            .with_context(
+                "currentPage",
+                BoundValue::path("/app/tickets/pagination/page"),
+            )
+            .with_context(
+                "totalPages",
+                BoundValue::path("/app/tickets/pagination/totalPages"),
+            )
             .with_context("search", BoundValue::path("/app/tickets/query/search"))
             .with_context("status", BoundValue::path("/app/tickets/query/status")),
     );
@@ -306,7 +353,9 @@ async fn build_tickets_ui(
     tx.send(msg.surface_update(components)).await?;
 
     // Fetch tickets with pagination and filters
-    let (items, total_count) = fetch_tickets_with_details(db, search_filter, status_filter, page, TICKETS_PAGE_SIZE).await?;
+    let (items, total_count) =
+        fetch_tickets_with_details(db, search_filter, status_filter, page, TICKETS_PAGE_SIZE)
+            .await?;
     // Fix pagination: if total_count is 0, total_pages should be 0
     let total_pages = if total_count == 0 {
         0
@@ -321,7 +370,10 @@ async fn build_tickets_ui(
         let is_selected = status == &status_filter;
         filter_button_states.push(ValueMap::map(
             *id,
-            vec![ValueMap::string("selected", if is_selected { "true" } else { "false" })],
+            vec![ValueMap::string(
+                "selected",
+                if is_selected { "true" } else { "false" },
+            )],
         ));
     }
 
@@ -350,8 +402,22 @@ async fn build_tickets_ui(
                             format!("第 {} 页 / 共 {} 页", page, total_pages)
                         },
                     ),
-                    ValueMap::string("prevEnabled", if total_pages == 0 || page <= 1 { "false" } else { "true" }),
-                    ValueMap::string("nextEnabled", if total_pages == 0 || page >= total_pages { "false" } else { "true" }),
+                    ValueMap::string(
+                        "prevEnabled",
+                        if total_pages == 0 || page <= 1 {
+                            "false"
+                        } else {
+                            "true"
+                        },
+                    ),
+                    ValueMap::string(
+                        "nextEnabled",
+                        if total_pages == 0 || page >= total_pages {
+                            "false"
+                        } else {
+                            "true"
+                        },
+                    ),
                 ],
             ),
             ValueMap::map("filters", filter_button_states),
@@ -376,7 +442,9 @@ async fn fetch_tickets_with_details(
     let offset = (page - 1) * page_size;
 
     // Build query with filters
-    let mut query = String::from("SELECT t.*, COALESCE(MAX(th.created_at), t.updated_at) as last_activity FROM tickets t LEFT JOIN ticket_history th ON t.id = th.ticket_id WHERE 1=1");
+    let mut query = String::from(
+        "SELECT t.*, COALESCE(MAX(th.created_at), t.updated_at) as last_activity FROM tickets t LEFT JOIN ticket_history th ON t.id = th.ticket_id WHERE 1=1",
+    );
     let mut count_query = String::from("SELECT COUNT(*) FROM tickets WHERE 1=1");
     let mut params: Vec<String> = Vec::new();
 
@@ -406,6 +474,7 @@ async fn fetch_tickets_with_details(
 
     // Custom struct for the query result
     #[derive(sqlx::FromRow)]
+    #[allow(dead_code)]
     struct TicketWithActivity {
         id: uuid::Uuid,
         title: String,
@@ -440,13 +509,20 @@ async fn fetch_tickets_with_details(
         let tags_display = if tags.is_empty() {
             "无标签".to_string()
         } else {
-            tags.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join(", ")
+            tags.iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         };
 
-        let status_label = ticket.status.parse::<crate::models::ticket::TicketStatus>()
+        let status_label = ticket
+            .status
+            .parse::<crate::models::ticket::TicketStatus>()
             .map(|s| s.label())
             .unwrap_or(&ticket.status);
-        let priority_label = ticket.priority.parse::<crate::models::ticket::Priority>()
+        let priority_label = ticket
+            .priority
+            .parse::<crate::models::ticket::Priority>()
             .map(|p| p.label())
             .unwrap_or(&ticket.priority);
 
@@ -467,7 +543,14 @@ async fn fetch_tickets_with_details(
                 ValueMap::string("created_at_display", &created_at_display),
                 ValueMap::string("updated_at_display", &updated_at_display),
                 // Only show process button for non-completed tickets
-                ValueMap::string("process_btn_text", if ticket.status == "completed" { "" } else { "处理" }),
+                ValueMap::string(
+                    "process_btn_text",
+                    if ticket.status == "completed" {
+                        ""
+                    } else {
+                        "处理"
+                    },
+                ),
             ],
         ));
     }
@@ -483,7 +566,10 @@ pub async fn tickets_action(
     State(state): State<AppState>,
     Json(action): Json<UserAction>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    info!("Received action: {} from {}", action.name, action.source_component_id);
+    info!(
+        "Received action: {} from {}",
+        action.name, action.source_component_id
+    );
 
     match action.name.as_str() {
         "search_tickets" | "filter_status" => {
@@ -503,13 +589,19 @@ pub async fn tickets_action(
         }
         "process_ticket" => {
             // Handle ticket processing - update status and add progress description
-            let ticket_id = action.context.get("ticketId")
+            let ticket_id = action
+                .context
+                .get("ticketId")
                 .and_then(|v| v.as_str())
                 .and_then(|s| uuid::Uuid::parse_str(s).ok());
-            let new_status = action.context.get("newStatus")
+            let new_status = action
+                .context
+                .get("newStatus")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            let progress_note = action.context.get("progressNote")
+            let progress_note = action
+                .context
+                .get("progressNote")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
@@ -528,12 +620,11 @@ pub async fn tickets_action(
             }
 
             // Get current ticket status
-            let current: Option<String> = sqlx::query_scalar(
-                "SELECT status FROM tickets WHERE id = $1"
-            )
-                .bind(ticket_id)
-                .fetch_optional(&state.db)
-                .await?;
+            let current: Option<String> =
+                sqlx::query_scalar("SELECT status FROM tickets WHERE id = $1")
+                    .bind(ticket_id)
+                    .fetch_optional(&state.db)
+                    .await?;
 
             let Some(current_status) = current else {
                 return Ok(Json(serde_json::json!({
@@ -543,7 +634,8 @@ pub async fn tickets_action(
             };
 
             // Validate status transition
-            let current_status_enum = current_status.parse::<crate::models::ticket::TicketStatus>()?;
+            let current_status_enum =
+                current_status.parse::<crate::models::ticket::TicketStatus>()?;
             let new_status_enum = new_status.parse::<crate::models::ticket::TicketStatus>()?;
 
             if !current_status_enum.can_transition_to(&new_status_enum) {
@@ -554,7 +646,8 @@ pub async fn tickets_action(
             }
 
             // Update ticket status
-            let completed_at = if new_status_enum == crate::models::ticket::TicketStatus::Completed {
+            let completed_at = if new_status_enum == crate::models::ticket::TicketStatus::Completed
+            {
                 Some(chrono::Utc::now())
             } else {
                 None
@@ -590,10 +683,14 @@ pub async fn tickets_action(
                     .await?;
             }
 
-            info!("Processed ticket {}: {} -> {}", ticket_id, current_status, new_status);
+            info!(
+                "Processed ticket {}: {} -> {}",
+                ticket_id, current_status, new_status
+            );
 
             // Return updated ticket list
-            let (items, total_count) = fetch_tickets_with_details(&state.db, "", "", 1, TICKETS_PAGE_SIZE).await?;
+            let (items, total_count) =
+                fetch_tickets_with_details(&state.db, "", "", 1, TICKETS_PAGE_SIZE).await?;
             let total_pages = if total_count == 0 {
                 0
             } else {
@@ -618,12 +715,10 @@ pub async fn tickets_action(
                 }
             })))
         }
-        _ => {
-            Ok(Json(serde_json::json!({
-                "success": true,
-                "message": format!("Action {} received", action.name)
-            })))
-        }
+        _ => Ok(Json(serde_json::json!({
+            "success": true,
+            "message": format!("Action {} received", action.name)
+        }))),
     }
 }
 
@@ -660,12 +755,11 @@ async fn build_ticket_edit_ui(
     let msg = MessageBuilder::new(surface_id);
 
     // Fetch ticket
-    let ticket = sqlx::query_as::<_, crate::models::ticket::Ticket>(
-        "SELECT * FROM tickets WHERE id = $1",
-    )
-    .bind(ticket_id)
-    .fetch_optional(db)
-    .await?;
+    let ticket =
+        sqlx::query_as::<_, crate::models::ticket::Ticket>("SELECT * FROM tickets WHERE id = $1")
+            .bind(ticket_id)
+            .fetch_optional(db)
+            .await?;
 
     let ticket = match ticket {
         Some(t) => t,
@@ -720,8 +814,7 @@ async fn build_ticket_edit_ui(
         builder.button_with_variant(
             &btn_id,
             &text_id,
-            Action::new("select_priority")
-                .with_context("priority", BoundValue::string(*value)),
+            Action::new("select_priority").with_context("priority", BoundValue::string(*value)),
             Some("secondary"),
         );
     }
@@ -804,6 +897,7 @@ pub async fn tags_stream(
 
 const TAGS_PAGE_SIZE: i64 = 10;
 
+#[allow(dead_code)]
 async fn build_tags_ui(
     tx: &A2UISender,
     surface_id: &str,
@@ -833,7 +927,11 @@ async fn build_tags_ui_with_page(
 
     // Create button
     builder.text("create-tag-text", BoundValue::string("新建标签"));
-    builder.button("create-tag-btn", "create-tag-text", Action::new("open_create_form"));
+    builder.button(
+        "create-tag-btn",
+        "create-tag-text",
+        Action::new("open_create_form"),
+    );
 
     builder.row_with_props(
         "header-row",
@@ -862,7 +960,10 @@ async fn build_tags_ui_with_page(
         Some("ghost"),
     );
 
-    builder.row("tag-actions", Children::explicit(vec!["tag-edit-btn", "tag-delete-btn"]));
+    builder.row(
+        "tag-actions",
+        Children::explicit(vec!["tag-edit-btn", "tag-delete-btn"]),
+    );
     builder.row_with_props(
         "tag-item-content",
         Children::explicit(vec!["tag-name", "tag-color", "tag-actions"]),
@@ -872,7 +973,10 @@ async fn build_tags_ui_with_page(
     builder.card("tag-item-card", "tag-item-content");
 
     // Tags list
-    builder.list("tags-list", Children::template("tag-item-card", "/app/tags/items"));
+    builder.list(
+        "tags-list",
+        Children::template("tag-item-card", "/app/tags/items"),
+    );
 
     // Pagination controls
     let mut pagination_children = vec![];
@@ -927,20 +1031,22 @@ async fn build_tags_ui_with_page(
     );
 
     // Main layout with pagination
-    builder.column("tags-content", Children::explicit(vec!["header-row", "tags-list", "pagination-row"]));
+    builder.column(
+        "tags-content",
+        Children::explicit(vec!["header-row", "tags-list", "pagination-row"]),
+    );
 
     let components = builder.build();
     tx.send(msg.surface_update(components)).await?;
 
     // Fetch tags with pagination
     let offset = (current_page - 1) * TAGS_PAGE_SIZE;
-    let tags: Vec<crate::models::Tag> = sqlx::query_as(
-        "SELECT * FROM tags ORDER BY created_at DESC LIMIT $1 OFFSET $2"
-    )
-        .bind(TAGS_PAGE_SIZE)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
+    let tags: Vec<crate::models::Tag> =
+        sqlx::query_as("SELECT * FROM tags ORDER BY created_at DESC LIMIT $1 OFFSET $2")
+            .bind(TAGS_PAGE_SIZE)
+            .bind(offset)
+            .fetch_all(db)
+            .await?;
 
     let mut items = Vec::new();
     for tag in tags {
@@ -959,13 +1065,20 @@ async fn build_tags_ui_with_page(
         Some("/app/tags".to_string()),
         vec![
             ValueMap::map("items", items),
-            ValueMap::map("pagination", vec![
-                ValueMap::string("info", format!("第 {} 页 / 共 {} 页", current_page, total_pages.max(1))),
-                ValueMap::string("page", current_page.to_string()),
-                ValueMap::string("totalPages", total_pages.to_string()),
-            ]),
+            ValueMap::map(
+                "pagination",
+                vec![
+                    ValueMap::string(
+                        "info",
+                        format!("第 {} 页 / 共 {} 页", current_page, total_pages.max(1)),
+                    ),
+                    ValueMap::string("page", current_page.to_string()),
+                    ValueMap::string("totalPages", total_pages.to_string()),
+                ],
+            ),
         ],
-    )).await?;
+    ))
+    .await?;
 
     tx.send(msg.begin_rendering("tags-content")).await?;
     Ok(())
@@ -975,7 +1088,10 @@ pub async fn tags_action(
     State(state): State<AppState>,
     Json(action): Json<UserAction>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    info!("Received tags action: {} from {}", action.name, action.source_component_id);
+    info!(
+        "Received tags action: {} from {}",
+        action.name, action.source_component_id
+    );
 
     match action.name.as_str() {
         "open_create_form" => {
@@ -987,7 +1103,9 @@ pub async fn tags_action(
             Ok(Json(serde_json::json!({ "success": true })))
         }
         "delete_tag" => {
-            let tag_id = action.context.get("tagId")
+            let tag_id = action
+                .context
+                .get("tagId")
                 .and_then(|v| v.as_str())
                 .and_then(|s| uuid::Uuid::parse_str(s).ok());
 
@@ -1017,15 +1135,21 @@ pub async fn tags_action(
         }
         "submit_tag" => {
             // Create or update tag
-            let name = action.context.get("name")
+            let name = action
+                .context
+                .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let color = action.context.get("color")
+            let color = action
+                .context
+                .get("color")
                 .and_then(|v| v.as_str())
                 .unwrap_or("#3B82F6")
                 .to_string();
-            let editing_id = action.context.get("editingId")
+            let editing_id = action
+                .context
+                .get("editingId")
                 .and_then(|v| v.as_str())
                 .and_then(|s| uuid::Uuid::parse_str(s).ok());
 
@@ -1077,17 +1201,21 @@ pub async fn tags_action(
 }
 
 async fn fetch_all_tags(db: &sqlx::PgPool) -> Result<Vec<serde_json::Value>, AppError> {
-    let tags: Vec<crate::models::Tag> = sqlx::query_as("SELECT * FROM tags ORDER BY created_at DESC")
-        .fetch_all(db)
-        .await?;
+    let tags: Vec<crate::models::Tag> =
+        sqlx::query_as("SELECT * FROM tags ORDER BY created_at DESC")
+            .fetch_all(db)
+            .await?;
 
-    let items: Vec<serde_json::Value> = tags.iter().map(|tag| {
-        serde_json::json!({
-            "id": tag.id.to_string(),
-            "name": tag.name,
-            "color": tag.color
+    let items: Vec<serde_json::Value> = tags
+        .iter()
+        .map(|tag| {
+            serde_json::json!({
+                "id": tag.id.to_string(),
+                "name": tag.name,
+                "color": tag.color
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(items)
 }
@@ -1123,12 +1251,11 @@ async fn build_ticket_detail_ui(
     let msg = MessageBuilder::new(surface_id);
 
     // Fetch ticket
-    let ticket = sqlx::query_as::<_, crate::models::ticket::Ticket>(
-        "SELECT * FROM tickets WHERE id = $1"
-    )
-    .bind(ticket_id)
-    .fetch_optional(db)
-    .await?;
+    let ticket =
+        sqlx::query_as::<_, crate::models::ticket::Ticket>("SELECT * FROM tickets WHERE id = $1")
+            .bind(ticket_id)
+            .fetch_optional(db)
+            .await?;
 
     let ticket = match ticket {
         Some(t) => t,
@@ -1146,60 +1273,112 @@ async fn build_ticket_detail_ui(
 
     // Back button and title
     builder.text("back-text", BoundValue::string("← 返回"));
-    builder.button_with_variant("back-btn", "back-text", Action::new("navigate_back"), Some("ghost"));
+    builder.button_with_variant(
+        "back-btn",
+        "back-text",
+        Action::new("navigate_back"),
+        Some("ghost"),
+    );
 
-    builder.text_with_hint("detail-title", BoundValue::path("/app/ticket/title"), Some("h1"));
-    builder.row("header-row", Children::explicit(vec!["back-btn", "detail-title"]));
+    builder.text_with_hint(
+        "detail-title",
+        BoundValue::path("/app/ticket/title"),
+        Some("h1"),
+    );
+    builder.row(
+        "header-row",
+        Children::explicit(vec!["back-btn", "detail-title"]),
+    );
 
     // Status and priority badges
-    builder.text_with_hint("status-badge", BoundValue::path("/app/ticket/status_label"), Some("badge"));
-    builder.text_with_hint("priority-badge", BoundValue::path("/app/ticket/priority_label"), Some("badge"));
-    builder.row("meta-row", Children::explicit(vec!["status-badge", "priority-badge"]));
+    builder.text_with_hint(
+        "status-badge",
+        BoundValue::path("/app/ticket/status_label"),
+        Some("badge"),
+    );
+    builder.text_with_hint(
+        "priority-badge",
+        BoundValue::path("/app/ticket/priority_label"),
+        Some("badge"),
+    );
+    builder.row(
+        "meta-row",
+        Children::explicit(vec!["status-badge", "priority-badge"]),
+    );
 
     // Description
     builder.label("desc-label", "描述");
     builder.text("desc-text", BoundValue::path("/app/ticket/description"));
-    builder.column("desc-section", Children::explicit(vec!["desc-label", "desc-text"]));
+    builder.column(
+        "desc-section",
+        Children::explicit(vec!["desc-label", "desc-text"]),
+    );
 
     // Action buttons
     builder.text("edit-text", BoundValue::string("编辑"));
     builder.button("edit-btn", "edit-text", Action::new("navigate_edit"));
 
     builder.text("delete-text", BoundValue::string("删除"));
-    builder.button_with_variant("delete-btn", "delete-text", Action::new("delete_ticket"), Some("ghost"));
+    builder.button_with_variant(
+        "delete-btn",
+        "delete-text",
+        Action::new("delete_ticket"),
+        Some("ghost"),
+    );
 
-    builder.row("action-buttons", Children::explicit(vec!["edit-btn", "delete-btn"]));
+    builder.row(
+        "action-buttons",
+        Children::explicit(vec!["edit-btn", "delete-btn"]),
+    );
 
     // Card content
-    builder.column("card-content", Children::explicit(vec![
-        "meta-row".to_string(), "desc-section".to_string(), "action-buttons".to_string()
-    ]));
+    builder.column(
+        "card-content",
+        Children::explicit(vec![
+            "meta-row".to_string(),
+            "desc-section".to_string(),
+            "action-buttons".to_string(),
+        ]),
+    );
     builder.card("detail-card", "card-content");
 
     // Main layout
-    builder.column("detail-layout", Children::explicit(vec!["header-row", "detail-card"]));
+    builder.column(
+        "detail-layout",
+        Children::explicit(vec!["header-row", "detail-card"]),
+    );
 
     let components = builder.build();
     tx.send(msg.surface_update(components)).await?;
 
     // Send data
-    let status_label = ticket.status.parse::<crate::models::ticket::TicketStatus>()
-        .map(|s| s.label()).unwrap_or(&ticket.status);
-    let priority_label = ticket.priority.parse::<crate::models::ticket::Priority>()
-        .map(|p| p.label()).unwrap_or(&ticket.priority);
+    let status_label = ticket
+        .status
+        .parse::<crate::models::ticket::TicketStatus>()
+        .map(|s| s.label())
+        .unwrap_or(&ticket.status);
+    let priority_label = ticket
+        .priority
+        .parse::<crate::models::ticket::Priority>()
+        .map(|p| p.label())
+        .unwrap_or(&ticket.priority);
 
     tx.send(msg.data_update(
         Some("/app/ticket".to_string()),
         vec![
             ValueMap::string("id", ticket.id.to_string()),
             ValueMap::string("title", &ticket.title),
-            ValueMap::string("description", ticket.description.as_deref().unwrap_or("暂无描述")),
+            ValueMap::string(
+                "description",
+                ticket.description.as_deref().unwrap_or("暂无描述"),
+            ),
             ValueMap::string("status", &ticket.status),
             ValueMap::string("status_label", status_label),
             ValueMap::string("priority", &ticket.priority),
             ValueMap::string("priority_label", priority_label),
         ],
-    )).await?;
+    ))
+    .await?;
 
     tx.send(msg.begin_rendering("detail-layout")).await?;
     Ok(())
@@ -1210,7 +1389,10 @@ pub async fn ticket_detail_action(
     Path(id): Path<uuid::Uuid>,
     Json(action): Json<UserAction>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    info!("Received ticket detail action: {} for ticket {}", action.name, id);
+    info!(
+        "Received ticket detail action: {} for ticket {}",
+        action.name, id
+    );
 
     match action.name.as_str() {
         "navigate_back" | "navigate_edit" | "delete_ticket" => {
@@ -1228,7 +1410,9 @@ pub async fn ticket_create_stream(
     State(_state): State<AppState>,
     Query(query): Query<StreamQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<axum::response::sse::Event, Infallible>>>, AppError> {
-    let surface_id = query.surface_id.unwrap_or_else(|| "ticket-create".to_string());
+    let surface_id = query
+        .surface_id
+        .unwrap_or_else(|| "ticket-create".to_string());
     let (tx, rx) = create_channel(32);
 
     tokio::spawn(async move {
@@ -1250,23 +1434,50 @@ async fn build_ticket_create_ui(
 
     // Back button and title
     builder.text("back-text", BoundValue::string("← 返回"));
-    builder.button_with_variant("back-btn", "back-text", Action::new("navigate_back"), Some("ghost"));
+    builder.button_with_variant(
+        "back-btn",
+        "back-text",
+        Action::new("navigate_back"),
+        Some("ghost"),
+    );
     builder.h1("create-title", "新建工单");
-    builder.row("header-row", Children::explicit(vec!["back-btn", "create-title"]));
+    builder.row(
+        "header-row",
+        Children::explicit(vec!["back-btn", "create-title"]),
+    );
 
     // Title field
     builder.label("title-label", "标题 *");
-    builder.text_field("title-field", BoundValue::string("请输入工单标题"), BoundValue::path("/app/form/create/title"));
-    builder.column("title-group", Children::explicit(vec!["title-label", "title-field"]));
+    builder.text_field(
+        "title-field",
+        BoundValue::string("请输入工单标题"),
+        BoundValue::path("/app/form/create/title"),
+    );
+    builder.column(
+        "title-group",
+        Children::explicit(vec!["title-label", "title-field"]),
+    );
 
     // Description field
     builder.label("desc-label", "描述");
-    builder.textarea("desc-field", BoundValue::string("请输入详细描述（可选）"), BoundValue::path("/app/form/create/description"));
-    builder.column("desc-group", Children::explicit(vec!["desc-label", "desc-field"]));
+    builder.textarea(
+        "desc-field",
+        BoundValue::string("请输入详细描述（可选）"),
+        BoundValue::path("/app/form/create/description"),
+    );
+    builder.column(
+        "desc-group",
+        Children::explicit(vec!["desc-label", "desc-field"]),
+    );
 
     // Priority selection
     builder.label("priority-label", "优先级");
-    let priorities = vec![("low", "低"), ("medium", "中"), ("high", "高"), ("urgent", "紧急")];
+    let priorities = vec![
+        ("low", "低"),
+        ("medium", "中"),
+        ("high", "高"),
+        ("urgent", "紧急"),
+    ];
     for (value, label) in &priorities {
         let btn_id = format!("priority-{}", value);
         let text_id = format!("priority-{}-text", value);
@@ -1278,18 +1489,33 @@ async fn build_ticket_create_ui(
             Some("secondary"),
         );
     }
-    builder.row("priority-buttons", Children::explicit(
-        priorities.iter().map(|(v, _)| format!("priority-{}", v)).collect()
-    ));
-    builder.column("priority-group", Children::explicit(vec!["priority-label", "priority-buttons"]));
+    builder.row(
+        "priority-buttons",
+        Children::explicit(
+            priorities
+                .iter()
+                .map(|(v, _)| format!("priority-{}", v))
+                .collect(),
+        ),
+    );
+    builder.column(
+        "priority-group",
+        Children::explicit(vec!["priority-label", "priority-buttons"]),
+    );
 
     // Form content (without action buttons - those are rendered by React along with TagSelector)
-    builder.column("form-fields", Children::explicit(vec!["title-group", "desc-group", "priority-group"]));
+    builder.column(
+        "form-fields",
+        Children::explicit(vec!["title-group", "desc-group", "priority-group"]),
+    );
 
     builder.card("form-card", "form-fields");
 
     // Main layout
-    builder.column("create-layout", Children::explicit(vec!["header-row", "form-card"]));
+    builder.column(
+        "create-layout",
+        Children::explicit(vec!["header-row", "form-card"]),
+    );
 
     let components = builder.build();
     tx.send(msg.surface_update(components)).await?;
@@ -1302,7 +1528,8 @@ async fn build_ticket_create_ui(
             ValueMap::string("description", ""),
             ValueMap::string("priority", "medium"),
         ],
-    )).await?;
+    ))
+    .await?;
 
     tx.send(msg.begin_rendering("create-layout")).await?;
     Ok(())
@@ -1317,20 +1544,28 @@ pub async fn ticket_create_action(
     match action.name.as_str() {
         "submit_create" => {
             // Get form data from context
-            let title = action.context.get("title")
+            let title = action
+                .context
+                .get("title")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let description = action.context.get("description")
+            let description = action
+                .context
+                .get("description")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
                 .filter(|s| !s.is_empty());
-            let priority = action.context.get("priority")
+            let priority = action
+                .context
+                .get("priority")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            
+
             // Get tag_ids from context
-            let tag_ids = action.context.get("tag_ids")
+            let tag_ids = action
+                .context
+                .get("tag_ids")
                 .and_then(|v| v.as_array())
                 .map(|arr| {
                     arr.iter()
@@ -1358,7 +1593,10 @@ pub async fn ticket_create_action(
 
             let ticket = handlers::tickets::create_ticket(&state.db, req).await?;
 
-            info!("Created ticket: {} - {}", ticket.ticket.id, ticket.ticket.title);
+            info!(
+                "Created ticket: {} - {}",
+                ticket.ticket.id, ticket.ticket.title
+            );
 
             Ok(Json(serde_json::json!({
                 "success": true,
@@ -1367,11 +1605,13 @@ pub async fn ticket_create_action(
         }
         "select_priority" => {
             // Update priority in data model
-            let priority = action.context.get("priority")
+            let priority = action
+                .context
+                .get("priority")
                 .and_then(|v| v.as_str())
                 .unwrap_or("medium")
                 .to_string();
-            
+
             // Return dataUpdate in format expected by frontend
             Ok(Json(serde_json::json!({
                 "success": true,
@@ -1383,10 +1623,7 @@ pub async fn ticket_create_action(
                 }
             })))
         }
-        "cancel_create" | "navigate_back" => {
-            Ok(Json(serde_json::json!({ "success": true })))
-        }
+        "cancel_create" | "navigate_back" => Ok(Json(serde_json::json!({ "success": true }))),
         _ => Ok(Json(serde_json::json!({ "success": true }))),
     }
 }
-

@@ -18,15 +18,29 @@ use ts_rs::TS;
 #[ts(export, export_to = "a2ui_types/")]
 #[serde(untagged)]
 pub enum BoundValue {
-    LiteralString { #[serde(rename = "literalString")] literal_string: String },
-    LiteralNumber { #[serde(rename = "literalNumber")] literal_number: f64 },
-    LiteralBoolean { #[serde(rename = "literalBoolean")] literal_boolean: bool },
-    Path { path: String },
+    LiteralString {
+        #[serde(rename = "literalString")]
+        literal_string: String,
+    },
+    LiteralNumber {
+        #[serde(rename = "literalNumber")]
+        literal_number: f64,
+    },
+    LiteralBoolean {
+        #[serde(rename = "literalBoolean")]
+        literal_boolean: bool,
+    },
+    Path {
+        path: String,
+    },
 }
 
+#[allow(dead_code)]
 impl BoundValue {
     pub fn string(s: impl Into<String>) -> Self {
-        BoundValue::LiteralString { literal_string: s.into() }
+        BoundValue::LiteralString {
+            literal_string: s.into(),
+        }
     }
 
     pub fn number(n: f64) -> Self {
@@ -65,6 +79,7 @@ pub struct ValueMap {
     pub value_map: Option<Vec<ValueMap>>,
 }
 
+#[allow(dead_code)]
 impl ValueMap {
     pub fn string(key: impl Into<String>, value: impl Into<String>) -> Self {
         Self {

@@ -54,6 +54,7 @@ pub async fn cleanup_test_data(pool: &PgPool) {
         .ok();
 }
 
+#[allow(dead_code)]
 pub fn test_config() -> Config {
     Config {
         database_url: std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {

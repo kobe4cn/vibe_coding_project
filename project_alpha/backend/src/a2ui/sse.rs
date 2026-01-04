@@ -38,14 +38,21 @@ pub struct A2UISender {
     tx: mpsc::Sender<A2UIMessage>,
 }
 
+#[allow(dead_code)]
 impl A2UISender {
     /// Send an A2UI message
-    pub async fn send(&self, message: A2UIMessage) -> Result<(), mpsc::error::SendError<A2UIMessage>> {
+    pub async fn send(
+        &self,
+        message: A2UIMessage,
+    ) -> Result<(), mpsc::error::SendError<A2UIMessage>> {
         self.tx.send(message).await
     }
 
     /// Send multiple messages
-    pub async fn send_all(&self, messages: Vec<A2UIMessage>) -> Result<(), mpsc::error::SendError<A2UIMessage>> {
+    pub async fn send_all(
+        &self,
+        messages: Vec<A2UIMessage>,
+    ) -> Result<(), mpsc::error::SendError<A2UIMessage>> {
         for msg in messages {
             self.tx.send(msg).await?;
         }

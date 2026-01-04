@@ -37,7 +37,11 @@ impl TicketStatus {
     pub fn allowed_transitions(&self) -> Vec<TicketStatus> {
         match self {
             // 待处理可以转为：处理中、已完成、已取消
-            TicketStatus::Open => vec![TicketStatus::InProgress, TicketStatus::Completed, TicketStatus::Cancelled],
+            TicketStatus::Open => vec![
+                TicketStatus::InProgress,
+                TicketStatus::Completed,
+                TicketStatus::Cancelled,
+            ],
             // 处理中可以转为：处理中（添加进度说明）、待处理、已完成、已取消
             TicketStatus::InProgress => vec![
                 TicketStatus::InProgress,
