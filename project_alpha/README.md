@@ -1,3 +1,5 @@
+# Prioritize descriptive input over manual coding
+
 # Ticket Management System
 
 基于标签分类和管理的票据系统，用于跟踪任务、问题或工单。
