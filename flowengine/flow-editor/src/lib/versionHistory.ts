@@ -1,96 +1,53 @@
 /**
  * Version History Service
- * Manages flow version history using IndexedDB
+ * Wrapper around StorageProvider for version management
+ * Provides backwards-compatible API
  */
 
-import { get, set, del, keys, createStore } from 'idb-keyval'
 import type { FlowModel } from '@/types/flow'
+import type {
+  StorageProvider,
+  FlowVersion,
+  FlowVersionSummary,
+} from '@/lib/storage'
 
-export interface FlowVersion {
-  id: string
-  flowId: string
-  version: number
-  name: string
-  description?: string
-  flow: FlowModel
-  createdAt: number
-  createdBy?: string
-  tags?: string[]
-  isAutoSave?: boolean
-}
-
-export interface FlowVersionSummary {
-  id: string
-  flowId: string
-  version: number
-  name: string
-  description?: string
-  createdAt: number
-  tags?: string[]
-  isAutoSave?: boolean
-}
-
-// Create custom store for flow versions
-const flowVersionStore = createStore('flow-versions-db', 'versions')
-const flowMetaStore = createStore('flow-meta-db', 'meta')
+// Re-export types for backwards compatibility
+export type { FlowVersion, FlowVersionSummary }
 
 /**
  * Version History Manager
+ * Wraps StorageProvider to provide a convenient API for version management
  */
 export class VersionHistoryManager {
   private flowId: string
+  private storage: StorageProvider
   private autoSaveInterval: number | null = null
   private lastAutoSave: FlowModel | null = null
 
-  constructor(flowId: string) {
+  constructor(flowId: string, storage: StorageProvider) {
     this.flowId = flowId
+    this.storage = storage
   }
 
   /**
    * Get all versions for the current flow
    */
   async getVersions(): Promise<FlowVersionSummary[]> {
-    const allKeys = await keys(flowVersionStore)
-    const flowKeys = allKeys.filter((key) => String(key).startsWith(`${this.flowId}:`))
-
-    const versions: FlowVersionSummary[] = []
-    for (const key of flowKeys) {
-      const version = await get<FlowVersion>(key, flowVersionStore)
-      if (version) {
-        versions.push({
-          id: version.id,
-          flowId: version.flowId,
-          version: version.version,
-          name: version.name,
-          description: version.description,
-          createdAt: version.createdAt,
-          tags: version.tags,
-          isAutoSave: version.isAutoSave,
-        })
-      }
-    }
-
-    // Sort by version descending
-    return versions.sort((a, b) => b.version - a.version)
+    return this.storage.listVersions(this.flowId)
   }
 
   /**
    * Get a specific version
    */
   async getVersion(versionId: string): Promise<FlowVersion | null> {
-    const key = `${this.flowId}:${versionId}`
-    const result = await get<FlowVersion>(key, flowVersionStore)
-    return result ?? null
+    return this.storage.getVersion(this.flowId, versionId)
   }
 
   /**
    * Get the latest version
    */
   async getLatestVersion(): Promise<FlowVersion | null> {
-    const versions = await this.getVersions()
-    if (versions.length === 0) return null
-
-    return this.getVersion(versions[0].id)
+    return this.storage.getLatestVersion(this.flowId)
   }
 
   /**
@@ -105,43 +62,20 @@ export class VersionHistoryManager {
       isAutoSave?: boolean
     } = {}
   ): Promise<FlowVersion> {
-    const versions = await this.getVersions()
-    const nextVersion = versions.length > 0 ? versions[0].version + 1 : 1
-
-    const versionId = `v${nextVersion}-${Date.now()}`
-    const version: FlowVersion = {
-      id: versionId,
-      flowId: this.flowId,
-      version: nextVersion,
-      name: options.name || `版本 ${nextVersion}`,
+    return this.storage.saveVersion(this.flowId, {
+      name: options.name,
       description: options.description,
-      flow: JSON.parse(JSON.stringify(flow)), // Deep clone
-      createdAt: Date.now(),
+      flow,
       tags: options.tags,
       isAutoSave: options.isAutoSave,
-    }
-
-    const key = `${this.flowId}:${versionId}`
-    await set(key, version, flowVersionStore)
-
-    // Update flow metadata
-    await this.updateFlowMeta({
-      latestVersion: nextVersion,
-      lastModified: Date.now(),
     })
-
-    // Clean up old auto-saves (keep only last 5)
-    await this.cleanupAutoSaves()
-
-    return version
   }
 
   /**
    * Delete a version
    */
   async deleteVersion(versionId: string): Promise<void> {
-    const key = `${this.flowId}:${versionId}`
-    await del(key, flowVersionStore)
+    return this.storage.deleteVersion(this.flowId, versionId)
   }
 
   /**
@@ -228,44 +162,13 @@ export class VersionHistoryManager {
   }
 
   /**
-   * Clean up old auto-saves
-   */
-  private async cleanupAutoSaves(keepCount: number = 5): Promise<void> {
-    const versions = await this.getVersions()
-    const autoSaves = versions.filter((v) => v.isAutoSave)
-
-    if (autoSaves.length <= keepCount) return
-
-    const toDelete = autoSaves.slice(keepCount)
-    for (const version of toDelete) {
-      await this.deleteVersion(version.id)
-    }
-  }
-
-  /**
-   * Update flow metadata
-   */
-  private async updateFlowMeta(meta: Record<string, unknown>): Promise<void> {
-    const existing = (await get<Record<string, unknown>>(this.flowId, flowMetaStore)) || {}
-    await set(this.flowId, { ...existing, ...meta }, flowMetaStore)
-  }
-
-  /**
-   * Get flow metadata
-   */
-  async getFlowMeta(): Promise<Record<string, unknown> | null> {
-    const result = await get<Record<string, unknown>>(this.flowId, flowMetaStore)
-    return result ?? null
-  }
-
-  /**
    * Export all versions as JSON
    */
   async exportVersions(): Promise<string> {
-    const versions = await this.getVersions()
+    const summaries = await this.getVersions()
     const fullVersions: FlowVersion[] = []
 
-    for (const summary of versions) {
+    for (const summary of summaries) {
       const version = await this.getVersion(summary.id)
       if (version) {
         fullVersions.push(version)
@@ -283,8 +186,12 @@ export class VersionHistoryManager {
     let imported = 0
 
     for (const version of versions) {
-      const key = `${this.flowId}:${version.id}`
-      await set(key, version, flowVersionStore)
+      await this.saveVersion(version.flow, {
+        name: version.name,
+        description: version.description,
+        tags: version.tags,
+        isAutoSave: version.isAutoSave,
+      })
       imported++
     }
 
@@ -295,18 +202,21 @@ export class VersionHistoryManager {
    * Clear all versions for this flow
    */
   async clearAllVersions(): Promise<void> {
-    const allKeys = await keys(flowVersionStore)
-    const flowKeys = allKeys.filter((key) => String(key).startsWith(`${this.flowId}:`))
-
-    for (const key of flowKeys) {
-      await del(key, flowVersionStore)
+    const versions = await this.getVersions()
+    for (const version of versions) {
+      await this.deleteVersion(version.id)
     }
   }
 }
 
 /**
  * Create a version history manager for a flow
+ * @param flowId - The flow ID
+ * @param storage - The storage provider instance
  */
-export function createVersionHistoryManager(flowId: string): VersionHistoryManager {
-  return new VersionHistoryManager(flowId)
+export function createVersionHistoryManager(
+  flowId: string,
+  storage: StorageProvider
+): VersionHistoryManager {
+  return new VersionHistoryManager(flowId, storage)
 }

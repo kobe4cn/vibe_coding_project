@@ -143,7 +143,7 @@ flow:
 
         validateInventory:
             name: 校验库存结果
-            when: inventoryCheck.some(inv => !inv.sufficient)
+            when: "inventoryCheck.some(inv => !inv.sufficient)"
             then: handleInsufficientStock
             else: calculatePricing
 
@@ -225,7 +225,7 @@ flow:
                 paySuccess = false
                 payError   = null
                 transactionId = null
-            when: payRetry < 3 && !paySuccess
+            when: "payRetry < 3 && !paySuccess"
             node:
                 doPayment:
                     name: 执行支付
@@ -253,7 +253,7 @@ flow:
                 paymentDelay:
                     name: 支付重试等待
                     wait: payRetry * 2000
-                    only: !paySuccess && payRetry < 3
+                    only: "!paySuccess && payRetry < 3"
 
             with: paySuccess, transactionId, payError, payRetry
             next: checkPaymentResult

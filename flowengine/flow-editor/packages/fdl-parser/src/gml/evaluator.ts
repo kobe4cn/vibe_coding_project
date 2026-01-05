@@ -365,6 +365,10 @@ function evaluateExpression(expr: GMLExpression, context: GMLContext): unknown {
 
     case 'MemberExpression': {
       const object = evaluateExpression(expr.object, context)
+      // Handle optional chaining: return undefined if object is null/undefined
+      if (expr.optional && (object === null || object === undefined)) {
+        return undefined
+      }
       if (expr.computed) {
         const property = evaluateExpression(expr.property, context)
         return safeGet(object, property as string | number)
@@ -376,11 +380,28 @@ function evaluateExpression(expr: GMLExpression, context: GMLContext): unknown {
 
     case 'CallExpression': {
       const callee = expr.callee
+
+      // Handle optional chaining for calls: obj?.method()
+      if (expr.optional) {
+        if (callee.type === 'MemberExpression') {
+          const obj = evaluateExpression(callee.object, context)
+          if (obj === null || obj === undefined) {
+            return undefined
+          }
+        }
+      }
+
       const args = expr.arguments.map((arg) => evaluateExpression(arg, context))
 
       // Method call: obj.method(args)
       if (callee.type === 'MemberExpression') {
         const obj = evaluateExpression(callee.object, context)
+
+        // Handle optional chaining on member expression
+        if (callee.optional && (obj === null || obj === undefined)) {
+          return undefined
+        }
+
         const methodName = callee.computed
           ? String(evaluateExpression(callee.property, context))
           : (callee.property as { name: string }).name

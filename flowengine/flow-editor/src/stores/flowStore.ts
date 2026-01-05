@@ -12,6 +12,14 @@ interface FlowState {
   // Current flow model
   flow: FlowModel
 
+  // Flow identification
+  flowId: string | null
+  flowName: string
+
+  // Read-only mode (for viewing historical versions)
+  isReadOnly: boolean
+  viewingVersionId: string | null
+
   // Selection state
   selectedNodeIds: string[]
   selectedEdgeIds: string[]
@@ -25,6 +33,10 @@ interface FlowState {
 
   // Actions
   setFlow: (flow: FlowModel) => void
+  setFlowId: (flowId: string | null) => void
+  setFlowName: (name: string) => void
+  setReadOnly: (isReadOnly: boolean, versionId?: string | null) => void
+  loadFlow: (flowId: string, flow: FlowModel, flowName: string) => void
   updateMeta: (meta: Partial<FlowMeta>) => void
   updateArgs: (args: FlowArgs) => void
   updateVars: (vars: string) => void
@@ -52,6 +64,9 @@ interface FlowState {
 
   // Reset
   reset: () => void
+
+  // Dirty flag control
+  setIsDirty: (isDirty: boolean) => void
 }
 
 const initialFlow: FlowModel = {
@@ -65,6 +80,10 @@ const initialFlow: FlowModel = {
 export const useFlowStore = create<FlowState>()(
   immer((set) => ({
     flow: initialFlow,
+    flowId: null,
+    flowName: '新流程',
+    isReadOnly: false,
+    viewingVersionId: null,
     selectedNodeIds: [],
     selectedEdgeIds: [],
     history: [initialFlow],
@@ -77,6 +96,36 @@ export const useFlowStore = create<FlowState>()(
         state.isDirty = false
         state.history = [flow]
         state.historyIndex = 0
+      }),
+
+    setFlowId: (flowId) =>
+      set((state) => {
+        state.flowId = flowId
+      }),
+
+    setFlowName: (name) =>
+      set((state) => {
+        state.flowName = name
+      }),
+
+    setReadOnly: (isReadOnly, versionId = null) =>
+      set((state) => {
+        state.isReadOnly = isReadOnly
+        state.viewingVersionId = versionId
+      }),
+
+    loadFlow: (flowId, flow, flowName) =>
+      set((state) => {
+        state.flowId = flowId
+        state.flow = flow
+        state.flowName = flowName
+        state.isDirty = false
+        state.isReadOnly = false
+        state.viewingVersionId = null
+        state.history = [flow]
+        state.historyIndex = 0
+        state.selectedNodeIds = []
+        state.selectedEdgeIds = []
       }),
 
     updateMeta: (meta) =>
@@ -219,17 +268,30 @@ export const useFlowStore = create<FlowState>()(
     reset: () =>
       set((state) => {
         state.flow = initialFlow
+        state.flowId = null
+        state.flowName = '新流程'
+        state.isReadOnly = false
+        state.viewingVersionId = null
         state.selectedNodeIds = []
         state.selectedEdgeIds = []
         state.history = [initialFlow]
         state.historyIndex = 0
         state.isDirty = false
       }),
+
+    setIsDirty: (isDirty) =>
+      set((state) => {
+        state.isDirty = isDirty
+      }),
   }))
 )
 
 // Selector hooks
 export const useFlow = () => useFlowStore((state) => state.flow)
+export const useFlowId = () => useFlowStore((state) => state.flowId)
+export const useFlowName = () => useFlowStore((state) => state.flowName)
+export const useIsReadOnly = () => useFlowStore((state) => state.isReadOnly)
+export const useViewingVersionId = () => useFlowStore((state) => state.viewingVersionId)
 export const useNodes = () => useFlowStore((state) => state.flow.nodes)
 export const useEdges = () => useFlowStore((state) => state.flow.edges)
 export const useSelectedNodes = () => useFlowStore((state) => state.selectedNodeIds)

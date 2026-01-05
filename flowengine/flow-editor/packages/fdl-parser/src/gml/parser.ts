@@ -182,7 +182,7 @@ export function tokenizeGML(input: string): GMLToken[] {
       continue
     }
 
-    if (['==', '!=', '<=', '>=', '&&', '||', '??', '=>', '<<', '>>'].includes(twoChar)) {
+    if (['==', '!=', '<=', '>=', '&&', '||', '??', '=>', '<<', '>>', '?.'].includes(twoChar)) {
       advance(2)
       tokens.push({ type: 'operator', value: twoChar, start, end: pos, line: startLine, column: startColumn })
       continue
@@ -487,8 +487,11 @@ class GMLParser {
     let expr = this.parsePrimary()
 
     while (true) {
-      if (this.current().value === '.') {
-        // Member access: obj.prop
+      // Check for optional chaining first (?.)
+      const isOptional = this.current().value === '?.'
+
+      if (isOptional || this.current().value === '.') {
+        // Member access: obj.prop or obj?.prop
         this.advance()
         const prop = this.expect('identifier')
         expr = {
@@ -501,6 +504,7 @@ class GMLParser {
             end: prop.end,
           } as GMLIdentifier,
           computed: false,
+          optional: isOptional,
           start: expr.start,
           end: prop.end,
         } as GMLMemberExpression
@@ -518,7 +522,8 @@ class GMLParser {
           end: end.end,
         } as GMLMemberExpression
       } else if (this.current().value === '(') {
-        // Function call: func(args)
+        // Function call: func(args) - check if previous was optional
+        const callOptional = (expr as GMLMemberExpression).optional
         this.advance()
         const args: GMLExpression[] = []
         while (this.current().value !== ')' && this.current().type !== 'eof') {
@@ -532,6 +537,7 @@ class GMLParser {
           type: 'CallExpression',
           callee: expr,
           arguments: args,
+          optional: callOptional,
           start: expr.start,
           end: end.end,
         } as GMLCallExpression

@@ -93,19 +93,21 @@ export interface GMLIdentifier extends GMLASTNode {
   name: string
 }
 
-// Member access: obj.prop or obj[expr]
+// Member access: obj.prop or obj[expr] or obj?.prop (optional chaining)
 export interface GMLMemberExpression extends GMLASTNode {
   type: 'MemberExpression'
   object: GMLExpression
   property: GMLExpression
   computed: boolean // true for obj[expr], false for obj.prop
+  optional?: boolean // true for obj?.prop (optional chaining)
 }
 
-// Function call: func(args) or obj.method(args)
+// Function call: func(args) or obj.method(args) or obj?.method(args)
 export interface GMLCallExpression extends GMLASTNode {
   type: 'CallExpression'
   callee: GMLExpression
   arguments: GMLExpression[]
+  optional?: boolean // true for obj?.method() (optional chaining)
 }
 
 // Binary operations: a + b, a && b, etc.

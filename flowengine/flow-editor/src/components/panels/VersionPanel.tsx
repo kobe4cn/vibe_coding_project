@@ -1,15 +1,13 @@
 /**
  * Version Panel Component
- * Material Design 3 styled version history
+ * Material Design 3 styled version history using StorageProvider
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useFlowStore } from '@/stores/flowStore'
-import {
-  createVersionHistoryManager,
-  type FlowVersionSummary,
-  type VersionHistoryManager,
-} from '@/lib/versionHistory'
+import { useStorage } from '@/lib/storage'
+import type { FlowVersionSummary } from '@/lib/storage'
 
 // Material Icons
 const Icons = {
@@ -33,6 +31,11 @@ const Icons = {
       <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
     </svg>
   ),
+  preview: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+    </svg>
+  ),
   loading: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="animate-spin">
       <path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/>
@@ -40,81 +43,143 @@ const Icons = {
   ),
 }
 
-export function VersionPanel() {
-  const { flow, setFlow } = useFlowStore()
+interface VersionPanelProps {
+  flowId?: string
+}
+
+export function VersionPanel({ flowId }: VersionPanelProps) {
+  const navigate = useNavigate()
+  const { flow, setFlow, setIsDirty } = useFlowStore()
+  const storage = useStorage()
   const [versions, setVersions] = useState<FlowVersionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [manager, setManager] = useState<VersionHistoryManager | null>(null)
   const [saveName, setSaveName] = useState('')
   const [saveDescription, setSaveDescription] = useState('')
   const [showSaveDialog, setShowSaveDialog] = useState(false)
 
-  // Initialize version manager
-  useEffect(() => {
-    const flowId = flow.meta.name?.replace(/\s+/g, '-') || 'default-flow'
-    const mgr = createVersionHistoryManager(flowId)
-    setManager(mgr)
+  // Auto-save refs
+  const autoSaveIntervalRef = useRef<number | null>(null)
+  const lastAutoSaveRef = useRef<string | null>(null)
 
-    // Load versions
-    mgr.getVersions().then((v) => {
-      setVersions(v)
+  // Load versions
+  const loadVersions = useCallback(async () => {
+    if (!flowId) {
       setLoading(false)
-    })
+      return
+    }
 
-    // Start auto-save
-    mgr.startAutoSave(() => flow, 120000) // Every 2 minutes
+    try {
+      const v = await storage.listVersions(flowId)
+      setVersions(v)
+    } catch (err) {
+      console.error('Failed to load versions:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [flowId, storage])
+
+  useEffect(() => {
+    loadVersions()
+  }, [loadVersions])
+
+  // Auto-save setup
+  useEffect(() => {
+    if (!flowId) return
+
+    const autoSaveInterval = 120000 // 2 minutes
+
+    autoSaveIntervalRef.current = window.setInterval(async () => {
+      const currentFlowJson = JSON.stringify(flow)
+
+      // Only save if flow has changed
+      if (lastAutoSaveRef.current === currentFlowJson) {
+        return
+      }
+
+      lastAutoSaveRef.current = currentFlowJson
+
+      try {
+        await storage.saveVersion(flowId, {
+          name: '自动保存',
+          flow,
+          isAutoSave: true,
+        })
+        // Refresh versions list
+        const v = await storage.listVersions(flowId)
+        setVersions(v)
+      } catch (err) {
+        console.error('Auto-save failed:', err)
+      }
+    }, autoSaveInterval)
 
     return () => {
-      mgr.stopAutoSave()
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current)
+      }
     }
-  }, [flow.meta.name])
-
-  const loadVersions = useCallback(async () => {
-    if (!manager) return
-    const v = await manager.getVersions()
-    setVersions(v)
-  }, [manager])
+  }, [flowId, flow, storage])
 
   const handleSaveVersion = useCallback(async () => {
-    if (!manager) return
+    if (!flowId) return
 
     setSaving(true)
     try {
-      await manager.saveVersion(flow, {
-        name: saveName || `Version ${versions.length + 1}`,
+      await storage.saveVersion(flowId, {
+        name: saveName || `版本 ${versions.length + 1}`,
         description: saveDescription,
+        flow,
       })
       await loadVersions()
       setShowSaveDialog(false)
       setSaveName('')
       setSaveDescription('')
+      setIsDirty(false)
+    } catch (err) {
+      console.error('Failed to save version:', err)
     } finally {
       setSaving(false)
     }
-  }, [manager, flow, saveName, saveDescription, versions.length, loadVersions])
+  }, [flowId, storage, flow, saveName, saveDescription, versions.length, loadVersions, setIsDirty])
 
   const handleRestoreVersion = useCallback(
     async (versionId: string) => {
-      if (!manager) return
+      if (!flowId) return
 
-      const restoredFlow = await manager.restoreVersion(versionId)
-      if (restoredFlow) {
-        setFlow(restoredFlow)
+      try {
+        const version = await storage.getVersion(flowId, versionId)
+        if (version) {
+          setFlow(version.flow)
+          setIsDirty(true)
+        }
+      } catch (err) {
+        console.error('Failed to restore version:', err)
       }
     },
-    [manager, setFlow]
+    [flowId, storage, setFlow, setIsDirty]
   )
 
   const handleDeleteVersion = useCallback(
     async (versionId: string) => {
-      if (!manager) return
-      if (!confirm('Delete this version?')) return
+      if (!flowId) return
+      if (!confirm('删除此版本?')) return
 
-      await manager.deleteVersion(versionId)
-      await loadVersions()
+      try {
+        await storage.deleteVersion(flowId, versionId)
+        await loadVersions()
+      } catch (err) {
+        console.error('Failed to delete version:', err)
+      }
     },
-    [manager, loadVersions]
+    [flowId, storage, loadVersions]
+  )
+
+  const handlePreviewVersion = useCallback(
+    (versionId: string) => {
+      if (!flowId) return
+      navigate(`/editor/${flowId}/version/${versionId}`)
+    },
+    [flowId, navigate]
   )
 
   const formatDate = (timestamp: number): string => {
@@ -122,12 +187,36 @@ export function VersionPanel() {
     const now = new Date()
     const diff = now.getTime() - timestamp
 
-    if (diff < 60000) return 'Just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
+    if (diff < 60000) return '刚刚'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`
 
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  }
+
+  if (!flowId) {
+    return (
+      <div
+        className="h-full flex items-center justify-center"
+        style={{ background: 'var(--surface-container)' }}
+      >
+        <div className="text-center p-8">
+          <div
+            className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+            style={{ backgroundColor: 'var(--surface-container-high)' }}
+          >
+            <span style={{ opacity: 0.5 }}>{Icons.history}</span>
+          </div>
+          <p
+            className="text-sm"
+            style={{ color: 'var(--on-surface-variant)' }}
+          >
+            请先保存流程
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -138,7 +227,7 @@ export function VersionPanel() {
       >
         <div className="flex items-center gap-2" style={{ color: 'var(--on-surface-variant)' }}>
           {Icons.loading}
-          <span className="text-sm">Loading...</span>
+          <span className="text-sm">加载中...</span>
         </div>
       </div>
     )
@@ -159,7 +248,7 @@ export function VersionPanel() {
             className="text-[11px] font-semibold uppercase tracking-wider"
             style={{ color: 'var(--on-surface-variant)' }}
           >
-            Version History
+            版本历史
           </h3>
           <button
             onClick={() => setShowSaveDialog(true)}
@@ -176,14 +265,14 @@ export function VersionPanel() {
             }}
           >
             {Icons.add}
-            Save
+            保存
           </button>
         </div>
         <p
           className="text-[11px]"
           style={{ color: 'var(--outline)' }}
         >
-          {versions.length} version{versions.length !== 1 ? 's' : ''}
+          {versions.length} 个版本
         </p>
       </div>
 
@@ -200,13 +289,13 @@ export function VersionPanel() {
             className="text-sm font-medium mb-4"
             style={{ color: 'var(--on-surface)' }}
           >
-            Save New Version
+            保存新版本
           </h4>
           <input
             type="text"
             value={saveName}
             onChange={(e) => setSaveName(e.target.value)}
-            placeholder="Version name"
+            placeholder="版本名称"
             className="w-full px-3 py-2.5 text-sm rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50"
             style={{
               backgroundColor: 'var(--surface-container-highest)',
@@ -217,7 +306,7 @@ export function VersionPanel() {
           <textarea
             value={saveDescription}
             onChange={(e) => setSaveDescription(e.target.value)}
-            placeholder="Description (optional)"
+            placeholder="描述 (可选)"
             className="w-full px-3 py-2.5 text-sm rounded-xl mb-4 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 resize-none"
             style={{
               backgroundColor: 'var(--surface-container-highest)',
@@ -236,7 +325,7 @@ export function VersionPanel() {
                 color: 'var(--on-primary-container)',
               }}
             >
-              {saving ? 'Saving...' : 'Save Version'}
+              {saving ? '保存中...' : '保存版本'}
             </button>
             <button
               onClick={() => setShowSaveDialog(false)}
@@ -246,7 +335,7 @@ export function VersionPanel() {
                 color: 'var(--on-surface-variant)',
               }}
             >
-              Cancel
+              取消
             </button>
           </div>
         </div>
@@ -265,7 +354,7 @@ export function VersionPanel() {
             >
               <span style={{ opacity: 0.5 }}>{Icons.history}</span>
             </div>
-            <p className="text-sm">No saved versions</p>
+            <p className="text-sm">暂无保存的版本</p>
           </div>
         ) : (
           <div className="p-3">
@@ -273,6 +362,7 @@ export function VersionPanel() {
               <VersionItem
                 key={version.id}
                 version={version}
+                onPreview={() => handlePreviewVersion(version.id)}
                 onRestore={() => handleRestoreVersion(version.id)}
                 onDelete={() => handleDeleteVersion(version.id)}
                 formatDate={formatDate}
@@ -287,11 +377,13 @@ export function VersionPanel() {
 
 function VersionItem({
   version,
+  onPreview,
   onRestore,
   onDelete,
   formatDate,
 }: {
   version: FlowVersionSummary
+  onPreview: () => void
   onRestore: () => void
   onDelete: () => void
   formatDate: (ts: number) => string
@@ -328,7 +420,7 @@ function VersionItem({
                   color: 'var(--on-surface-variant)',
                 }}
               >
-                Auto
+                自动
               </span>
             )}
           </div>
@@ -361,11 +453,28 @@ function VersionItem({
             <button
               onClick={(e) => {
                 e.stopPropagation()
+                onPreview()
+              }}
+              className="p-2 rounded-xl transition-all"
+              style={{ color: 'var(--tertiary)' }}
+              title="预览"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(125, 196, 186, 0.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+            >
+              {Icons.preview}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
                 onRestore()
               }}
               className="p-2 rounded-xl transition-all"
               style={{ color: 'var(--primary)' }}
-              title="Restore"
+              title="恢复"
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = 'rgba(208, 188, 255, 0.1)'
               }}
@@ -382,7 +491,7 @@ function VersionItem({
               }}
               className="p-2 rounded-xl transition-all"
               style={{ color: 'var(--error)' }}
-              title="Delete"
+              title="删除"
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = 'rgba(242, 184, 181, 0.1)'
               }}

@@ -1,6 +1,6 @@
 /**
  * FDL Flow Executor
- * Executes flow definitions step by step
+ * Executes flow definitions step by step with GML expression support
  */
 
 import type {
@@ -13,11 +13,14 @@ import type {
   ExecutionHistoryEntry,
 } from './types'
 import type { FlowModel, FlowNode, FlowEdge, FlowNodeData } from '../../../src/types/flow'
+import { parseGML, evaluateGML, createContext as createGMLContext } from '@flow-editor/fdl-parser'
+import type { GMLContext } from '@flow-editor/fdl-parser'
+import { ParallelScheduler, buildDependencyGraph } from './scheduler'
 
 export class FlowExecutor {
   private flow: FlowModel
   private config: RuntimeConfig
-  private context: ExecutionContext
+  public context: ExecutionContext // Public for sub-flow access
   private status: ExecutionStatus = 'idle'
   private nodeMap: Map<string, FlowNode>
   private edgeMap: Map<string, FlowEdge[]>
@@ -89,11 +92,13 @@ export class FlowExecutor {
     return Array.from(this.context.breakpoints)
   }
 
-  async start(args: Record<string, unknown> = {}): Promise<void> {
+  async start(args: Record<string, unknown> = {}, initialVars: Record<string, unknown> = {}): Promise<void> {
     if (this.status === 'running') return
 
     this.context = this.createInitialContext()
     this.context.args = args
+    // Apply initial vars (used by sub-flow execution)
+    Object.assign(this.context.vars, initialVars)
     this.status = 'running'
     this.emit({ type: 'start' })
 
@@ -351,6 +356,11 @@ export class FlowExecutor {
       return { success: true, output: result }
     }
 
+    // Handle sets-only mapping nodes
+    if (mappingData.sets) {
+      this.applySetsUpdate(mappingData.sets, this.context.vars)
+    }
+
     return { success: true }
   }
 
@@ -392,7 +402,14 @@ export class FlowExecutor {
   }
 
   private async executeEachNode(node: FlowNode): Promise<NodeExecutionResult> {
-    const data = node.data as FlowNodeData & { each?: string; subFlowNodes?: FlowNode[] }
+    const data = node.data as FlowNodeData & {
+      each?: string
+      subFlowNodes?: FlowNode[]
+      subFlowEdges?: FlowEdge[]
+      parallel?: boolean
+      maxConcurrency?: number
+      sets?: string
+    }
 
     if (!data.each) {
       return { success: false, error: 'No each expression specified' }
@@ -412,29 +429,99 @@ export class FlowExecutor {
     }
 
     const results: unknown[] = []
-    for (let i = 0; i < source.length; i++) {
-      this.context.vars[itemVar] = source[i]
-      if (indexVar) {
-        this.context.vars[indexVar] = i
+
+    // Execute sub-flow for each item
+    if (data.subFlowNodes && data.subFlowNodes.length > 0) {
+      const executeIteration = async (item: unknown, index: number) => {
+        // Create isolated scope for this iteration
+        const iterationVars = { ...this.context.vars }
+        iterationVars[itemVar] = item
+        if (indexVar) {
+          iterationVars[indexVar] = index
+        }
+
+        // Create sub-flow executor
+        const subFlow: FlowModel = {
+          nodes: data.subFlowNodes!,
+          edges: data.subFlowEdges || [],
+        }
+
+        const subExecutor = new FlowExecutor(subFlow, {
+          ...this.config,
+          onEvent: (event) => {
+            // Forward events with iteration context
+            this.emit({
+              type: event.type,
+              nodeId: event.nodeId ? `${node.id}[${index}].${event.nodeId}` : node.id,
+              data: { ...event.data as Record<string, unknown>, iteration: index },
+            })
+          },
+        })
+
+        // Start sub-executor with iteration vars
+        await subExecutor.start(this.context.args, iterationVars)
+
+        // Get result from sub-executor
+        const subContext = subExecutor.getContext()
+        return subContext.vars.$result ?? item
       }
 
-      // Execute sub-flow if present
-      if (data.subFlowNodes && data.subFlowNodes.length > 0) {
-        // Sub-flow execution would go here
-        results.push(source[i])
+      if (data.parallel) {
+        // Parallel execution with optional concurrency limit
+        const maxConcurrency = data.maxConcurrency || source.length
+        const batches: unknown[][] = []
+
+        for (let i = 0; i < source.length; i += maxConcurrency) {
+          batches.push(source.slice(i, i + maxConcurrency))
+        }
+
+        let batchIndex = 0
+        for (const batch of batches) {
+          const batchResults = await Promise.all(
+            batch.map((item, idx) => executeIteration(item, batchIndex * maxConcurrency + idx))
+          )
+          results.push(...batchResults)
+          batchIndex++
+        }
       } else {
+        // Sequential execution
+        for (let i = 0; i < source.length; i++) {
+          const result = await executeIteration(source[i], i)
+          results.push(result)
+        }
+      }
+    } else {
+      // No sub-flow, just transform items
+      for (let i = 0; i < source.length; i++) {
+        this.context.vars[itemVar] = source[i]
+        if (indexVar) {
+          this.context.vars[indexVar] = i
+        }
         results.push(source[i])
       }
+    }
+
+    // Apply 'sets' if specified
+    if (data.sets) {
+      this.context.vars.$results = results
+      this.applySetsUpdate(data.sets, results)
     }
 
     return { success: true, output: results }
   }
 
   private async executeLoopNode(node: FlowNode): Promise<NodeExecutionResult> {
-    const data = node.data as FlowNodeData & { vars?: string; when?: string; subFlowNodes?: FlowNode[] }
+    const data = node.data as FlowNodeData & {
+      vars?: string
+      when?: string
+      subFlowNodes?: FlowNode[]
+      subFlowEdges?: FlowEdge[]
+      sets?: string
+      until?: string
+    }
 
-    if (!data.when) {
-      return { success: false, error: 'No loop condition specified' }
+    if (!data.when && !data.until) {
+      return { success: false, error: 'No loop condition specified (when or until)' }
     }
 
     // Initialize vars
@@ -443,19 +530,101 @@ export class FlowExecutor {
     }
 
     let iterations = 0
-    while (this.evaluateCondition(data.when)) {
+    const results: unknown[] = []
+
+    // Determine loop condition
+    const shouldContinue = () => {
+      if (data.until) {
+        return !this.evaluateCondition(data.until)
+      }
+      return this.evaluateCondition(data.when!)
+    }
+
+    // Loop: increment $iteration first, then check condition, then execute body
+    while (true) {
       iterations++
       if (iterations > this.config.maxIterations!) {
         return { success: false, error: 'Max loop iterations exceeded' }
       }
 
+      // Update iteration variable before condition check
+      this.context.vars.$iteration = iterations
+
+      // Check condition after incrementing
+      if (!shouldContinue()) {
+        break
+      }
+
       // Execute sub-flow if present
       if (data.subFlowNodes && data.subFlowNodes.length > 0) {
-        // Sub-flow execution would go here
+        // Create isolated scope for this iteration
+        const iterationVars = { ...this.context.vars }
+
+        // Create sub-flow executor
+        const subFlow: FlowModel = {
+          nodes: data.subFlowNodes,
+          edges: data.subFlowEdges || [],
+        }
+
+        const subExecutor = new FlowExecutor(subFlow, {
+          ...this.config,
+          onEvent: (event) => {
+            this.emit({
+              type: event.type,
+              nodeId: event.nodeId ? `${node.id}[${iterations}].${event.nodeId}` : node.id,
+              data: { ...event.data as Record<string, unknown>, iteration: iterations },
+            })
+          },
+        })
+
+        // Start sub-executor with iteration vars
+        await subExecutor.start(this.context.args, iterationVars)
+
+        // Get updated vars back from sub-executor
+        const subContext = subExecutor.getContext()
+
+        // Merge back specific vars (not all, to maintain isolation)
+        if (data.sets) {
+          const setsVars = data.sets.split('\n')
+            .map(line => line.match(/^\s*([\w$]+)\s*=/)?.[1])
+            .filter(Boolean) as string[]
+
+          for (const varName of setsVars) {
+            if (varName in subContext.vars) {
+              this.context.vars[varName] = subContext.vars[varName]
+            }
+          }
+        }
+
+        // Collect result
+        results.push(subContext.vars.$result ?? iterations)
+
+        // Check for break signal
+        if (subContext.vars.$break) {
+          break
+        }
+
+        // Check for continue signal (skip to next iteration)
+        if (subContext.vars.$continue) {
+          continue
+        }
+      } else if (data.sets) {
+        // No sub-flow, execute sets directly in each iteration
+        this.applySetsUpdate(data.sets, this.context.vars)
+        results.push(iterations)
       }
+
+      this.emit({
+        type: 'nodeComplete',
+        nodeId: `${node.id}[${iterations}]`,
+        data: { iteration: iterations },
+      })
     }
 
-    return { success: true, output: { iterations } }
+    // Store final results
+    this.context.vars.$results = results
+
+    return { success: true, output: { iterations, results } }
   }
 
   private async executeAgentNode(data: FlowNodeData): Promise<NodeExecutionResult> {
@@ -629,37 +798,62 @@ export class FlowExecutor {
     return vars
   }
 
+  /**
+   * Create GML context from execution context
+   */
+  private createGMLContextFromExecutionContext(): GMLContext {
+    return createGMLContext({
+      ...this.context.vars,
+      ...this.context.args,
+      // Add special variables
+      $vars: this.context.vars,
+      $args: this.context.args,
+      $history: this.context.history,
+    })
+  }
+
+  /**
+   * Parse and evaluate a GML expression
+   */
   private parseExpression(expr: string): unknown {
-    // Simple expression evaluation
     const trimmed = expr.trim()
 
-    // Number
+    // Quick checks for simple values
     if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
       return parseFloat(trimmed)
     }
-
-    // Boolean
     if (trimmed === 'true') return true
     if (trimmed === 'false') return false
-
-    // Null
     if (trimmed === 'null') return null
-
-    // String (quoted)
     if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
         (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
       return trimmed.slice(1, -1)
     }
 
-    // Variable reference
+    // Use GML parser for complex expressions
+    try {
+      const parseResult = parseGML(trimmed)
+      if (parseResult.success && parseResult.ast) {
+        const gmlContext = this.createGMLContextFromExecutionContext()
+        const { result } = evaluateGML(parseResult.ast, gmlContext)
+        return result
+      }
+    } catch (e) {
+      // Fall back to simple variable lookup
+      console.warn(`GML parse failed for: ${trimmed}`, e)
+    }
+
+    // Simple variable reference fallback
     if (/^[\w.]+$/.test(trimmed)) {
       return this.getVariable(trimmed)
     }
 
-    // Return as string if can't parse
     return trimmed
   }
 
+  /**
+   * Get a variable from the context
+   */
   private getVariable(path: string): unknown {
     const parts = path.split('.')
     let current: unknown = { ...this.context.vars, ...this.context.args }
@@ -676,26 +870,94 @@ export class FlowExecutor {
     return current
   }
 
+  /**
+   * Evaluate a condition expression using GML
+   */
   private evaluateCondition(expr: string): boolean {
-    // Simple condition evaluation
     const result = this.parseExpression(expr)
     return Boolean(result)
   }
 
+  /**
+   * Apply a 'with' transformation using GML
+   */
   private applyWithTransform(withExpr: string, input: unknown): unknown {
-    // Simple transformation - just return the input for now
-    // In real implementation, would parse GML expressions
+    try {
+      // Create context with input available as $input
+      const gmlContext = createGMLContext({
+        ...this.context.vars,
+        ...this.context.args,
+        $input: input,
+        $: input, // Shorthand
+      })
+
+      const parseResult = parseGML(withExpr)
+      if (parseResult.success && parseResult.ast) {
+        const { result, context: newContext } = evaluateGML(parseResult.ast, gmlContext)
+
+        // If the expression assigned variables, use those
+        if (Object.keys(newContext.variables).length > Object.keys(gmlContext.variables).length) {
+          // Extract new assignments
+          const assignments: Record<string, unknown> = {}
+          for (const key of Object.keys(newContext.variables)) {
+            if (!(key in gmlContext.variables) || key === '$input' || key === '$') {
+              continue
+            }
+            if (newContext.variables[key] !== gmlContext.variables[key]) {
+              assignments[key] = newContext.variables[key]
+            }
+          }
+          if (Object.keys(assignments).length > 0) {
+            return assignments
+          }
+        }
+
+        return result
+      }
+    } catch (e) {
+      console.warn(`GML with transform failed: ${withExpr}`, e)
+    }
+
     return input
   }
 
-  private applySetsUpdate(setsExpr: string, _value: unknown): void {
-    // Parse and apply variable updates
-    const lines = setsExpr.split('\n')
-    for (const line of lines) {
-      const match = line.match(/^\s*(\w+)\s*=\s*(.+?)\s*$/)
-      if (match) {
-        const [, key, valueExpr] = match
-        this.context.vars[key] = this.parseExpression(valueExpr)
+  /**
+   * Apply variable updates from a 'sets' expression using GML
+   */
+  private applySetsUpdate(setsExpr: string, value: unknown): void {
+    // Special variables that should not be copied back from GML context
+    const reservedVars = new Set(['$value', '$', '$input', '$vars', '$args', '$history'])
+
+    try {
+      // Create context with value available as $value
+      const gmlContext = createGMLContext({
+        ...this.context.vars,
+        ...this.context.args,
+        $value: value,
+        $: value,
+      })
+
+      const parseResult = parseGML(setsExpr)
+      if (parseResult.success && parseResult.ast) {
+        const { context: newContext } = evaluateGML(parseResult.ast, gmlContext)
+
+        // Apply all new/changed variables to execution context
+        for (const [key, val] of Object.entries(newContext.variables)) {
+          if (reservedVars.has(key)) continue // Skip reserved special variables
+          this.context.vars[key] = val
+        }
+      }
+    } catch (e) {
+      // Fall back to simple parsing
+      const lines = setsExpr.split('\n')
+      for (const line of lines) {
+        const match = line.match(/^\s*([\w$]+)\s*=\s*(.+?)\s*$/)
+        if (match) {
+          const [, key, valueExpr] = match
+          if (!reservedVars.has(key)) {
+            this.context.vars[key] = this.parseExpression(valueExpr)
+          }
+        }
       }
     }
   }
