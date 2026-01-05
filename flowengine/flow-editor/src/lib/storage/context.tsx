@@ -29,11 +29,38 @@ interface StorageContextValue {
 const StorageContext = createContext<StorageContextValue | null>(null)
 
 /**
+ * Get default storage mode from environment
+ */
+function getDefaultStorageMode(): StorageMode {
+  const envMode = import.meta.env.VITE_DEFAULT_STORAGE_MODE
+  if (envMode === 'backend' || envMode === 'local') {
+    return envMode
+  }
+  return 'backend' // Default to backend for full functionality
+}
+
+/**
+ * Get default backend URL from environment
+ */
+function getDefaultBackendUrl(): string {
+  return import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3001'
+}
+
+/**
  * Default storage configuration
  */
 const DEFAULT_CONFIG: StorageConfig = {
-  mode: 'local',
+  mode: getDefaultStorageMode(),
+  backendUrl: getDefaultBackendUrl(),
 }
+
+// Debug log for storage configuration
+console.log('[Storage] Default config:', {
+  mode: DEFAULT_CONFIG.mode,
+  backendUrl: DEFAULT_CONFIG.backendUrl,
+  envMode: import.meta.env.VITE_DEFAULT_STORAGE_MODE,
+  envApiUrl: import.meta.env.VITE_API_URL,
+})
 
 /**
  * Local storage key for persisting config
@@ -41,18 +68,35 @@ const DEFAULT_CONFIG: StorageConfig = {
 const CONFIG_STORAGE_KEY = 'fdl-storage-config'
 
 /**
- * Load config from localStorage
+ * Load config from localStorage, with environment variable override
  */
 function loadConfig(): StorageConfig {
   try {
     const stored = localStorage.getItem(CONFIG_STORAGE_KEY)
     if (stored) {
-      return JSON.parse(stored) as StorageConfig
+      const config = JSON.parse(stored) as StorageConfig
+      // If no backendUrl is set, use the default from environment
+      if (!config.backendUrl) {
+        config.backendUrl = getDefaultBackendUrl()
+      }
+      return config
     }
   } catch {
     // Ignore errors
   }
   return DEFAULT_CONFIG
+}
+
+/**
+ * Clear stored config and use defaults
+ * Call this to reset to environment-based defaults
+ */
+export function resetStorageConfig(): void {
+  try {
+    localStorage.removeItem(CONFIG_STORAGE_KEY)
+  } catch {
+    // Ignore errors
+  }
 }
 
 /**
@@ -89,12 +133,15 @@ export function StorageProviderComponent({
 
   // Create provider based on mode
   const provider = useMemo<StorageProvider>(() => {
+    console.log('[Storage] Creating provider with config:', config)
     if (config.mode === 'backend' && config.backendUrl) {
+      console.log('[Storage] Using BackendProvider with URL:', config.backendUrl)
       return new BackendProvider({
         baseUrl: config.backendUrl,
         token: config.token,
       })
     }
+    console.log('[Storage] Using IndexedDBProvider (local storage)')
     return new IndexedDBProvider()
   }, [config.mode, config.backendUrl, config.token])
 

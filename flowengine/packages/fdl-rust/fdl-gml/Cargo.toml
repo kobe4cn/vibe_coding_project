@@ -1,0 +1,18 @@
+[package]
+name = "fdl-gml"
+description = "GML (Generic Mapping Language) expression engine for FDL"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+once_cell = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

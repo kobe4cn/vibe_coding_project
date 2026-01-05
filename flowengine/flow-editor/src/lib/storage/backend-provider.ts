@@ -339,6 +339,113 @@ export class BackendProvider implements StorageProvider {
 }
 
 /**
+ * Execution request
+ */
+export interface ExecuteFlowRequest {
+  flow: {
+    meta: { name: string; description?: string }
+    nodes: unknown[]
+    edges: unknown[]
+    vars?: string
+  }
+  inputs?: Record<string, unknown>
+  async_mode?: boolean
+  tenant_id?: string
+}
+
+/**
+ * Execution result from backend
+ */
+export interface ExecutionResult {
+  execution_id: string
+  flow_id: string
+  flow_name: string
+  status: 'completed' | 'failed' | 'running' | 'cancelled'
+  result?: {
+    success: boolean
+    outputs: unknown
+    node_results: Record<string, unknown>
+    error?: string
+    duration_ms: number
+  }
+  message?: string
+}
+
+/**
+ * Execution status response
+ */
+export interface ExecutionStatus {
+  execution_id: string
+  flow_id: string
+  status: string
+  progress: number
+  current_node?: string
+  result?: unknown
+  error?: string
+  started_at: string
+  completed_at?: string
+}
+
+/**
+ * Execute a flow directly (without storage)
+ */
+export async function executeFlow(
+  config: BackendProviderConfig,
+  request: ExecuteFlowRequest
+): Promise<ExecutionResult> {
+  const baseUrl = config.baseUrl.replace(/\/$/, '')
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (config.token) {
+    headers['Authorization'] = `Bearer ${config.token}`
+  }
+
+  const response = await fetch(`${baseUrl}/api/execute/run`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Execute error ${response.status}: ${error}`)
+  }
+
+  return response.json()
+}
+
+/**
+ * Get execution status
+ */
+export async function getExecutionStatus(
+  config: BackendProviderConfig,
+  executionId: string
+): Promise<ExecutionStatus> {
+  const baseUrl = config.baseUrl.replace(/\/$/, '')
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (config.token) {
+    headers['Authorization'] = `Bearer ${config.token}`
+  }
+
+  const response = await fetch(`${baseUrl}/api/execute/status/${executionId}`, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Status error ${response.status}: ${error}`)
+  }
+
+  return response.json()
+}
+
+/**
  * Create a new Backend provider instance
  */
 export function createBackendProvider(

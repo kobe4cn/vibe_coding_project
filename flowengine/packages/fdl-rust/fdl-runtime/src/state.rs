@@ -1,0 +1,554 @@
+//! Application state management
+
+use chrono::{DateTime, Utc};
+use dashmap::DashMap;
+use fdl_auth::{JwtConfig, JwtService};
+use fdl_executor::Executor;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::storage::{
+    Storage, StorageError,
+    traits::{CreateFlowRequest as StorageCreateFlow, CreateVersionRequest as StorageCreateVersion,
+             UpdateFlowRequest as StorageUpdateFlow, ListOptions, FlowRecord, VersionRecord},
+};
+
+/// Database configuration
+#[derive(Debug, Clone)]
+pub struct DatabaseConfig {
+    /// PostgreSQL connection URL
+    pub url: Option<String>,
+    /// Enable database storage (vs in-memory)
+    pub enabled: bool,
+    /// Connection pool size
+    pub pool_size: u32,
+    /// Connection timeout in seconds
+    pub timeout_secs: u64,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            url: None,
+            enabled: false,
+            pool_size: 10,
+            timeout_secs: 30,
+        }
+    }
+}
+
+impl DatabaseConfig {
+    pub fn from_env() -> Self {
+        Self {
+            url: std::env::var("DATABASE_URL").ok(),
+            enabled: std::env::var("FDL_USE_DATABASE")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
+            pool_size: std::env::var("FDL_DB_POOL_SIZE")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(10),
+            timeout_secs: std::env::var("FDL_DB_TIMEOUT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(30),
+        }
+    }
+}
+
+/// Server configuration
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
+    pub dev_mode: bool,
+    pub jwt_secret: String,
+    pub database: DatabaseConfig,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            host: "0.0.0.0".to_string(),
+            port: 3001,
+            dev_mode: true,
+            jwt_secret: "dev-secret-key-change-in-production".to_string(),
+            database: DatabaseConfig::default(),
+        }
+    }
+}
+
+impl ServerConfig {
+    pub fn from_env() -> Self {
+        Self {
+            host: std::env::var("FDL_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
+            port: std::env::var("FDL_PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(3001),
+            dev_mode: std::env::var("FDL_DEV_MODE")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(true),
+            jwt_secret: std::env::var("FDL_JWT_SECRET")
+                .unwrap_or_else(|_| "dev-secret-key-change-in-production".to_string()),
+            database: DatabaseConfig::from_env(),
+        }
+    }
+}
+
+/// Execution state
+#[derive(Debug, Clone, Serialize)]
+pub struct ExecutionState {
+    pub execution_id: String,
+    pub flow_id: String,
+    pub tenant_id: String,
+    pub status: ExecutionStatus,
+    pub progress: f32,
+    pub current_node: Option<String>,
+    pub error: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionStatus {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+/// Storage mode for the application
+pub enum StorageMode {
+    /// In-memory storage using DashMap
+    Memory,
+    /// PostgreSQL database storage
+    Database,
+}
+
+/// Application state shared across handlers
+pub struct AppState {
+    /// JWT service for authentication
+    pub jwt_service: Arc<JwtService>,
+    /// Active executors by execution ID
+    pub executors: DashMap<String, Arc<Executor>>,
+    /// Execution states
+    pub executions: DashMap<String, ExecutionState>,
+    /// Server configuration
+    pub config: ServerConfig,
+    /// Current storage mode
+    pub storage_mode: StorageMode,
+    /// Database connection pool (optional)
+    pub db_pool: Option<sqlx::PgPool>,
+    /// Storage backend (memory or postgres)
+    pub storage: Storage,
+}
+
+impl AppState {
+    /// Create a new application state with in-memory storage
+    pub fn new() -> Self {
+        let jwt_config = JwtConfig::default();
+        let jwt_service = Arc::new(JwtService::new(jwt_config));
+
+        Self {
+            jwt_service,
+            executors: DashMap::new(),
+            executions: DashMap::new(),
+            config: ServerConfig::default(),
+            storage_mode: StorageMode::Memory,
+            db_pool: None,
+            storage: Storage::memory(),
+        }
+    }
+
+    /// Create with configuration (async for database initialization)
+    pub async fn with_config(config: ServerConfig) -> Self {
+        let jwt_config = JwtConfig {
+            secret: config.jwt_secret.clone(),
+            issuer: "fdl-runtime".to_string(),
+            access_token_ttl: chrono::Duration::hours(24),
+            refresh_token_ttl: chrono::Duration::days(7),
+        };
+        let jwt_service = Arc::new(JwtService::new(jwt_config));
+
+        // Initialize storage backend
+        let (storage_mode, db_pool, storage) = match Storage::new(&config.database).await {
+            Ok(s) => {
+                let is_db = s.is_database();
+                if is_db {
+                    tracing::info!("Database storage initialized successfully");
+                    // Get db_pool for compatibility
+                    let pool = Self::init_database(&config.database).await.ok();
+                    (StorageMode::Database, pool, s)
+                } else {
+                    tracing::info!("Using in-memory storage");
+                    (StorageMode::Memory, None, s)
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to initialize storage: {}, falling back to memory", e);
+                (StorageMode::Memory, None, Storage::memory())
+            }
+        };
+
+        Self {
+            jwt_service,
+            executors: DashMap::new(),
+            executions: DashMap::new(),
+            config,
+            storage_mode,
+            db_pool,
+            storage,
+        }
+    }
+
+    /// Initialize database connection pool
+    async fn init_database(config: &DatabaseConfig) -> Result<sqlx::PgPool, sqlx::Error> {
+        let url = config.url.as_ref().ok_or_else(|| {
+            sqlx::Error::Configuration("DATABASE_URL not set".into())
+        })?;
+
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(config.pool_size)
+            .acquire_timeout(std::time::Duration::from_secs(config.timeout_secs))
+            .connect(url)
+            .await?;
+
+        // Test the connection
+        sqlx::query("SELECT 1").execute(&pool).await?;
+
+        Ok(pool)
+    }
+
+    /// Create with custom JWT config (sync, in-memory only)
+    pub fn with_jwt_config(jwt_config: JwtConfig) -> Self {
+        let jwt_service = Arc::new(JwtService::new(jwt_config));
+
+        Self {
+            jwt_service,
+            executors: DashMap::new(),
+            executions: DashMap::new(),
+            config: ServerConfig::default(),
+            storage_mode: StorageMode::Memory,
+            db_pool: None,
+            storage: Storage::memory(),
+        }
+    }
+
+    /// Check if using database storage
+    pub fn is_database_mode(&self) -> bool {
+        matches!(self.storage_mode, StorageMode::Database)
+    }
+
+    /// Get database pool reference (if available)
+    pub fn database(&self) -> Option<&sqlx::PgPool> {
+        self.db_pool.as_ref()
+    }
+
+    // Executor management
+
+    /// Register an executor
+    pub fn register_executor(&self, id: &str, executor: Arc<Executor>) {
+        self.executors.insert(id.to_string(), executor);
+    }
+
+    /// Get an executor by ID
+    pub fn get_executor(&self, id: &str) -> Option<Arc<Executor>> {
+        self.executors.get(id).map(|e| e.clone())
+    }
+
+    /// Remove an executor
+    pub fn remove_executor(&self, id: &str) {
+        self.executors.remove(id);
+    }
+
+    // Flow management (async, using Storage abstraction)
+
+    /// Create a new flow
+    pub async fn create_flow(&self, tenant_id: &str, name: &str, description: Option<String>) -> Result<FlowRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        self.storage.as_flow_storage().create_flow(StorageCreateFlow {
+            tenant_id: tenant_uuid,
+            name: name.to_string(),
+            description,
+        }).await
+    }
+
+    /// Get flow by ID
+    pub async fn get_flow(&self, tenant_id: &str, flow_id: &str) -> Result<FlowRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage.as_flow_storage().get_flow(tenant_uuid, flow_uuid).await
+    }
+
+    /// List flows for a tenant
+    pub async fn list_flows(&self, tenant_id: &str, limit: usize, offset: usize) -> Result<(Vec<FlowRecord>, usize), StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let result = self.storage.as_flow_storage().list_flows(tenant_uuid, ListOptions { limit, offset }).await?;
+        Ok((result.items, result.total))
+    }
+
+    /// Update flow
+    pub async fn update_flow(&self, tenant_id: &str, flow_id: &str, name: Option<String>, description: Option<String>) -> Result<FlowRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage.as_flow_storage().update_flow(tenant_uuid, flow_uuid, StorageUpdateFlow {
+            name,
+            description,
+            thumbnail: None,
+        }).await
+    }
+
+    /// Delete flow
+    pub async fn delete_flow(&self, tenant_id: &str, flow_id: &str) -> Result<(), StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage.as_flow_storage().delete_flow(tenant_uuid, flow_uuid).await
+    }
+
+    // Version management (async, using Storage abstraction)
+
+    /// Create a new version
+    pub async fn create_version(&self, flow_id: &str, tenant_id: &str, data: serde_json::Value, label: Option<String>) -> Result<VersionRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage.as_flow_storage().create_version(StorageCreateVersion {
+            flow_id: flow_uuid,
+            tenant_id: tenant_uuid,
+            data,
+            label,
+        }).await
+    }
+
+    /// Get version by ID
+    pub async fn get_version(&self, tenant_id: &str, flow_id: &str, version_id: &str) -> Result<VersionRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        let version_uuid = Uuid::parse_str(version_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid version ID: {}", version_id)))?;
+        self.storage.as_flow_storage().get_version(tenant_uuid, flow_uuid, version_uuid).await
+    }
+
+    /// List versions for a flow
+    pub async fn list_versions(&self, tenant_id: &str, flow_id: &str) -> Result<Vec<VersionRecord>, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage.as_flow_storage().list_versions(tenant_uuid, flow_uuid).await
+    }
+
+    /// Delete version
+    pub async fn delete_version(&self, tenant_id: &str, flow_id: &str, version_id: &str) -> Result<(), StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        let version_uuid = Uuid::parse_str(version_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid version ID: {}", version_id)))?;
+        self.storage.as_flow_storage().delete_version(tenant_uuid, flow_uuid, version_uuid).await
+    }
+
+    /// Get version count for a flow
+    pub async fn version_count(&self, tenant_id: &str, flow_id: &str) -> usize {
+        match self.list_versions(tenant_id, flow_id).await {
+            Ok(versions) => versions.len(),
+            Err(_) => 0,
+        }
+    }
+
+    /// Get latest version for a flow
+    pub async fn get_latest_version(&self, tenant_id: &str, flow_id: &str) -> Result<Option<VersionRecord>, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage.as_flow_storage().get_latest_version(tenant_uuid, flow_uuid).await
+    }
+
+    // Execution management
+
+    /// Create a new execution
+    pub fn create_execution(&self, flow_id: &str, tenant_id: &str) -> ExecutionState {
+        let execution = ExecutionState {
+            execution_id: Uuid::new_v4().to_string(),
+            flow_id: flow_id.to_string(),
+            tenant_id: tenant_id.to_string(),
+            status: ExecutionStatus::Pending,
+            progress: 0.0,
+            current_node: None,
+            error: None,
+            started_at: Utc::now(),
+            completed_at: None,
+        };
+        self.executions.insert(execution.execution_id.clone(), execution.clone());
+        execution
+    }
+
+    /// Get execution state
+    pub fn get_execution(&self, execution_id: &str) -> Option<ExecutionState> {
+        self.executions.get(execution_id).map(|e| e.clone())
+    }
+
+    /// Update execution status
+    pub fn update_execution(&self, execution_id: &str, status: ExecutionStatus, progress: f32, current_node: Option<String>) {
+        if let Some(mut exec) = self.executions.get_mut(execution_id) {
+            exec.status = status;
+            exec.progress = progress;
+            exec.current_node = current_node;
+            if matches!(status, ExecutionStatus::Completed | ExecutionStatus::Failed | ExecutionStatus::Cancelled) {
+                exec.completed_at = Some(Utc::now());
+            }
+        }
+    }
+
+    /// Fail execution with error
+    pub fn fail_execution(&self, execution_id: &str, error: &str) {
+        if let Some(mut exec) = self.executions.get_mut(execution_id) {
+            exec.status = ExecutionStatus::Failed;
+            exec.error = Some(error.to_string());
+            exec.completed_at = Some(Utc::now());
+        }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Parse tenant ID string to UUID
+/// Uses a static UUID for "default" tenant, otherwise parses or generates from hash
+fn parse_tenant_id(tenant_id: &str) -> Uuid {
+    if tenant_id == "default" {
+        // Well-known UUID for "default" tenant
+        Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+    } else {
+        Uuid::parse_str(tenant_id).unwrap_or_else(|_| {
+            // Generate UUID from hash of the string
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            tenant_id.hash(&mut hasher);
+            let hash = hasher.finish();
+            Uuid::from_u64_pair(hash, hash.wrapping_mul(31))
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_state_creation() {
+        let state = AppState::new();
+        assert!(state.executions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_flow_crud() {
+        let state = AppState::new();
+        let tenant_id = "tenant-1";
+
+        // Create
+        let flow = state.create_flow(tenant_id, "Test Flow", Some("Description".to_string())).await.unwrap();
+        assert_eq!(flow.name, "Test Flow");
+
+        // Get
+        let flow_id = flow.id.to_string();
+        let retrieved = state.get_flow(tenant_id, &flow_id).await.unwrap();
+        assert_eq!(retrieved.name, "Test Flow");
+
+        // Update
+        let updated = state.update_flow(tenant_id, &flow_id, Some("Updated".to_string()), None).await.unwrap();
+        assert_eq!(updated.name, "Updated");
+
+        // List
+        let (flows, total) = state.list_flows(tenant_id, 10, 0).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(flows.len(), 1);
+
+        // Delete
+        state.delete_flow(tenant_id, &flow_id).await.unwrap();
+        assert!(state.get_flow(tenant_id, &flow_id).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_version_crud() {
+        let state = AppState::new();
+        let tenant_id = "tenant-1";
+
+        let flow = state.create_flow(tenant_id, "Test", None).await.unwrap();
+        let flow_id = flow.id.to_string();
+
+        // Create versions
+        let v1 = state.create_version(&flow_id, tenant_id, serde_json::json!({"v": 1}), Some("v1.0".to_string())).await.unwrap();
+        let v2 = state.create_version(&flow_id, tenant_id, serde_json::json!({"v": 2}), None).await.unwrap();
+
+        assert_eq!(v1.version_number, 1);
+        assert_eq!(v2.version_number, 2);
+
+        // List
+        let versions = state.list_versions(tenant_id, &flow_id).await.unwrap();
+        assert_eq!(versions.len(), 2);
+
+        // Get
+        let v1_id = v1.id.to_string();
+        let retrieved = state.get_version(tenant_id, &flow_id, &v1_id).await.unwrap();
+        assert_eq!(retrieved.version_number, 1);
+
+        // Delete
+        state.delete_version(tenant_id, &flow_id, &v1_id).await.unwrap();
+        assert_eq!(state.version_count(tenant_id, &flow_id).await, 1);
+    }
+
+    #[test]
+    fn test_execution_lifecycle() {
+        let state = AppState::new();
+
+        let exec = state.create_execution("flow-1", "tenant-1");
+        assert_eq!(exec.status, ExecutionStatus::Pending);
+
+        state.update_execution(&exec.execution_id, ExecutionStatus::Running, 0.5, Some("node-1".to_string()));
+        let running = state.get_execution(&exec.execution_id).unwrap();
+        assert_eq!(running.status, ExecutionStatus::Running);
+        assert_eq!(running.progress, 0.5);
+
+        state.update_execution(&exec.execution_id, ExecutionStatus::Completed, 1.0, None);
+        let completed = state.get_execution(&exec.execution_id).unwrap();
+        assert_eq!(completed.status, ExecutionStatus::Completed);
+        assert!(completed.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_server_config() {
+        let config = ServerConfig::default();
+        assert_eq!(config.port, 3001);
+        assert!(config.dev_mode);
+    }
+
+    #[test]
+    fn test_parse_tenant_id() {
+        // Default tenant should produce consistent UUID
+        let default1 = parse_tenant_id("default");
+        let default2 = parse_tenant_id("default");
+        assert_eq!(default1, default2);
+
+        // Valid UUID should be parsed
+        let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
+        let parsed = parse_tenant_id(uuid_str);
+        assert_eq!(parsed.to_string(), uuid_str);
+
+        // Invalid UUID should produce deterministic UUID
+        let custom1 = parse_tenant_id("my-tenant");
+        let custom2 = parse_tenant_id("my-tenant");
+        assert_eq!(custom1, custom2);
+    }
+}

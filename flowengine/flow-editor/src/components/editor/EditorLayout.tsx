@@ -3,17 +3,20 @@
  * Material Design 3 Inspired Layout for the Flow Editor
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FlowCanvas } from '@/components/canvas/FlowCanvas'
 import { NodePalette } from '@/components/panels/NodePalette'
 import { PropertyPanel } from '@/components/panels/PropertyPanel'
 import { DebugPanel } from '@/components/panels/DebugPanel'
 import { VersionPanel } from '@/components/panels/VersionPanel'
+import { ExecutePanel } from '@/components/panels/ExecutePanel'
+import { SettingsDialog } from '@/components/settings'
 import { ResizeHandle } from '@/components/ui/ResizeHandle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { useEditorStore } from '@/stores/editorStore'
 import { useFlowStore } from '@/stores/flowStore'
+import { useExecuteStore } from '@/stores/executeStore'
 import { flowToYaml, yamlToFlow } from '@/lib/flowYamlConverter'
 
 // Material Design Icons
@@ -103,6 +106,16 @@ const Icons = {
       <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
     </svg>
   ),
+  playArrow: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z"/>
+    </svg>
+  ),
+  settings: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+    </svg>
+  ),
 }
 
 // Helper function to check if it's night time (6PM - 6AM)
@@ -119,7 +132,7 @@ interface EditorLayoutProps {
   versionId?: string
 }
 
-export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, versionId }: EditorLayoutProps) {
+export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, versionId: _versionId }: EditorLayoutProps) {
   const navigate = useNavigate()
   const {
     showNodePalette,
@@ -344,8 +357,33 @@ export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, ver
             </aside>
           </>
         )}
+
+        {/* Execute Results Panel */}
+        <ExecuteResultsPanel />
       </div>
     </div>
+  )
+}
+
+function ExecuteResultsPanel() {
+  const { showResultsPanel } = useExecuteStore()
+
+  if (!showResultsPanel) return null
+
+  return (
+    <>
+      <ResizeHandle direction="horizontal" onResize={() => {}} />
+      <aside
+        className="flex-shrink-0 rounded-2xl overflow-hidden"
+        style={{
+          width: 360,
+          background: 'var(--surface-container)',
+          boxShadow: 'var(--elevation-1)',
+        }}
+      >
+        <ExecutePanel />
+      </aside>
+    </>
   )
 }
 
@@ -356,7 +394,7 @@ interface HeaderProps {
 }
 
 function Header({ flowName, onBack }: HeaderProps) {
-  const { isDirty, flow } = useFlowStore()
+  const { isDirty, flow, isReadOnly } = useFlowStore()
   const {
     toggleNodePalette,
     togglePropertyPanel,
@@ -371,6 +409,8 @@ function Header({ flowName, onBack }: HeaderProps) {
     theme,
     setTheme,
   } = useEditorStore()
+  const { state: executeState, execute, openResultsPanel } = useExecuteStore()
+  const [showSettings, setShowSettings] = useState(false)
 
   const cycleTheme = useCallback(() => {
     const themeOrder = ['system', 'light', 'dark'] as const
@@ -406,6 +446,14 @@ function Header({ flowName, onBack }: HeaderProps) {
     const yamlContent = flowToYaml(flow)
     navigator.clipboard.writeText(yamlContent)
   }, [flow])
+
+  const handleExecute = useCallback(() => {
+    if (executeState === 'running') {
+      openResultsPanel()
+    } else {
+      execute(flow)
+    }
+  }, [executeState, execute, flow, openResultsPanel])
 
   return (
     <header
@@ -537,9 +585,34 @@ function Header({ flowName, onBack }: HeaderProps) {
           {getThemeIcon()}
         </button>
 
+        <button
+          onClick={() => setShowSettings(true)}
+          title="设置"
+          className="p-2 rounded-lg transition-all"
+          style={{
+            background: 'var(--surface-container-high)',
+            color: 'var(--on-surface-variant)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--surface-container-highest)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'var(--surface-container-high)'
+          }}
+        >
+          {Icons.settings}
+        </button>
+
         <div
           className="w-px h-8"
           style={{ background: 'var(--outline-variant)' }}
+        />
+
+        {/* Settings Dialog */}
+        <SettingsDialog
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          initialTab="storage"
         />
 
         <button
@@ -559,6 +632,32 @@ function Header({ flowName, onBack }: HeaderProps) {
           {Icons.contentCopy}
           Copy
         </button>
+        {!isReadOnly && (
+          <button
+            onClick={handleExecute}
+            disabled={executeState === 'running'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            style={{
+              background: executeState === 'running' ? 'var(--tertiary)' : 'var(--secondary)',
+              color: executeState === 'running' ? 'var(--on-tertiary)' : 'var(--on-secondary)',
+              opacity: executeState === 'running' ? 0.8 : 1,
+            }}
+            onMouseEnter={(e) => {
+              if (executeState !== 'running') {
+                e.currentTarget.style.opacity = '0.9'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (executeState !== 'running') {
+                e.currentTarget.style.opacity = '1'
+              }
+            }}
+            title={executeState === 'running' ? '执行中...' : '执行流程'}
+          >
+            {Icons.playArrow}
+            {executeState === 'running' ? '执行中' : '执行'}
+          </button>
+        )}
         <button
           onClick={handleSave}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"

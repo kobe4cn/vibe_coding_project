@@ -1,0 +1,69 @@
+[workspace]
+resolver = "2"
+members = [
+    "fdl-gml",
+    "fdl-executor",
+    "fdl-auth",
+    "fdl-tools",
+    "fdl-runtime",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["FlowEngine Team"]
+license = "MIT"
+repository = "https://github.com/flowengine/fdl-rust"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.45", features = ["full"] }
+
+# Web framework
+axum = { version = "0.8", features = ["macros", "ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json"] }
+
+# Authentication
+jsonwebtoken = "9.3"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.16", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json","fmt","registry"] }
+dashmap = "6.1"
+regex = "1.11"
+once_cell = "1.21"
+dotenvy = "0.15"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# OpenAPI documentation
+utoipa = { version = "5.3", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9.0", features = ["axum"] }
+
+# Testing
+tokio-test = "0.4"
+
+# Internal crates
+fdl-gml = { path = "fdl-gml" }
+fdl-executor = { path = "fdl-executor" }
+fdl-auth = { path = "fdl-auth" }
+fdl-tools = { path = "fdl-tools" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
