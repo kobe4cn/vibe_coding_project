@@ -1,0 +1,399 @@
+@import "tailwindcss";
+
+/**
+ * Flow Editor - Material Design Inspired Theme
+ * Based on Material Design 3 guidelines
+ */
+
+:root {
+  /* Material Design Spacing (8px grid) */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* Surface Colors - Material Design 3 Dark Theme */
+  --surface-dim: #141218;
+  --surface-default: #1d1b20;
+  --surface-bright: #3b383e;
+  --surface-container-lowest: #0f0d13;
+  --surface-container-low: #1d1b20;
+  --surface-container: #211f26;
+  --surface-container-high: #2b2930;
+  --surface-container-highest: #36343b;
+
+  /* On Surface Colors */
+  --on-surface: #e6e0e9;
+  --on-surface-variant: #cac4d0;
+  --outline: #938f99;
+  --outline-variant: #49454f;
+
+  /* Primary Colors */
+  --primary: #d0bcff;
+  --primary-container: #4f378b;
+  --on-primary: #381e72;
+  --on-primary-container: #eaddff;
+
+  /* Secondary Colors */
+  --secondary: #ccc2dc;
+  --secondary-container: #4a4458;
+  --on-secondary: #332d41;
+  --on-secondary-container: #e8def8;
+
+  /* Tertiary Colors */
+  --tertiary: #efb8c8;
+  --tertiary-container: #633b48;
+
+  /* Error Colors */
+  --error: #f2b8b5;
+  --error-container: #8c1d18;
+  --on-error: #601410;
+
+  /* Node Type Colors - Modern Material Palette */
+  --node-exec: #b4a7ff;
+  --node-mapping: #c9b6ff;
+  --node-condition: #ffb77c;
+  --node-switch: #ffa570;
+  --node-delay: #a8c7fa;
+  --node-each: #7dd3fc;
+  --node-loop: #5eead4;
+  --node-agent: #f9a8d4;
+  --node-guard: #fca5a5;
+  --node-approval: #86efac;
+  --node-mcp: #93c5fd;
+  --node-handoff: #c4b5fd;
+
+  /* Elevation Shadows - Material Design */
+  --elevation-1: 0 1px 3px 1px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elevation-2: 0 2px 6px 2px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --elevation-4: 0 6px 10px 4px rgba(0, 0, 0, 0.15), 0 2px 3px rgba(0, 0, 0, 0.3);
+  --elevation-5: 0 8px 12px 6px rgba(0, 0, 0, 0.15), 0 4px 4px rgba(0, 0, 0, 0.3);
+
+  /* Border Radius - Material Design */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  font-family: 'Roboto', 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--on-surface);
+  background-color: var(--surface-dim);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Light Theme - Material Design 3 */
+[data-theme="light"] {
+  /* Surface Colors - Material Design 3 Light Theme */
+  --surface-dim: #ded8e1;
+  --surface-default: #fef7ff;
+  --surface-bright: #fef7ff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f7f2fa;
+  --surface-container: #f3edf7;
+  --surface-container-high: #ece6f0;
+  --surface-container-highest: #e6e0e9;
+
+  /* On Surface Colors */
+  --on-surface: #1d1b20;
+  --on-surface-variant: #49454f;
+  --outline: #79747e;
+  --outline-variant: #cac4d0;
+
+  /* Primary Colors */
+  --primary: #6750a4;
+  --primary-container: #eaddff;
+  --on-primary: #ffffff;
+  --on-primary-container: #21005d;
+
+  /* Secondary Colors */
+  --secondary: #625b71;
+  --secondary-container: #e8def8;
+  --on-secondary: #ffffff;
+  --on-secondary-container: #1d192b;
+
+  /* Tertiary Colors */
+  --tertiary: #7d5260;
+  --tertiary-container: #ffd8e4;
+
+  /* Error Colors */
+  --error: #b3261e;
+  --error-container: #f9dedc;
+  --on-error: #ffffff;
+
+  /* Node Type Colors - Adjusted for Light Theme */
+  --node-exec: #6750a4;
+  --node-mapping: #7e67c9;
+  --node-condition: #c87c3c;
+  --node-switch: #b86a2e;
+  --node-delay: #3b78b8;
+  --node-each: #0d7999;
+  --node-loop: #1a8a7a;
+  --node-agent: #b34f7e;
+  --node-guard: #c44f4f;
+  --node-approval: #2e8b57;
+  --node-mcp: #4a7fc4;
+  --node-handoff: #7c5fc9;
+
+  color: var(--on-surface);
+  background-color: var(--surface-dim);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--surface-dim);
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  padding: var(--spacing-md);
+}
+
+/* Material Design Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--outline);
+}
+
+/* React Flow Customizations */
+.react-flow {
+  background-color: var(--surface-container-lowest) !important;
+  border-radius: var(--radius-lg);
+}
+
+.react-flow__background {
+  background-color: var(--surface-container-lowest) !important;
+}
+
+.react-flow__node {
+  font-size: 14px;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+  stroke: var(--outline);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+}
+
+.react-flow__handle {
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: var(--radius-full) !important;
+  border: 2px solid white !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 50 !important;
+  pointer-events: all !important;
+  cursor: crosshair !important;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.5) !important;
+  border-color: #86efac !important;
+  box-shadow: 0 0 8px rgba(134, 239, 172, 0.6) !important;
+}
+
+/* Connection line styling */
+.react-flow__connection-line {
+  stroke: var(--primary) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__connection-path {
+  stroke: var(--primary) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__controls {
+  background: var(--surface-container-high) !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--elevation-2) !important;
+  padding: var(--spacing-xs) !important;
+  gap: var(--spacing-xs);
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border: none !important;
+  color: var(--on-surface-variant) !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: var(--radius-sm) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--surface-container-highest) !important;
+  color: var(--on-surface) !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+.react-flow__minimap {
+  background: var(--surface-container-high) !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--elevation-2) !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.6) !important;
+}
+
+.react-flow__selection {
+  background: rgba(208, 188, 255, 0.1) !important;
+  border: 1px solid var(--primary) !important;
+  border-radius: var(--radius-sm);
+}
+
+/* Material Design Input Styling */
+input, textarea, select {
+  background-color: var(--surface-container-highest);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 14px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--outline);
+}
+
+/* Material Design Button */
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* Material Design Ripple Effect */
+.md-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.md-ripple::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.md-ripple:hover::after {
+  opacity: 0.08;
+}
+
+.md-ripple:active::after {
+  opacity: 0.12;
+}
+
+/* Material Design Card */
+.md-card {
+  background: var(--surface-container);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1);
+}
+
+.md-card-elevated {
+  background: var(--surface-container-high);
+  box-shadow: var(--elevation-2);
+}
+
+/* Animations */
+@keyframes md-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes md-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes md-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-md-pulse {
+  animation: md-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-md-fade-in {
+  animation: md-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-md-scale-in {
+  animation: md-scale-in 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}

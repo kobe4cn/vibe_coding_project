@@ -1,0 +1,442 @@
+flow:
+    name: 智能订单处理与履约流程
+    desp: |
+        完整的电商订单处理流程，包含：
+        - 客户身份与信用校验
+        - 库存检查与锁定
+        - 智能定价与优惠计算
+        - 支付处理与重试
+        - 订单创建与拆分
+        - 多渠道通知发送
+        - 异步物流调度
+    args:
+        defs:
+            Customer:                      # 客户信息
+                id: string                 # 客户ID
+                name: string               # 客户姓名
+                level: string              # 会员等级 (normal/silver/gold/platinum)
+                mobile: string             # 手机号
+                email: string?             # 邮箱（可选）
+                creditScore: int           # 信用分
+                balance: decimal           # 账户余额
+
+            OrderItem:                     # 订单商品项
+                skuId: string              # SKU编码
+                skuName: string            # 商品名称
+                quantity: int              # 购买数量
+                unitPrice: decimal         # 单价
+                warehouseId: string?       # 发货仓库ID
+
+            PaymentInfo:                   # 支付信息
+                method: string             # 支付方式 (balance/alipay/wechat/card)
+                transactionId: string?     # 交易流水号
+                paidAmount: decimal        # 实付金额
+                paidAt: date?              # 支付时间
+
+            Order:                         # 订单对象
+                id: string                 # 订单ID
+                customerId: string         # 客户ID
+                items: OrderItem[]         # 商品列表
+                totalAmount: decimal       # 商品总额
+                discountAmount: decimal    # 优惠金额
+                finalAmount: decimal       # 应付金额
+                payment: PaymentInfo?      # 支付信息
+                status: string             # 订单状态
+                createdAt: date            # 创建时间
+
+            ShipmentPlan:                  # 发货计划
+                orderId: string            # 订单ID
+                warehouseId: string        # 仓库ID
+                items: OrderItem[]         # 商品列表
+                estimatedDelivery: date    # 预计送达时间
+
+        in:
+            customerId: string             # 客户ID（必填）
+            items: OrderItem[]             # 购买商品列表（必填）
+            paymentMethod: string = 'alipay'    # 支付方式，默认支付宝
+            couponCode: string?            # 优惠券码（可选）
+            addressId: string              # 收货地址ID（必填）
+
+        out:
+            order: Order                   # 订单信息
+            shipments: ShipmentPlan[]      # 发货计划列表
+
+    vars: |
+        orderStartTime = DATE()
+        retryCount     = 0
+
+    node:
+        # ============ 第一阶段：数据准备与校验（并行执行） ============
+
+        customer:
+            name: 获取客户信息
+            desp: 从CRM系统获取客户完整信息，包括会员等级和信用分。
+            exec: db://crm.mysql.customer/take
+            args: id = customerId, proj = 'id, name, level, mobile, email, creditScore, balance'
+            fail: errorHandler
+
+        address:
+            name: 获取收货地址
+            exec: db://crm.mysql.address/take
+            args: id = addressId
+            with: |
+                ...address
+                fullAddress = `${address.province}${address.city}${address.district}${address.detail}`
+            fail: errorHandler
+
+        inventoryCheck:
+            name: 批量检查库存
+            desp: 并行检查所有商品的库存情况，返回可用库存和推荐仓库。
+            exec: api://inventory-service/batch_check
+            args: |
+                skuIds   = items.map(i => i.skuId)
+                quantity = items.map(i => i.quantity)
+            with: |
+                inventoryCheck.map(inv => {
+                    ...inv
+                    sufficient = inv.available >= inv.requested
+                })
+            next: validateInventory
+
+        couponInfo:
+            name: 查询优惠券
+            exec: api://promotion-service/coupon_detail
+            args: code = couponCode, customerId = customerId
+            only: couponCode != null
+            with: |
+                valid      = couponInfo.status == 'active' && couponInfo.expireAt > DATE()
+                discount   = couponInfo.discountType == 'percent'
+                            ? couponInfo.discountValue / 100
+                            : couponInfo.discountValue
+                couponType = couponInfo.discountType
+                minAmount  = couponInfo.minOrderAmount || 0
+
+        # ============ 第二阶段：业务校验 ============
+
+        validateCustomer:
+            name: 校验客户资格
+            desp: 检查客户信用分和账户状态，决定是否允许下单。
+            case:
+                -   when: customer.error != null
+                    then: errorHandler
+                -   when: customer.creditScore < 300
+                    then: rejectLowCredit
+                -   when: customer.level == 'blacklist'
+                    then: rejectBlacklist
+            else: validateInventory
+
+        rejectLowCredit:
+            name: 拒绝低信用客户
+            with: |
+                error = {
+                    code    = 'LOW_CREDIT'
+                    message = '您的信用分不足，暂时无法下单。'
+                }
+
+        rejectBlacklist:
+            name: 拒绝黑名单客户
+            with: |
+                error = {
+                    code    = 'BLACKLISTED'
+                    message = '您的账户存在异常，请联系客服。'
+                }
+
+        validateInventory:
+            name: 校验库存结果
+            when: inventoryCheck.some(inv => !inv.sufficient)
+            then: handleInsufficientStock
+            else: calculatePricing
+
+        handleInsufficientStock:
+            name: 处理库存不足
+            with: |
+                insufficientItems = inventoryCheck
+                    .filter(inv => !inv.sufficient)
+                    .map(inv => {
+                        skuId     = inv.skuId
+                        requested = inv.requested
+                        available = inv.available
+                        shortage  = inv.requested - inv.available
+                    })
+                error = {
+                    code    = 'INSUFFICIENT_STOCK'
+                    message = `以下商品库存不足：${insufficientItems.map(i => i.skuId).join(', ')}`
+                    details = insufficientItems
+                }
+
+        # ============ 第三阶段：定价与优惠计算 ============
+
+        calculatePricing:
+            name: 计算订单金额
+            desp: 根据会员等级、优惠券、促销活动计算最终价格。
+            with: |
+                $itemsWithPrice = items.map(item => {
+                    ...item
+                    subtotal = item.quantity * item.unitPrice
+                })
+                $totalAmount    = $itemsWithPrice.sum('subtotal')
+
+                # 会员折扣计算
+                $memberDiscount = CASE
+                    WHEN customer.level == 'platinum' THEN 0.85
+                    WHEN customer.level == 'gold'     THEN 0.90
+                    WHEN customer.level == 'silver'   THEN 0.95
+                    ELSE 1.0
+                END
+
+                # 优惠券折扣（如果有效且满足最低消费）
+                $couponDiscount = couponInfo.valid && $totalAmount >= couponInfo.minAmount
+                    ? (couponInfo.couponType == 'percent'
+                        ? $totalAmount * (1 - couponInfo.discount)
+                        : couponInfo.discount)
+                    : 0
+
+                # 最终金额计算
+                $afterMember = $totalAmount * $memberDiscount
+                $finalAmount = $afterMember - $couponDiscount
+
+                totalAmount    = $totalAmount
+                memberDiscount = $totalAmount - $afterMember
+                couponDiscount = $couponDiscount
+                finalAmount    = $finalAmount > 0 ? $finalAmount : 0
+                itemsWithPrice = $itemsWithPrice
+            next: lockInventory
+
+        lockInventory:
+            name: 锁定库存
+            exec: api://inventory-service/batch_lock
+            args: |
+                items = inventoryCheck.map(inv => {
+                    skuId       = inv.skuId
+                    quantity    = inv.requested
+                    warehouseId = inv.recommendedWarehouse
+                })
+                expireMinutes = 30
+            fail: errorHandler
+            next: processPayment
+
+        # ============ 第四阶段：支付处理（带重试） ============
+
+        processPayment:
+            name: 支付处理循环
+            desp: 尝试处理支付，失败时最多重试3次，每次间隔递增。
+            vars: |
+                payRetry   = 0
+                paySuccess = false
+                payError   = null
+                transactionId = null
+            when: payRetry < 3 && !paySuccess
+            node:
+                doPayment:
+                    name: 执行支付
+                    exec: api://payment-service/charge?timeout=30000&max-attempts=1
+                    args: |
+                        customerId = customerId
+                        amount     = calculatePricing.finalAmount
+                        method     = paymentMethod
+                        orderId    = `PRE_${customerId}_${orderStartTime.offset('0s')}`
+                    sets: |
+                        payRetry = payRetry + 1
+                        paySuccess = doPayment.error == null && doPayment.status == 'success'
+                        transactionId = doPayment.transactionId
+                        payError = doPayment.error
+                    fail: paymentFailed
+                    next: paymentDelay
+
+                paymentFailed:
+                    name: 记录支付失败
+                    with: |
+                        paySuccess = false
+                        payError   = doPayment.error
+                    next: paymentDelay
+
+                paymentDelay:
+                    name: 支付重试等待
+                    wait: payRetry * 2000
+                    only: !paySuccess && payRetry < 3
+
+            with: paySuccess, transactionId, payError, payRetry
+            next: checkPaymentResult
+
+        checkPaymentResult:
+            name: 检查支付结果
+            when: processPayment.paySuccess
+            then: createOrder
+            else: handlePaymentFailure
+
+        handlePaymentFailure:
+            name: 处理支付失败
+            exec: api://inventory-service/batch_unlock
+            args: items = lockInventory.lockedItems
+            with: |
+                error = {
+                    code    = 'PAYMENT_FAILED'
+                    message = `支付失败（已重试${processPayment.payRetry}次）: ${processPayment.payError.message}`
+                }
+
+        # ============ 第五阶段：订单创建与拆分 ============
+
+        createOrder:
+            name: 创建主订单
+            exec: db://order.mysql.orders/create
+            args: |
+                data = {
+                    customerId     = customerId
+                    items          = calculatePricing.itemsWithPrice
+                    totalAmount    = calculatePricing.totalAmount
+                    discountAmount = calculatePricing.memberDiscount + calculatePricing.couponDiscount
+                    finalAmount    = calculatePricing.finalAmount
+                    payment        = {
+                        method        = paymentMethod
+                        transactionId = processPayment.transactionId
+                        paidAmount    = calculatePricing.finalAmount
+                        paidAt        = DATE()
+                    }
+                    status    = 'paid'
+                    addressId = addressId
+                    createdAt = DATE()
+                }
+            next: planShipments
+
+        planShipments:
+            name: 规划发货计划
+            desp: 按仓库分组商品，生成多个发货计划。
+            with: |
+                # 按仓库分组商品
+                $groupedByWarehouse = inventoryCheck.group('recommendedWarehouse')
+
+                # 生成发货计划
+                shipmentPlans = $groupedByWarehouse.map((warehouseId, items) => {
+                    orderId           = createOrder.id
+                    warehouseId       = warehouseId
+                    items             = items.map(inv => {
+                        skuId       = inv.skuId
+                        skuName     = inv.skuName
+                        quantity    = inv.requested
+                        warehouseId = warehouseId
+                    })
+                    estimatedDelivery = DATE().offset('3d')
+                })
+            next: createShipments
+
+        createShipments:
+            name: 批量创建发货单
+            each: planShipments.shipmentPlans => plan, index
+            node:
+                createShipment:
+                    name: 创建发货单
+                    exec: db://logistics.mysql.shipments/create
+                    args: data = plan
+
+                notifyWarehouse:
+                    name: 通知仓库备货
+                    exec: api://warehouse-service/prepare
+                    args: |
+                        shipmentId  = createShipment.id
+                        warehouseId = plan.warehouseId
+                        items       = plan.items
+                        priority    = customer.level == 'platinum' ? 'high' : 'normal'
+
+            with: |
+                shipments = createShipment.map(s => {
+                    ...s
+                    warehouseNotified = true
+                })
+            next: sendNotifications
+
+        # ============ 第六阶段：多渠道通知 ============
+
+        sendNotifications:
+            name: 发送订单通知
+            desp: 根据客户偏好发送短信和/或邮件通知。
+            node:
+                smsNotify:
+                    name: 发送短信通知
+                    exec: api://notification-service/sms
+                    args: |
+                        to      = customer.mobile
+                        content = `【电商平台】您的订单${createOrder.id}已支付成功，共${createOrder.items.length()}件商品，实付¥${createOrder.finalAmount}。预计${planShipments.shipmentPlans[0].estimatedDelivery}送达。`
+
+                emailNotify:
+                    name: 发送邮件通知
+                    exec: api://notification-service/email
+                    args: |
+                        to      = customer.email
+                        subject = `订单确认 - ${createOrder.id}`
+                        body    = `
+                            尊敬的${customer.name}：
+
+                            您的订单已支付成功！
+
+                            订单编号：${createOrder.id}
+                            商品数量：${createOrder.items.length()}件
+                            订单金额：¥${createOrder.totalAmount}
+                            优惠金额：¥${createOrder.discountAmount}
+                            实付金额：¥${createOrder.finalAmount}
+
+                            发货计划：${planShipments.shipmentPlans.length()}个包裹
+                            预计送达：${planShipments.shipmentPlans[0].estimatedDelivery}
+
+                            感谢您的支持！
+                        `
+                    only: customer.email != null
+
+                pushNotify:
+                    name: 发送APP推送
+                    exec: api://notification-service/push
+                    args: |
+                        userId  = customerId
+                        title   = '订单支付成功'
+                        content = `订单${createOrder.id}已支付，正在为您安排发货`
+                        data    = { orderId = createOrder.id, action = 'view_order' }
+
+            next: asyncLogistics
+
+        # ============ 第七阶段：异步物流调度 ============
+
+        asyncLogistics:
+            name: 调度物流任务
+            exec: api://logistics-service/schedule_delivery
+            args: |
+                orderId   = createOrder.id
+                shipments = createShipments.shipments
+                address   = address
+                priority  = CASE
+                    WHEN customer.level == 'platinum' THEN 'express'
+                    WHEN customer.level == 'gold'     THEN 'priority'
+                    ELSE 'standard'
+                END
+            next: finalResult
+
+        # ============ 最终输出 ============
+
+        finalResult:
+            name: 组装最终结果
+            with: |
+                order = {
+                    ...createOrder
+                    customer    = customer.proj('id, name, level, mobile')
+                    address     = address
+                    processTime = DATE().offset('0s') - orderStartTime
+                }
+                shipments = createShipments.shipments
+
+        # ============ 错误处理 ============
+
+        errorHandler:
+            name: 统一错误处理
+            exec: api://logging-service/error
+            args: |
+                flowName  = '智能订单处理与履约流程'
+                errorInfo = customer.error || address.error || inventoryCheck.error || lockInventory.error
+                context   = {
+                    customerId = customerId
+                    items      = items
+                    timestamp  = DATE()
+                }
+            with: |
+                error = {
+                    code    = 'SYSTEM_ERROR'
+                    message = '系统处理异常，请稍后重试'
+                    traceId = errorHandler.traceId
+                }

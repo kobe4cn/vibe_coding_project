@@ -1,0 +1,29 @@
+flow:
+    name: 客户视图构建流程
+    desp: 根据客户标识、订单起始时间，获取指定客户的姓名和订单数量。
+    args:
+        in:
+            customerId: string    # 客户标识（必填）
+            from: DATE('-3M')     # 订单起始时间（可选），默认为最近3个月
+
+        out:
+            id: string            # 客户标识
+            name: string          # 客户姓名
+            orders: int           # 订单数量
+    node:
+        customer:
+            name: 获取客户基本信息
+            exec: api://crm-service/customer
+            next: merge
+
+        orderCount:
+            name: 获取客户订单数量
+            exec: db://ec.mysql.order/count
+            args: exps = `customerId = ${customerId} && time > '${from}'`
+            next: merge
+
+        merge:
+            name: 合并客户视图
+            with: |
+                ...customer            # 展开客户信息
+                orders = orderCount    # 订单数量
