@@ -25,10 +25,12 @@ interface EditorState {
   showDebugPanel: boolean
   showVersionPanel: boolean
 
-  // Panel sizes (percentage)
+  // Panel sizes (pixels)
   nodePaletteWidth: number
   propertyPanelWidth: number
+  versionPanelWidth: number
   debugPanelHeight: number
+  yamlEditorWidth: number // for split mode
 
   // Editor settings
   showGrid: boolean
@@ -59,7 +61,9 @@ interface EditorState {
 
   setNodePaletteWidth: (width: number) => void
   setPropertyPanelWidth: (width: number) => void
+  setVersionPanelWidth: (width: number) => void
   setDebugPanelHeight: (height: number) => void
+  setYamlEditorWidth: (width: number) => void
 
   setShowGrid: (show: boolean) => void
   setSnapToGrid: (snap: boolean) => void
@@ -88,7 +92,9 @@ export const useEditorStore = create<EditorState>()(
 
     nodePaletteWidth: 240,
     propertyPanelWidth: 320,
+    versionPanelWidth: 300,
     debugPanelHeight: 200,
+    yamlEditorWidth: 420,
 
     showGrid: true,
     snapToGrid: true,
@@ -154,9 +160,19 @@ export const useEditorStore = create<EditorState>()(
         state.propertyPanelWidth = Math.max(280, Math.min(500, width))
       }),
 
+    setVersionPanelWidth: (width) =>
+      set((state) => {
+        state.versionPanelWidth = Math.max(200, Math.min(400, width))
+      }),
+
     setDebugPanelHeight: (height) =>
       set((state) => {
         state.debugPanelHeight = Math.max(100, Math.min(400, height))
+      }),
+
+    setYamlEditorWidth: (width) =>
+      set((state) => {
+        state.yamlEditorWidth = Math.max(300, Math.min(800, width))
       }),
 
     setShowGrid: (show) =>

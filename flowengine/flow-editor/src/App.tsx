@@ -10,6 +10,7 @@ import { NodePalette } from '@/components/panels/NodePalette'
 import { PropertyPanel } from '@/components/panels/PropertyPanel'
 import { DebugPanel } from '@/components/panels/DebugPanel'
 import { VersionPanel } from '@/components/panels/VersionPanel'
+import { ResizeHandle } from '@/components/ui/ResizeHandle'
 import { useEditorStore } from '@/stores/editorStore'
 import { useFlowStore } from '@/stores/flowStore'
 import { flowToYaml, yamlToFlow } from '@/lib/flowYamlConverter'
@@ -98,11 +99,18 @@ function EditorLayout() {
     showVersionPanel,
     nodePaletteWidth,
     propertyPanelWidth,
+    versionPanelWidth,
     debugPanelHeight,
+    yamlEditorWidth,
     viewMode,
     theme,
     resolvedTheme,
     setResolvedTheme,
+    setNodePaletteWidth,
+    setPropertyPanelWidth,
+    setVersionPanelWidth,
+    setDebugPanelHeight,
+    setYamlEditorWidth,
   } = useEditorStore()
   const { undo, redo } = useFlowStore()
 
@@ -157,19 +165,25 @@ function EditorLayout() {
       <Header />
 
       {/* Main Content */}
-      <div className="flex-1 flex gap-4 min-h-0">
+      <div className="flex-1 flex min-h-0">
         {/* Left Panel - Node Palette */}
         {showNodePalette && viewMode !== 'yaml' && (
-          <aside
-            className="flex-shrink-0 rounded-2xl"
-            style={{
-              width: nodePaletteWidth,
-              background: 'var(--surface-container)',
-              boxShadow: 'var(--elevation-1)',
-            }}
-          >
-            <NodePalette />
-          </aside>
+          <>
+            <aside
+              className="flex-shrink-0 rounded-2xl"
+              style={{
+                width: nodePaletteWidth,
+                background: 'var(--surface-container)',
+                boxShadow: 'var(--elevation-1)',
+              }}
+            >
+              <NodePalette />
+            </aside>
+            <ResizeHandle
+              direction="horizontal"
+              onResize={(delta) => setNodePaletteWidth(nodePaletteWidth + delta)}
+            />
+          </>
         )}
 
         {/* Center - Canvas Area */}
@@ -186,12 +200,19 @@ function EditorLayout() {
             {viewMode === 'yaml' && <YamlEditor />}
             {viewMode === 'split' && (
               <>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <FlowCanvas />
                 </div>
+                <ResizeHandle
+                  direction="horizontal"
+                  onResize={(delta) => setYamlEditorWidth(yamlEditorWidth + delta)}
+                />
                 <div
-                  className="w-[420px] border-l"
-                  style={{ borderColor: 'var(--outline-variant)' }}
+                  className="flex-shrink-0"
+                  style={{
+                    width: yamlEditorWidth,
+                    borderLeft: '1px solid var(--outline-variant)',
+                  }}
                 >
                   <YamlEditor />
                 </div>
@@ -201,25 +222,35 @@ function EditorLayout() {
 
           {/* Debug Panel - hidden in YAML mode */}
           {showDebugPanel && viewMode !== 'yaml' && (
-            <div
-              className="flex-shrink-0 rounded-2xl overflow-hidden"
-              style={{
-                height: debugPanelHeight,
-                background: 'var(--surface-container)',
-                boxShadow: 'var(--elevation-1)',
-              }}
-            >
-              <DebugPanel />
-            </div>
+            <>
+              <ResizeHandle
+                direction="vertical"
+                onResize={(delta) => setDebugPanelHeight(debugPanelHeight - delta)}
+              />
+              <div
+                className="flex-shrink-0 rounded-2xl overflow-hidden"
+                style={{
+                  height: debugPanelHeight,
+                  background: 'var(--surface-container)',
+                  boxShadow: 'var(--elevation-1)',
+                }}
+              >
+                <DebugPanel />
+              </div>
+            </>
           )}
         </main>
 
         {/* Right Panels */}
-        <div className="flex gap-4 flex-shrink-0">
-          {/* Property Panel - hidden in YAML mode */}
-          {showPropertyPanel && viewMode !== 'yaml' && (
+        {/* Property Panel - hidden in YAML mode */}
+        {showPropertyPanel && viewMode !== 'yaml' && (
+          <>
+            <ResizeHandle
+              direction="horizontal"
+              onResize={(delta) => setPropertyPanelWidth(propertyPanelWidth - delta)}
+            />
             <aside
-              className="rounded-2xl overflow-hidden"
+              className="flex-shrink-0 rounded-2xl overflow-hidden"
               style={{
                 width: propertyPanelWidth,
                 background: 'var(--surface-container)',
@@ -228,22 +259,28 @@ function EditorLayout() {
             >
               <PropertyPanel />
             </aside>
-          )}
+          </>
+        )}
 
-          {/* Version Panel - always visible when enabled */}
-          {showVersionPanel && (
+        {/* Version Panel - always visible when enabled */}
+        {showVersionPanel && (
+          <>
+            <ResizeHandle
+              direction="horizontal"
+              onResize={(delta) => setVersionPanelWidth(versionPanelWidth - delta)}
+            />
             <aside
-              className="rounded-2xl overflow-hidden"
+              className="flex-shrink-0 rounded-2xl overflow-hidden"
               style={{
-                width: 300,
+                width: versionPanelWidth,
                 background: 'var(--surface-container)',
                 boxShadow: 'var(--elevation-1)',
               }}
             >
               <VersionPanel />
             </aside>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   )
