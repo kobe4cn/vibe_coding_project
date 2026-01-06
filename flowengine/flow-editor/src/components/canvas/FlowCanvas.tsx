@@ -1,9 +1,11 @@
 /**
  * Flow Canvas Component
  * Main visual flow editor using React Flow
+ *
+ * Start 节点作为普通可拖拽节点，用户从组件面板拖入画布后手动连线
  */
 
-import { useCallback, useRef, useEffect, useMemo } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -51,27 +53,31 @@ export function FlowCanvas() {
 
   // Track if we're syncing to prevent selection reset
   const isSyncingRef = useRef(false)
-  const selectedNodeIdsRef = useRef<string[]>([])
 
-  // Sync nodes with store when flow changes - preserve selection
+  // Sync nodes with store when flow changes - preserve React Flow internal state
   useEffect(() => {
     isSyncingRef.current = true
-    // Update nodes while preserving selection state
     setNodes((currentNodes) => {
       const currentNodeMap = new Map(currentNodes.map(n => [n.id, n]))
-      return flow.nodes.map(flowNode => {
+
+      // 更新或添加节点，保留 React Flow 的内部状态
+      const updatedNodes = (flow.nodes as Node[]).map(flowNode => {
         const currentNode = currentNodeMap.get(flowNode.id)
-        // Preserve the selected state from current node if it exists
         if (currentNode) {
+          // 保留 React Flow 的内部状态，只更新业务数据
           return {
-            ...flowNode,
-            selected: currentNode.selected,
+            ...currentNode,  // 保留 React Flow 内部属性（measured, dragging 等）
+            position: flowNode.position,
+            data: flowNode.data,
+            type: flowNode.type,
           } as Node
         }
+        // 新节点直接使用
         return flowNode as Node
       })
+
+      return updatedNodes
     })
-    // Re-enable selection handling after a tick
     requestAnimationFrame(() => {
       isSyncingRef.current = false
     })
@@ -86,12 +92,14 @@ export function FlowCanvas() {
     (changes: NodeChange[]) => {
       onNodesChange(changes)
 
-      // Handle position changes
+      // Handle position and remove changes
       for (const change of changes) {
-        if (change.type === 'position' && 'position' in change && change.position && change.id) {
+        if (!('id' in change)) continue
+
+        if (change.type === 'position' && 'position' in change && change.position) {
           moveNode(change.id, change.position)
         }
-        if (change.type === 'remove' && change.id) {
+        if (change.type === 'remove') {
           deleteNodes([change.id])
         }
       }
@@ -104,7 +112,9 @@ export function FlowCanvas() {
       onEdgesChange(changes)
 
       for (const change of changes) {
-        if (change.type === 'remove' && change.id) {
+        if (!('id' in change)) continue
+
+        if (change.type === 'remove') {
           deleteEdges([change.id])
         }
       }
@@ -158,6 +168,7 @@ export function FlowCanvas() {
   )
 
   // Handle drop from palette
+  // 只通过 store 添加节点，让 useEffect 同步到 React Flow
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
@@ -186,11 +197,11 @@ export function FlowCanvas() {
         data: createDefaultNodeData(nodeType),
       }
 
+      // 只通过 store 添加，useEffect 会自动同步到 React Flow
       addNode(newNode)
-      setNodes((nds) => [...nds, newNode as Node])
       pushHistory()
     },
-    [addNode, setNodes, pushHistory, snapToGrid, gridSize]
+    [addNode, pushHistory, snapToGrid, gridSize]
   )
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -259,6 +270,8 @@ function createDefaultNodeData(nodeType: FlowNodeType): FlowNodeData {
   }
 
   switch (nodeType) {
+    case 'start':
+      return { ...baseData, nodeType: 'start' as const, parameters: [] }
     case 'exec':
       return { ...baseData, nodeType: 'exec' as const, exec: '' }
     case 'mapping':
@@ -290,6 +303,7 @@ function createDefaultNodeData(nodeType: FlowNodeType): FlowNodeData {
 
 function getDefaultLabel(nodeType: FlowNodeType): string {
   const labels: Record<FlowNodeType, string> = {
+    start: '开始',
     exec: '新工具调用',
     mapping: '新数据映射',
     condition: '新条件判断',

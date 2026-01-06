@@ -329,6 +329,7 @@ function DatasourceDialog({ open, datasource, onClose, onSave }: {
   const [description, setDescription] = useState('')
   const [dbType, setDbType] = useState('mysql')
   const [connectionString, setConnectionString] = useState('')
+  const [originalConnectionString, setOriginalConnectionString] = useState('') // 保存原始掩码值
   const [schema, setSchema] = useState('')
   const [table, setTable] = useState('')
   const [poolSize, setPoolSize] = useState('10')
@@ -345,7 +346,10 @@ function DatasourceDialog({ open, datasource, onClose, onSave }: {
       setDisplayName(datasource.display_name)
       setDescription(datasource.description || '')
       setDbType(datasource.db_type.toLowerCase())
-      setConnectionString(datasource.connection_string || '')
+      // 保存原始掩码值，用于判断用户是否修改
+      const maskedStr = datasource.connection_string || ''
+      setConnectionString(maskedStr)
+      setOriginalConnectionString(maskedStr)
       setSchema(datasource.schema || '')
       setTable(datasource.table || '')
       setPoolSize(String(datasource.pool_size))
@@ -358,6 +362,7 @@ function DatasourceDialog({ open, datasource, onClose, onSave }: {
       setDescription('')
       setDbType('mysql')
       setConnectionString('')
+      setOriginalConnectionString('')
       setSchema('')
       setTable('')
       setPoolSize('10')
@@ -369,23 +374,35 @@ function DatasourceDialog({ open, datasource, onClose, onSave }: {
 
   if (!open) return null
 
+  // 检查连接字符串是否被修改（与原始掩码值不同且不包含掩码标记）
+  const connectionStringModified = connectionString !== originalConnectionString && !connectionString.includes('***')
+
   const handleSave = async () => {
-    if (!name.trim() || !displayName.trim() || !connectionString.trim()) return
+    // 新建时必须提供连接字符串，编辑时如果未修改则可选
+    if (!name.trim() || !displayName.trim()) return
+    if (!isEdit && !connectionString.trim()) return
+
     setSaving(true)
     try {
-      await onSave({
+      const data: Partial<Datasource> = {
         name: name.trim(),
         display_name: displayName.trim(),
         description: description.trim() || undefined,
         db_type: dbType,
-        connection_string: connectionString.trim(),
         schema: schema.trim() || undefined,
         table: table.trim() || undefined,
         pool_size: parseInt(poolSize) || 10,
         timeout_ms: parseInt(timeoutMs) || 5000,
         read_only: readOnly,
         enabled
-      })
+      }
+
+      // 只有当连接字符串被修改时才发送（避免发送掩码值）
+      if (!isEdit || connectionStringModified) {
+        data.connection_string = connectionString.trim()
+      }
+
+      await onSave(data)
       onClose()
     } finally {
       setSaving(false)
@@ -429,7 +446,28 @@ function DatasourceDialog({ open, datasource, onClose, onSave }: {
             { value: 'elasticsearch', label: 'Elasticsearch' },
           ]}
         />
-        <FormInput label="连接字符串" value={connectionString} onChange={setConnectionString} placeholder="mysql://user:pass@host:3306/db" required />
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--on-surface)' }}>
+            连接字符串 {!isEdit && <span style={{ color: 'var(--error)' }}>*</span>}
+          </label>
+          <input
+            type="text"
+            value={connectionString}
+            onChange={e => setConnectionString(e.target.value)}
+            placeholder={isEdit ? '不修改请保留原值' : 'mysql://user:pass@host:3306/db'}
+            className="w-full px-3 py-2 rounded-lg text-sm"
+            style={{
+              backgroundColor: 'var(--surface-container)',
+              border: '1px solid var(--outline-variant)',
+              color: 'var(--on-surface)'
+            }}
+          />
+          {isEdit && connectionString.includes('***') && (
+            <p className="text-xs mt-1" style={{ color: 'var(--on-surface-variant)' }}>
+              用户名和密码已掩码。如需修改，请输入完整的连接字符串。
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <FormInput label="Schema" value={schema} onChange={setSchema} placeholder="可选" />
           <FormInput label="默认表" value={table} onChange={setTable} placeholder="可选" />
@@ -454,7 +492,7 @@ function DatasourceDialog({ open, datasource, onClose, onSave }: {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !name.trim() || !displayName.trim() || !connectionString.trim()}
+            disabled={saving || !name.trim() || !displayName.trim() || (!isEdit && !connectionString.trim())}
             className="flex-1 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
             style={{
               backgroundColor: 'var(--primary)',

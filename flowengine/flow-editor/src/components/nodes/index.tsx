@@ -7,6 +7,7 @@ import { memo } from 'react'
 import { Position } from '@xyflow/react'
 import { BaseNode } from './BaseNode'
 import type {
+  StartNodeData,
   ExecNodeData,
   MappingNodeData,
   ConditionNodeData,
@@ -23,6 +24,13 @@ import type {
 
 // Lucide style SVG icons - consistent with NodePalette and PropertyPanel
 const Icons = {
+  // 开始节点 - Play Circle icon
+  start: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
   // 工具调用 - Play/Execute icon
   exec: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
@@ -130,6 +138,37 @@ interface NodeComponentProps<T> {
   data: T
   selected?: boolean
 }
+
+// Start Node - Flow entry point
+export const StartNode = memo(function StartNode({
+  data,
+  selected,
+}: NodeComponentProps<StartNodeData>) {
+  const paramCount = data.parameters?.length || 0
+
+  return (
+    <BaseNode
+      nodeType="start"
+      label={data.label}
+      description={data.description}
+      icon={Icons.start}
+      selected={selected}
+      showTargetHandle={false}
+      executionStatus={data.executionStatus}
+      hasBreakpoint={data.hasBreakpoint}
+    >
+      <div className="text-xs text-gray-600">
+        {paramCount > 0 ? (
+          <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
+            {paramCount} 个输入参数
+          </span>
+        ) : (
+          <span className="text-gray-400">无输入参数</span>
+        )}
+      </div>
+    </BaseNode>
+  )
+})
 
 // Exec Node - Tool/API call
 export const ExecNode = memo(function ExecNode({
@@ -463,6 +502,7 @@ export const HandoffNode = memo(function HandoffNode({
 // Node type mapping for React Flow
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const nodeTypes: Record<string, any> = {
+  start: StartNode,
   exec: ExecNode,
   mapping: MappingNode,
   condition: ConditionNode,

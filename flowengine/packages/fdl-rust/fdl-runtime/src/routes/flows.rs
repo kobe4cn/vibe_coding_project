@@ -84,6 +84,21 @@ pub struct CreateVersionRequest {
     pub tenant_id: String,
 }
 
+/// Publish flow request
+#[derive(Deserialize)]
+pub struct PublishFlowRequest {
+    pub version_id: String,
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
+/// Unpublish flow request (only needs tenant_id)
+#[derive(Deserialize)]
+pub struct UnpublishFlowRequest {
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
 /// Build flow routes
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -96,6 +111,12 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/{id}/versions", post(create_version))
         .route("/{id}/versions/{version_id}", get(get_version))
         .route("/{id}/versions/{version_id}", delete(delete_version))
+        // Publish operations
+        .route("/{id}/publish", post(publish_flow))
+        .route("/{id}/unpublish", post(unpublish_flow))
+        .route("/{id}/publish-status", get(get_publish_status))
+        // API Keys - 嵌套路由
+        .nest("/{id}/api-keys", super::api_keys::routes())
 }
 
 async fn list_flows(
@@ -320,5 +341,72 @@ async fn delete_version(
         "success": true,
         "flow_id": flow_id,
         "deleted_version_id": version_id
+    })))
+}
+
+// Publish operations
+
+async fn publish_flow(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<PublishFlowRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let flow = state
+        .publish_flow(&req.tenant_id, &id, &req.version_id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "id": flow.id.to_string(),
+        "name": flow.name,
+        "published": flow.published,
+        "published_at": flow.published_at.map(|t| t.to_rfc3339()),
+        "published_version_id": flow.published_version_id.map(|id| id.to_string())
+    })))
+}
+
+async fn unpublish_flow(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<UnpublishFlowRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let flow = state
+        .unpublish_flow(&req.tenant_id, &id)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "id": flow.id.to_string(),
+        "name": flow.name,
+        "published": flow.published
+    })))
+}
+
+async fn get_publish_status(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(query): Query<ListQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let flow = state
+        .get_flow(&query.tenant_id, &id)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(Json(serde_json::json!({
+        "id": flow.id.to_string(),
+        "name": flow.name,
+        "published": flow.published,
+        "published_at": flow.published_at.map(|t| t.to_rfc3339()),
+        "published_version_id": flow.published_version_id.map(|id| id.to_string())
     })))
 }

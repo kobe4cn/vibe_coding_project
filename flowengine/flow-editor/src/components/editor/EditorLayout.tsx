@@ -11,13 +11,16 @@ import { PropertyPanel } from '@/components/panels/PropertyPanel'
 import { DebugPanel } from '@/components/panels/DebugPanel'
 import { VersionPanel } from '@/components/panels/VersionPanel'
 import { ExecutePanel } from '@/components/panels/ExecutePanel'
+import { InputsDialog } from '@/components/dialogs/InputsDialog'
+import { PublishDialog } from '@/components/dialogs/PublishDialog'
 import { SettingsDialog } from '@/components/settings'
 import { ResizeHandle } from '@/components/ui/ResizeHandle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { YamlEditor } from '@/components/editor/YamlEditor'
 import { useEditorStore } from '@/stores/editorStore'
 import { useFlowStore } from '@/stores/flowStore'
 import { useExecuteStore } from '@/stores/executeStore'
-import { flowToYaml, yamlToFlow } from '@/lib/flowYamlConverter'
+import { flowToYaml } from '@/lib/flowYamlConverter'
 
 // Material Design Icons
 const Icons = {
@@ -114,6 +117,12 @@ const Icons = {
   settings: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
       <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+    </svg>
+  ),
+  publish: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
     </svg>
   ),
 }
@@ -393,7 +402,7 @@ interface HeaderProps {
   onBack: () => void
 }
 
-function Header({ flowName, onBack }: HeaderProps) {
+function Header({ flowId, flowName, onBack }: HeaderProps) {
   const { isDirty, flow, isReadOnly } = useFlowStore()
   const {
     toggleNodePalette,
@@ -409,8 +418,18 @@ function Header({ flowName, onBack }: HeaderProps) {
     theme,
     setTheme,
   } = useEditorStore()
-  const { state: executeState, execute, openResultsPanel } = useExecuteStore()
+  const {
+    state: executeState,
+    execute,
+    openResultsPanel,
+    prepareExecution,
+    showInputsDialog,
+    closeInputsDialog,
+    parameterDefs,
+    setInputs,
+  } = useExecuteStore()
   const [showSettings, setShowSettings] = useState(false)
+  const [showPublish, setShowPublish] = useState(false)
 
   const cycleTheme = useCallback(() => {
     const themeOrder = ['system', 'light', 'dark'] as const
@@ -451,9 +470,15 @@ function Header({ flowName, onBack }: HeaderProps) {
     if (executeState === 'running') {
       openResultsPanel()
     } else {
-      execute(flow)
+      prepareExecution(flow)
     }
-  }, [executeState, execute, flow, openResultsPanel])
+  }, [executeState, prepareExecution, flow, openResultsPanel])
+
+  const handleExecuteWithInputs = useCallback((inputs: Record<string, unknown>) => {
+    setInputs(inputs)
+    closeInputsDialog()
+    execute(flow)
+  }, [setInputs, closeInputsDialog, execute, flow])
 
   return (
     <header
@@ -615,6 +640,15 @@ function Header({ flowName, onBack }: HeaderProps) {
           initialTab="storage"
         />
 
+        {/* Inputs Dialog */}
+        <InputsDialog
+          isOpen={showInputsDialog}
+          onClose={closeInputsDialog}
+          onExecute={handleExecuteWithInputs}
+          parameters={parameterDefs}
+          flowName={flow.meta.name}
+        />
+
         <button
           onClick={handleExport}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
@@ -659,6 +693,24 @@ function Header({ flowName, onBack }: HeaderProps) {
           </button>
         )}
         <button
+          onClick={() => setShowPublish(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+          style={{
+            background: 'var(--tertiary-container)',
+            color: 'var(--on-tertiary-container)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '0.9'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '1'
+          }}
+          title="发布管理"
+        >
+          {Icons.publish}
+          发布
+        </button>
+        <button
           onClick={handleSave}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
           style={{
@@ -676,6 +728,14 @@ function Header({ flowName, onBack }: HeaderProps) {
           Download
         </button>
       </div>
+
+      {/* Publish Dialog */}
+      <PublishDialog
+        isOpen={showPublish}
+        onClose={() => setShowPublish(false)}
+        flowId={flowId}
+        flowName={flow.meta.name}
+      />
     </header>
   )
 }
@@ -732,102 +792,3 @@ function IconButton({
   )
 }
 
-function YamlEditor() {
-  const { yamlContent, yamlError, setYamlContent, setYamlError, isSyncing, setIsSyncing } = useEditorStore()
-  const { flow, setFlow } = useFlowStore()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const syncTimeoutRef = useRef<number | null>(null)
-  const isUserEditingRef = useRef(false)
-
-  useEffect(() => {
-    if (isSyncing || isUserEditingRef.current || yamlError) return
-    const yaml = flowToYaml(flow)
-    setYamlContent(yaml)
-  }, [flow, isSyncing, yamlError, setYamlContent])
-
-  const handleYamlChange = useCallback(
-    (newContent: string) => {
-      isUserEditingRef.current = true
-      setYamlContent(newContent)
-      setIsSyncing(true)
-
-      if (syncTimeoutRef.current) {
-        window.clearTimeout(syncTimeoutRef.current)
-      }
-
-      syncTimeoutRef.current = window.setTimeout(() => {
-        const { flow: newFlow, error } = yamlToFlow(newContent)
-        if (error) {
-          setYamlError(error)
-        } else {
-          setYamlError(null)
-          setFlow(newFlow)
-          isUserEditingRef.current = false
-        }
-        setIsSyncing(false)
-      }, 500)
-    },
-    [setYamlContent, setIsSyncing, setFlow, setYamlError]
-  )
-
-  const codeIcon = (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
-    </svg>
-  )
-
-  return (
-    <div className="h-full w-full flex flex-col" style={{ background: 'var(--surface-container)' }}>
-      <div
-        className="px-5 py-4 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--outline-variant)' }}
-      >
-        <div className="flex items-center gap-3">
-          <span style={{ color: 'var(--on-surface-variant)' }}>{codeIcon}</span>
-          <span
-            className="text-sm font-medium"
-            style={{ color: 'var(--on-surface)' }}
-          >
-            YAML Editor
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          {isSyncing && (
-            <span
-              className="flex items-center gap-2 text-xs"
-              style={{ color: 'var(--primary)' }}
-            >
-              <span className="w-2 h-2 rounded-full bg-current animate-md-pulse" />
-              Syncing...
-            </span>
-          )}
-          {yamlError && (
-            <span
-              className="flex items-center gap-2 text-xs"
-              style={{ color: 'var(--error)' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-              </svg>
-              {yamlError}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <textarea
-        ref={textareaRef}
-        value={yamlContent}
-        onChange={(e) => handleYamlChange(e.target.value)}
-        className="flex-1 p-5 font-mono text-sm resize-none focus:outline-none"
-        style={{
-          background: yamlError ? 'var(--error-container)' : 'var(--surface-container-low)',
-          color: yamlError ? 'var(--on-error)' : 'var(--on-surface)',
-          border: 'none',
-        }}
-        placeholder="# FDL YAML content..."
-        spellCheck={false}
-      />
-    </div>
-  )
-}

@@ -47,6 +47,10 @@ pub struct FlowArgs {
     /// Output parameters
     #[serde(default)]
     pub out: Option<OutputDef>,
+    /// Entry node IDs - nodes that Start node connects to
+    /// 入口节点列表：Start 节点连接的目标节点 ID
+    #[serde(default)]
+    pub entry: Option<Vec<String>>,
 }
 
 /// Type definition
@@ -154,12 +158,22 @@ pub struct FlowNode {
     /// MCP tool URI (e.g., "mcp://filesystem/read_file")
     #[serde(default)]
     pub mcp: Option<String>,
+
+    // Start node fields
+    /// Input parameters for start node
+    #[serde(default)]
+    pub parameters: Option<Vec<InputParamDef>>,
+
+    /// Node type (used by frontend, e.g., "start", "exec", "mapping")
+    #[serde(rename = "nodeType", default)]
+    pub node_type_str: Option<String>,
 }
 
 impl FlowNode {
     /// 根据节点字段确定节点类型
-    /// 
+    ///
     /// 节点类型通过检查特定字段的存在来确定，优先级顺序：
+    /// 0. node_type_str == "start" -> Start（开始节点）
     /// 1. exec -> Exec（工具调用）
     /// 2. agent -> Agent（AI 代理）
     /// 3. mcp -> Mcp（MCP 协议）
@@ -171,6 +185,13 @@ impl FlowNode {
     /// 9. with_expr -> Mapping（数据映射）
     /// 10. 其他 -> Unknown（未知类型）
     pub fn node_type(&self) -> NodeType {
+        // Check for explicit node_type_str first (from frontend)
+        if let Some(ref type_str) = self.node_type_str {
+            if type_str == "start" {
+                return NodeType::Start;
+            }
+        }
+
         if self.exec.is_some() {
             NodeType::Exec
         } else if self.agent.is_some() {
@@ -193,6 +214,11 @@ impl FlowNode {
             NodeType::Unknown
         }
     }
+
+    /// Check if this is a start node
+    pub fn is_start(&self) -> bool {
+        self.node_type() == NodeType::Start
+    }
 }
 
 /// Case branch for switch node
@@ -207,6 +233,8 @@ pub struct CaseBranch {
 /// Node type enumeration
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NodeType {
+    /// Start node - flow entry point
+    Start,
     /// Tool execution node
     Exec,
     /// Data mapping node
@@ -227,6 +255,26 @@ pub enum NodeType {
     Mcp,
     /// Unknown node type
     Unknown,
+}
+
+/// Start node input parameter definition
+///
+/// 定义了流程启动时需要传入的参数
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputParamDef {
+    /// Parameter name
+    pub name: String,
+    /// Parameter type: string, number, boolean, object, array
+    #[serde(rename = "type")]
+    pub param_type: String,
+    /// Whether the parameter is required
+    #[serde(default)]
+    pub required: bool,
+    /// Default value (optional)
+    #[serde(rename = "defaultValue")]
+    pub default_value: Option<String>,
+    /// Parameter description (optional)
+    pub description: Option<String>,
 }
 
 #[cfg(test)]

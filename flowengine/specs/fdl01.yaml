@@ -4,16 +4,22 @@ flow:
     args:
         in:
             customerId: string    # 客户标识（必填）
-            from: DATE('-3M')     # 订单起始时间（可选），默认为最近3个月
+            from: string    # 订单起始时间（可选），默认为最近3个月
 
         out:
-            id: string            # 客户标识
-            name: string          # 客户姓名
-            orders: int           # 订单数量
+            -
+                name: id
+                type: string
+            -
+                name: userName
+                type: string
+            -
+                name: orders
+                type: int         # 订单数量
     node:
         customer:
             name: 获取客户基本信息
-            exec: api://crm-service/customer
+            exec: api://crm-service/user/${customerId}
             next: merge
 
         orderCount:

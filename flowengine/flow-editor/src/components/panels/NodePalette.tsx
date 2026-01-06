@@ -41,6 +41,13 @@ const Icons = {
 
 // Node type icons - Lucide style SVG icons for better design
 const NODE_ICONS: Record<FlowNodeType, React.ReactNode> = {
+  // 开始节点 - Play Circle icon
+  start: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
   // 工具调用 - Play/Execute icon
   exec: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -269,7 +276,7 @@ function NodeCategory({ category, expanded, onToggle }: NodeCategoryProps) {
 export function NodePalette() {
   const [search, setSearch] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['basic', 'control', 'loop', 'agent'])
+    new Set(['entry', 'basic', 'control', 'loop', 'agent'])
   )
 
   const toggleCategory = useCallback((category: string) => {
@@ -327,7 +334,7 @@ export function NodePalette() {
         {search ? (
           <div className="space-y-1">
             {Object.entries(NODE_LABELS)
-              .filter(([_, label]) => label.toLowerCase().includes(search.toLowerCase()))
+              .filter(([, label]) => label.toLowerCase().includes(search.toLowerCase()))
               .map(([nodeType]) => (
                 <NodeItem
                   key={nodeType}

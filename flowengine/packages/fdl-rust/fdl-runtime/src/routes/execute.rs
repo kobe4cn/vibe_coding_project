@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::converter::{ExecutionResult, FrontendFlow, convert_frontend_to_executor};
+use crate::converter::{ExecutionResult, FrontendFlow, convert_frontend_to_executor, validate_inputs, filter_output_by_definition};
 use crate::state::{AppState, ExecutionStatus as ExecStatus};
 
 /// 执行流程请求
@@ -303,9 +303,10 @@ async fn execute_direct(
 ///
 /// 这是所有执行路径的统一实现，确保执行逻辑的一致性。
 /// 设计要点：
-/// 1. 格式转换：前端格式 -> 执行器格式，输入 JSON -> GML Value
-/// 2. 状态管理：创建执行记录、注册执行器、更新状态
-/// 3. 执行模式：同步（阻塞等待）和异步（后台执行）两种模式
+/// 1. 参数验证：根据 Start 节点定义验证输入参数
+/// 2. 格式转换：前端格式 -> 执行器格式，输入 JSON -> GML Value
+/// 3. 状态管理：创建执行记录、注册执行器、更新状态
+/// 4. 执行模式：同步（阻塞等待）和异步（后台执行）两种模式
 ///
 /// 同步 vs 异步模式的选择：
 /// - 同步：适用于快速执行的流程，客户端需要立即得到结果
@@ -317,6 +318,22 @@ async fn execute_flow_internal(
     frontend_flow: FrontendFlow,
     req: ExecuteRequest,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    // 验证输入参数（根据 Start 节点的参数定义）
+    // 如果验证失败，返回详细的错误信息
+    let validated_inputs = match validate_inputs(&frontend_flow, &req.inputs) {
+        Ok(inputs) => inputs,
+        Err(errors) => {
+            let error_messages: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "参数验证失败",
+                    "validation_errors": error_messages
+                })),
+            ));
+        }
+    };
+
     // 将前端格式的流程转换为执行器格式
     // 前端使用 React Flow 格式（便于可视化编辑），执行器使用内部格式（便于执行）
     let executor_flow = convert_frontend_to_executor(&frontend_flow);
@@ -354,7 +371,8 @@ async fn execute_flow_internal(
 
     // 将 JSON 格式的输入转换为 GML Value 格式
     // GML 是执行器的内部数据格式，支持更丰富的数据类型
-    let inputs = json_to_gml_value(&req.inputs);
+    // 使用验证后的输入（已应用默认值）
+    let inputs = json_to_gml_value(&validated_inputs);
 
     if req.async_mode {
         // 异步执行模式：在后台任务中执行，立即返回执行 ID
@@ -414,8 +432,13 @@ async fn execute_flow_internal(
             Ok(value) => {
                 // 执行成功：转换输出格式并返回结果
                 let raw_outputs = gml_value_to_json(&value);
-                // 过滤系统变量，只返回节点结果
-                let outputs = filter_system_vars(&raw_outputs);
+                // 过滤系统变量
+                let cleaned_outputs = filter_system_vars(&raw_outputs);
+
+                // 根据流程定义的 args.out 过滤最终输出
+                // 如果定义了 out，只返回指定的字段；否则返回所有节点结果
+                let outputs = filter_output_by_definition(&frontend_flow, &cleaned_outputs);
+
                 state.update_execution(&execution_id, ExecStatus::Completed, 1.0, None);
 
                 Ok((
@@ -428,7 +451,7 @@ async fn execute_flow_internal(
                         "result": ExecutionResult {
                             success: true,
                             outputs: outputs.clone(),
-                            // 从输出中提取每个节点的结果，便于前端展示
+                            // 从输出中提取每个节点的结果，便于前端展示和调试
                             node_results: extract_node_results(&raw_outputs),
                             error: None,
                             duration_ms,

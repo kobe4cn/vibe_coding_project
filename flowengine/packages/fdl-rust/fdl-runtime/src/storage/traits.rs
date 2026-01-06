@@ -45,6 +45,11 @@ pub struct FlowRecord {
     pub thumbnail: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    // Publish status
+    #[serde(default)]
+    pub published: bool,
+    pub published_at: Option<DateTime<Utc>>,
+    pub published_version_id: Option<Uuid>,
 }
 
 /// Version record
@@ -72,6 +77,43 @@ pub struct ExecutionRecord {
     pub error: Option<String>,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// API Key record
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiKeyRecord {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub flow_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub key_hash: String,
+    pub key_prefix: String,
+    pub rate_limit: i32,
+    pub is_active: bool,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub usage_count: i32,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Create API key request
+#[derive(Debug, Clone)]
+pub struct CreateApiKeyRequest {
+    pub tenant_id: Uuid,
+    pub flow_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub key_hash: String,
+    pub key_prefix: String,
+    pub rate_limit: Option<i32>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Publish flow request
+#[derive(Debug, Clone)]
+pub struct PublishFlowRequest {
+    pub version_id: Uuid,
 }
 
 /// Create flow request
@@ -189,6 +231,43 @@ pub trait FlowStorage: Send + Sync {
         flow_id: Uuid,
         opts: ListOptions,
     ) -> Result<ListResult<ExecutionRecord>, StorageError>;
+
+    // Publish operations
+    async fn publish_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        version_id: Uuid,
+    ) -> Result<FlowRecord, StorageError>;
+    async fn unpublish_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<FlowRecord, StorageError>;
+    async fn get_published_flow(&self, flow_id: Uuid) -> Result<FlowRecord, StorageError>;
+
+    // API Key operations
+    async fn create_api_key(
+        &self,
+        req: CreateApiKeyRequest,
+    ) -> Result<ApiKeyRecord, StorageError>;
+    async fn get_api_key(
+        &self,
+        tenant_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<ApiKeyRecord, StorageError>;
+    async fn get_api_key_by_hash(&self, key_hash: &str) -> Result<ApiKeyRecord, StorageError>;
+    async fn list_api_keys(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<Vec<ApiKeyRecord>, StorageError>;
+    async fn delete_api_key(
+        &self,
+        tenant_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<(), StorageError>;
+    async fn update_api_key_usage(&self, key_id: Uuid) -> Result<(), StorageError>;
 
     // Health check
     async fn is_healthy(&self) -> bool;

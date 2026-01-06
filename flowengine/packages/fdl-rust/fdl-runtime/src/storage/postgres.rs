@@ -14,10 +14,26 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use super::traits::{
-    CreateFlowRequest, CreateVersionRequest, ExecutionRecord, FlowRecord, FlowStorage, ListOptions,
-    ListResult, StorageError, UpdateFlowRequest, VersionRecord,
+    ApiKeyRecord, CreateApiKeyRequest, CreateFlowRequest, CreateVersionRequest, ExecutionRecord,
+    FlowRecord, FlowStorage, ListOptions, ListResult, StorageError, UpdateFlowRequest, VersionRecord,
 };
 use crate::db::Database;
+
+/// 辅助函数：从数据库行构建 FlowRecord
+fn flow_from_row(row: &sqlx::postgres::PgRow) -> FlowRecord {
+    FlowRecord {
+        id: row.get("id"),
+        tenant_id: row.get("tenant_id"),
+        name: row.get("name"),
+        description: row.get("description"),
+        thumbnail: row.get("thumbnail"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        published: row.try_get("published").unwrap_or(false),
+        published_at: row.try_get("published_at").ok().flatten(),
+        published_version_id: row.try_get("published_version_id").ok().flatten(),
+    }
+}
 
 /// PostgreSQL 存储实现
 /// 
@@ -39,7 +55,8 @@ impl FlowStorage for PostgresStorage {
             r#"
             INSERT INTO flows (tenant_id, name, description)
             VALUES ($1, $2, $3)
-            RETURNING id, tenant_id, name, description, thumbnail, created_at, updated_at
+            RETURNING id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                      published, published_at, published_version_id
             "#,
         )
         .bind(req.tenant_id)
@@ -48,21 +65,14 @@ impl FlowStorage for PostgresStorage {
         .fetch_one(self.db.pool())
         .await?;
 
-        Ok(FlowRecord {
-            id: row.get("id"),
-            tenant_id: row.get("tenant_id"),
-            name: row.get("name"),
-            description: row.get("description"),
-            thumbnail: row.get("thumbnail"),
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-        })
+        Ok(flow_from_row(&row))
     }
 
     async fn get_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<FlowRecord, StorageError> {
         let row = sqlx::query(
             r#"
-            SELECT id, tenant_id, name, description, thumbnail, created_at, updated_at
+            SELECT id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                   published, published_at, published_version_id
             FROM flows
             WHERE id = $1 AND tenant_id = $2
             "#,
@@ -73,15 +83,7 @@ impl FlowStorage for PostgresStorage {
         .await?
         .ok_or_else(|| StorageError::NotFound(format!("Flow {} not found", flow_id)))?;
 
-        Ok(FlowRecord {
-            id: row.get("id"),
-            tenant_id: row.get("tenant_id"),
-            name: row.get("name"),
-            description: row.get("description"),
-            thumbnail: row.get("thumbnail"),
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-        })
+        Ok(flow_from_row(&row))
     }
 
     async fn list_flows(
@@ -99,7 +101,8 @@ impl FlowStorage for PostgresStorage {
         // 获取分页结果：按更新时间倒序排列，支持 limit 和 offset
         let rows = sqlx::query(
             r#"
-            SELECT id, tenant_id, name, description, thumbnail, created_at, updated_at
+            SELECT id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                   published, published_at, published_version_id
             FROM flows
             WHERE tenant_id = $1
             ORDER BY updated_at DESC
@@ -112,18 +115,7 @@ impl FlowStorage for PostgresStorage {
         .fetch_all(self.db.pool())
         .await?;
 
-        let items = rows
-            .into_iter()
-            .map(|row| FlowRecord {
-                id: row.get("id"),
-                tenant_id: row.get("tenant_id"),
-                name: row.get("name"),
-                description: row.get("description"),
-                thumbnail: row.get("thumbnail"),
-                created_at: row.get("created_at"),
-                updated_at: row.get("updated_at"),
-            })
-            .collect();
+        let items = rows.iter().map(flow_from_row).collect();
 
         Ok(ListResult {
             items,
@@ -147,7 +139,8 @@ impl FlowStorage for PostgresStorage {
                 thumbnail = COALESCE($5, thumbnail),
                 updated_at = NOW()
             WHERE id = $1 AND tenant_id = $2
-            RETURNING id, tenant_id, name, description, thumbnail, created_at, updated_at
+            RETURNING id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                      published, published_at, published_version_id
             "#,
         )
         .bind(flow_id)
@@ -159,15 +152,7 @@ impl FlowStorage for PostgresStorage {
         .await?
         .ok_or_else(|| StorageError::NotFound(format!("Flow {} not found", flow_id)))?;
 
-        Ok(FlowRecord {
-            id: row.get("id"),
-            tenant_id: row.get("tenant_id"),
-            name: row.get("name"),
-            description: row.get("description"),
-            thumbnail: row.get("thumbnail"),
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-        })
+        Ok(flow_from_row(&row))
     }
 
     async fn delete_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<(), StorageError> {
@@ -506,6 +491,265 @@ impl FlowStorage for PostgresStorage {
             items,
             total: total as usize,
         })
+    }
+
+    // Publish operations
+    async fn publish_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        version_id: Uuid,
+    ) -> Result<FlowRecord, StorageError> {
+        let row = sqlx::query(
+            r#"
+            UPDATE flows
+            SET published = true,
+                published_at = NOW(),
+                published_version_id = $3,
+                updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                      published, published_at, published_version_id
+            "#,
+        )
+        .bind(flow_id)
+        .bind(tenant_id)
+        .bind(version_id)
+        .fetch_optional(self.db.pool())
+        .await?
+        .ok_or_else(|| StorageError::NotFound(format!("Flow {} not found", flow_id)))?;
+
+        Ok(flow_from_row(&row))
+    }
+
+    async fn unpublish_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<FlowRecord, StorageError> {
+        let row = sqlx::query(
+            r#"
+            UPDATE flows
+            SET published = false,
+                published_at = NULL,
+                published_version_id = NULL,
+                updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                      published, published_at, published_version_id
+            "#,
+        )
+        .bind(flow_id)
+        .bind(tenant_id)
+        .fetch_optional(self.db.pool())
+        .await?
+        .ok_or_else(|| StorageError::NotFound(format!("Flow {} not found", flow_id)))?;
+
+        Ok(flow_from_row(&row))
+    }
+
+    async fn get_published_flow(&self, flow_id: Uuid) -> Result<FlowRecord, StorageError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, tenant_id, name, description, thumbnail, created_at, updated_at,
+                   published, published_at, published_version_id
+            FROM flows
+            WHERE id = $1 AND published = true
+            "#,
+        )
+        .bind(flow_id)
+        .fetch_optional(self.db.pool())
+        .await?
+        .ok_or_else(|| StorageError::NotFound(format!("Published flow {} not found", flow_id)))?;
+
+        Ok(flow_from_row(&row))
+    }
+
+    // API Key operations
+    async fn create_api_key(
+        &self,
+        req: CreateApiKeyRequest,
+    ) -> Result<ApiKeyRecord, StorageError> {
+        let row = sqlx::query(
+            r#"
+            INSERT INTO flow_api_keys (tenant_id, flow_id, name, description, key_hash, key_prefix, rate_limit, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, tenant_id, flow_id, name, description, key_hash, key_prefix, rate_limit,
+                      is_active, last_used_at, usage_count, created_at, expires_at
+            "#,
+        )
+        .bind(req.tenant_id)
+        .bind(req.flow_id)
+        .bind(&req.name)
+        .bind(&req.description)
+        .bind(&req.key_hash)
+        .bind(&req.key_prefix)
+        .bind(req.rate_limit.unwrap_or(100))
+        .bind(req.expires_at)
+        .fetch_one(self.db.pool())
+        .await?;
+
+        Ok(ApiKeyRecord {
+            id: row.get("id"),
+            tenant_id: row.get("tenant_id"),
+            flow_id: row.get("flow_id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            key_hash: row.get("key_hash"),
+            key_prefix: row.get("key_prefix"),
+            rate_limit: row.get("rate_limit"),
+            is_active: row.get("is_active"),
+            last_used_at: row.get("last_used_at"),
+            usage_count: row.get("usage_count"),
+            created_at: row.get("created_at"),
+            expires_at: row.get("expires_at"),
+        })
+    }
+
+    async fn get_api_key(
+        &self,
+        tenant_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<ApiKeyRecord, StorageError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, tenant_id, flow_id, name, description, key_hash, key_prefix, rate_limit,
+                   is_active, last_used_at, usage_count, created_at, expires_at
+            FROM flow_api_keys
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(key_id)
+        .bind(tenant_id)
+        .fetch_optional(self.db.pool())
+        .await?
+        .ok_or_else(|| StorageError::NotFound(format!("API Key {} not found", key_id)))?;
+
+        Ok(ApiKeyRecord {
+            id: row.get("id"),
+            tenant_id: row.get("tenant_id"),
+            flow_id: row.get("flow_id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            key_hash: row.get("key_hash"),
+            key_prefix: row.get("key_prefix"),
+            rate_limit: row.get("rate_limit"),
+            is_active: row.get("is_active"),
+            last_used_at: row.get("last_used_at"),
+            usage_count: row.get("usage_count"),
+            created_at: row.get("created_at"),
+            expires_at: row.get("expires_at"),
+        })
+    }
+
+    async fn get_api_key_by_hash(&self, key_hash: &str) -> Result<ApiKeyRecord, StorageError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, tenant_id, flow_id, name, description, key_hash, key_prefix, rate_limit,
+                   is_active, last_used_at, usage_count, created_at, expires_at
+            FROM flow_api_keys
+            WHERE key_hash = $1 AND is_active = true
+                  AND (expires_at IS NULL OR expires_at > NOW())
+            "#,
+        )
+        .bind(key_hash)
+        .fetch_optional(self.db.pool())
+        .await?
+        .ok_or_else(|| StorageError::NotFound("API Key not found".to_string()))?;
+
+        Ok(ApiKeyRecord {
+            id: row.get("id"),
+            tenant_id: row.get("tenant_id"),
+            flow_id: row.get("flow_id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            key_hash: row.get("key_hash"),
+            key_prefix: row.get("key_prefix"),
+            rate_limit: row.get("rate_limit"),
+            is_active: row.get("is_active"),
+            last_used_at: row.get("last_used_at"),
+            usage_count: row.get("usage_count"),
+            created_at: row.get("created_at"),
+            expires_at: row.get("expires_at"),
+        })
+    }
+
+    async fn list_api_keys(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<Vec<ApiKeyRecord>, StorageError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, tenant_id, flow_id, name, description, key_hash, key_prefix, rate_limit,
+                   is_active, last_used_at, usage_count, created_at, expires_at
+            FROM flow_api_keys
+            WHERE tenant_id = $1 AND flow_id = $2
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(flow_id)
+        .fetch_all(self.db.pool())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ApiKeyRecord {
+                id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
+                flow_id: row.get("flow_id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                key_hash: row.get("key_hash"),
+                key_prefix: row.get("key_prefix"),
+                rate_limit: row.get("rate_limit"),
+                is_active: row.get("is_active"),
+                last_used_at: row.get("last_used_at"),
+                usage_count: row.get("usage_count"),
+                created_at: row.get("created_at"),
+                expires_at: row.get("expires_at"),
+            })
+            .collect())
+    }
+
+    async fn delete_api_key(
+        &self,
+        tenant_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<(), StorageError> {
+        let result = sqlx::query(
+            "DELETE FROM flow_api_keys WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(key_id)
+        .bind(tenant_id)
+        .execute(self.db.pool())
+        .await?;
+
+        if result.rows_affected() == 0 {
+            return Err(StorageError::NotFound(format!(
+                "API Key {} not found",
+                key_id
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn update_api_key_usage(&self, key_id: Uuid) -> Result<(), StorageError> {
+        sqlx::query(
+            r#"
+            UPDATE flow_api_keys
+            SET last_used_at = NOW(),
+                usage_count = usage_count + 1
+            WHERE id = $1
+            "#,
+        )
+        .bind(key_id)
+        .execute(self.db.pool())
+        .await?;
+
+        Ok(())
     }
 
     async fn is_healthy(&self) -> bool {

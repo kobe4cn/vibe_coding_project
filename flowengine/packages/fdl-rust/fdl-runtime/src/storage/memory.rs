@@ -14,18 +14,19 @@ use dashmap::DashMap;
 use uuid::Uuid;
 
 use super::traits::{
-    CreateFlowRequest, CreateVersionRequest, ExecutionRecord, FlowRecord, FlowStorage, ListOptions,
-    ListResult, StorageError, UpdateFlowRequest, VersionRecord,
+    ApiKeyRecord, CreateApiKeyRequest, CreateFlowRequest, CreateVersionRequest, ExecutionRecord,
+    FlowRecord, FlowStorage, ListOptions, ListResult, StorageError, UpdateFlowRequest, VersionRecord,
 };
 
 /// 内存存储实现
-/// 
-/// 使用 DashMap 存储流程、版本和执行记录。
+///
+/// 使用 DashMap 存储流程、版本、执行记录和 API Keys。
 /// DashMap 提供线程安全的并发访问，适合多线程环境。
 pub struct MemoryStorage {
     flows: DashMap<Uuid, FlowRecord>,
     versions: DashMap<Uuid, VersionRecord>,
     executions: DashMap<Uuid, ExecutionRecord>,
+    api_keys: DashMap<Uuid, ApiKeyRecord>,
 }
 
 impl MemoryStorage {
@@ -34,6 +35,7 @@ impl MemoryStorage {
             flows: DashMap::new(),
             versions: DashMap::new(),
             executions: DashMap::new(),
+            api_keys: DashMap::new(),
         }
     }
 }
@@ -56,6 +58,9 @@ impl FlowStorage for MemoryStorage {
             thumbnail: None,
             created_at: now,
             updated_at: now,
+            published: false,
+            published_at: None,
+            published_version_id: None,
         };
         self.flows.insert(flow.id, flow.clone());
         Ok(flow)
@@ -324,6 +329,156 @@ impl FlowStorage for MemoryStorage {
             .collect();
 
         Ok(ListResult { items, total })
+    }
+
+    // Publish operations
+    async fn publish_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        version_id: Uuid,
+    ) -> Result<FlowRecord, StorageError> {
+        let mut entry = self
+            .flows
+            .get_mut(&flow_id)
+            .filter(|f| f.tenant_id == tenant_id)
+            .ok_or_else(|| StorageError::NotFound(format!("Flow {} not found", flow_id)))?;
+
+        // Verify version exists
+        if !self
+            .versions
+            .get(&version_id)
+            .map(|v| v.flow_id == flow_id)
+            .unwrap_or(false)
+        {
+            return Err(StorageError::NotFound(format!(
+                "Version {} not found",
+                version_id
+            )));
+        }
+
+        entry.published = true;
+        entry.published_at = Some(Utc::now());
+        entry.published_version_id = Some(version_id);
+        entry.updated_at = Utc::now();
+
+        Ok(entry.clone())
+    }
+
+    async fn unpublish_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<FlowRecord, StorageError> {
+        let mut entry = self
+            .flows
+            .get_mut(&flow_id)
+            .filter(|f| f.tenant_id == tenant_id)
+            .ok_or_else(|| StorageError::NotFound(format!("Flow {} not found", flow_id)))?;
+
+        entry.published = false;
+        entry.published_at = None;
+        entry.published_version_id = None;
+        entry.updated_at = Utc::now();
+
+        Ok(entry.clone())
+    }
+
+    async fn get_published_flow(&self, flow_id: Uuid) -> Result<FlowRecord, StorageError> {
+        self.flows
+            .get(&flow_id)
+            .filter(|f| f.published)
+            .map(|f| f.clone())
+            .ok_or_else(|| StorageError::NotFound(format!("Published flow {} not found", flow_id)))
+    }
+
+    // API Key operations
+    async fn create_api_key(
+        &self,
+        req: CreateApiKeyRequest,
+    ) -> Result<ApiKeyRecord, StorageError> {
+        let key = ApiKeyRecord {
+            id: Uuid::new_v4(),
+            tenant_id: req.tenant_id,
+            flow_id: req.flow_id,
+            name: req.name,
+            description: req.description,
+            key_hash: req.key_hash,
+            key_prefix: req.key_prefix,
+            rate_limit: req.rate_limit.unwrap_or(100),
+            is_active: true,
+            last_used_at: None,
+            usage_count: 0,
+            created_at: Utc::now(),
+            expires_at: req.expires_at,
+        };
+        self.api_keys.insert(key.id, key.clone());
+        Ok(key)
+    }
+
+    async fn get_api_key(
+        &self,
+        tenant_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<ApiKeyRecord, StorageError> {
+        self.api_keys
+            .get(&key_id)
+            .filter(|k| k.tenant_id == tenant_id)
+            .map(|k| k.clone())
+            .ok_or_else(|| StorageError::NotFound(format!("API Key {} not found", key_id)))
+    }
+
+    async fn get_api_key_by_hash(&self, key_hash: &str) -> Result<ApiKeyRecord, StorageError> {
+        self.api_keys
+            .iter()
+            .find(|k| k.key_hash == key_hash && k.is_active)
+            .map(|k| k.clone())
+            .ok_or_else(|| StorageError::NotFound("API Key not found".to_string()))
+    }
+
+    async fn list_api_keys(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<Vec<ApiKeyRecord>, StorageError> {
+        let keys: Vec<ApiKeyRecord> = self
+            .api_keys
+            .iter()
+            .filter(|k| k.tenant_id == tenant_id && k.flow_id == flow_id)
+            .map(|k| k.clone())
+            .collect();
+        Ok(keys)
+    }
+
+    async fn delete_api_key(
+        &self,
+        tenant_id: Uuid,
+        key_id: Uuid,
+    ) -> Result<(), StorageError> {
+        if !self
+            .api_keys
+            .get(&key_id)
+            .map(|k| k.tenant_id == tenant_id)
+            .unwrap_or(false)
+        {
+            return Err(StorageError::NotFound(format!(
+                "API Key {} not found",
+                key_id
+            )));
+        }
+        self.api_keys.remove(&key_id);
+        Ok(())
+    }
+
+    async fn update_api_key_usage(&self, key_id: Uuid) -> Result<(), StorageError> {
+        let mut entry = self
+            .api_keys
+            .get_mut(&key_id)
+            .ok_or_else(|| StorageError::NotFound(format!("API Key {} not found", key_id)))?;
+
+        entry.last_used_at = Some(Utc::now());
+        entry.usage_count += 1;
+        Ok(())
     }
 
     async fn is_healthy(&self) -> bool {

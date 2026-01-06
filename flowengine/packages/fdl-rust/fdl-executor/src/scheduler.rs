@@ -268,6 +268,11 @@ async fn execute_single_node(
     tracing::debug!("Executing node '{}': type={:?}", node_id, node_type);
 
     let result = match node_type {
+        NodeType::Start => {
+            // Start 节点是流程入口，不执行任何操作，直接返回后续节点
+            // 参数验证在执行路由层处理
+            Ok(get_next_nodes(node))
+        }
         NodeType::Exec => nodes::execute_exec_node(node_id, node, context.clone()).await,
         NodeType::Mapping => nodes::execute_mapping_node(node_id, node, context.clone()).await,
         NodeType::Condition => nodes::execute_condition_node(node_id, node, context.clone()).await,

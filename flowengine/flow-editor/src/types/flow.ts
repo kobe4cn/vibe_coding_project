@@ -16,6 +16,7 @@ export type NodeExecutionStatus =
 
 // FDL Node types - matching fdl-parser types
 export type FlowNodeType =
+  | 'start'
   | 'exec'
   | 'mapping'
   | 'condition'
@@ -42,6 +43,21 @@ export interface BaseNodeData {
   only?: string // GML condition for conditional execution
   executionStatus?: NodeExecutionStatus
   hasBreakpoint?: boolean
+}
+
+// Start node parameter definition
+export interface StartParameterDef {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
+  required: boolean
+  defaultValue?: string
+  description?: string
+}
+
+// Start node data - flow entry point
+export interface StartNodeData extends BaseNodeData {
+  nodeType: 'start'
+  parameters: StartParameterDef[]
 }
 
 // Exec node data
@@ -153,6 +169,7 @@ export interface HandoffNodeData extends BaseNodeData {
 
 // Union type for all node data
 export type FlowNodeData =
+  | StartNodeData
   | ExecNodeData
   | MappingNodeData
   | ConditionNodeData
@@ -216,6 +233,8 @@ export interface FlowArgs {
   inputs?: FlowParameter[]
   outputs?: FlowParameter[] | { type: string; nullable?: boolean; isArray?: boolean }
   defs?: FlowTypeDef[]
+  /** 入口节点 ID 列表 - 从 Start 节点连接到这些节点 */
+  entryNodeIds?: string[]
 }
 
 // Complete flow model
@@ -229,6 +248,7 @@ export interface FlowModel {
 
 // Node color configuration - Material Design 3 Palette
 export const NODE_COLORS: Record<FlowNodeType, string> = {
+  start: '#22c55e',     // Green - flow entry point
   exec: '#b4a7ff',      // Primary variant - actions
   mapping: '#c9b6ff',   // Secondary - data transformation
   condition: '#ffb77c', // Tertiary warm - conditional logic
@@ -245,6 +265,7 @@ export const NODE_COLORS: Record<FlowNodeType, string> = {
 
 // Node labels for palette
 export const NODE_LABELS: Record<FlowNodeType, string> = {
+  start: '开始节点',
   exec: '工具调用',
   mapping: '数据映射',
   condition: '条件跳转',
@@ -261,6 +282,7 @@ export const NODE_LABELS: Record<FlowNodeType, string> = {
 
 // Node categories for palette
 export const NODE_CATEGORIES = {
+  entry: ['start'] as FlowNodeType[],
   basic: ['exec', 'mapping'] as FlowNodeType[],
   control: ['condition', 'switch', 'delay'] as FlowNodeType[],
   loop: ['each', 'loop'] as FlowNodeType[],
@@ -268,6 +290,7 @@ export const NODE_CATEGORIES = {
 }
 
 export const NODE_CATEGORY_LABELS: Record<keyof typeof NODE_CATEGORIES, string> = {
+  entry: '流程入口',
   basic: '基础节点',
   control: '流程控制',
   loop: '循环遍历',

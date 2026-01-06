@@ -1,14 +1,15 @@
 //! 流程模型转换器
 //!
 //! 将前端 React Flow 格式转换为后端执行器格式。
-//! 
+//!
 //! 前端使用 React Flow 的节点-边模型，后端使用基于依赖图的节点模型。
 //! 转换器负责：
 //! - 将边（edges）转换为节点的 next/then/else/fail 字段
 //! - 将前端节点数据映射到后端 FlowNode 结构
 //! - 解析全局变量
+//! - 处理 Start 节点的参数定义
 
-use fdl_executor::types::{CaseBranch, Flow, FlowArgs, FlowMeta, FlowNode};
+use fdl_executor::types::{CaseBranch, Flow, FlowArgs, FlowMeta, FlowNode, InputParamDef, ParamDef};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -17,6 +18,21 @@ use std::collections::HashMap;
 pub struct Position {
     pub x: f64,
     pub y: f64,
+}
+
+/// 前端 Start 节点的参数定义
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendParameterDef {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub param_type: String,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub default_value: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// Frontend node data
@@ -29,6 +45,9 @@ pub struct FrontendNodeData {
     pub description: Option<String>,
     #[serde(default)]
     pub only: Option<String>,
+    // Start node - 流程入口参数定义
+    #[serde(default)]
+    pub parameters: Option<Vec<FrontendParameterDef>>,
     // Exec node
     #[serde(default)]
     pub exec: Option<String>,
@@ -115,6 +134,23 @@ pub struct FrontendMeta {
     pub description: Option<String>,
 }
 
+/// Frontend 输出参数定义
+#[derive(Debug, Clone, Deserialize)]
+pub struct FrontendOutputDef {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub output_type: String,
+}
+
+/// Frontend 流程参数（inputs/outputs）
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct FrontendArgs {
+    #[serde(rename = "in", default)]
+    pub inputs: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub out: Option<Vec<FrontendOutputDef>>,
+}
+
 /// Frontend flow model (React Flow format)
 #[derive(Debug, Clone, Deserialize)]
 pub struct FrontendFlow {
@@ -125,6 +161,9 @@ pub struct FrontendFlow {
     pub edges: Vec<FrontendEdge>,
     #[serde(default)]
     pub vars: Option<String>,
+    /// 流程参数定义（可选，用于 YAML 格式的流程）
+    #[serde(default)]
+    pub args: Option<FrontendArgs>,
 }
 
 /// 将前端流程转换为执行器流程
@@ -177,6 +216,20 @@ pub fn convert_frontend_to_executor(frontend: &FrontendFlow) -> Flow {
         let data = &node.data;
         let node_id = &node.id;
 
+        // 转换 Start 节点的参数定义
+        let parameters = data.parameters.as_ref().map(|params| {
+            params
+                .iter()
+                .map(|p| InputParamDef {
+                    name: p.name.clone(),
+                    param_type: p.param_type.clone(),
+                    required: p.required,
+                    default_value: p.default_value.clone(),
+                    description: p.description.clone(),
+                })
+                .collect()
+        });
+
         let flow_node = FlowNode {
             name: Some(data.label.clone()),
             description: data.description.clone(),
@@ -218,6 +271,9 @@ pub fn convert_frontend_to_executor(frontend: &FrontendFlow) -> Flow {
                     _ => None,
                 }
             }),
+            // Start 节点专用字段
+            parameters,
+            node_type_str: Some(data.node_type.clone()),
         };
 
         nodes.insert(node_id.clone(), flow_node);
@@ -242,19 +298,109 @@ pub fn convert_frontend_to_executor(frontend: &FrontendFlow) -> Flow {
         })
         .unwrap_or_default();
 
+    // 从 Start 节点提取参数定义和入口节点
+    // 查找 Start 节点并提取其连接的下游节点作为 entry
+    // 同时传递 frontend.args 用于提取输出定义
+    let args = extract_flow_args(&frontend.nodes, &frontend.edges, frontend.args.as_ref());
+
+    // 如果有 entry，更新 Start 节点的 next 字段为逗号分隔的所有入口节点
+    // 这确保调度器能并行执行所有入口节点
+    if let Some(ref entry) = args.entry {
+        if let Some(start_node) = frontend.nodes.iter().find(|n| n.data.node_type == "start") {
+            if let Some(node) = nodes.get_mut(&start_node.id) {
+                node.next = Some(entry.join(", "));
+            }
+        }
+    }
+
     Flow {
         meta: FlowMeta {
             name: frontend.meta.name.clone(),
             description: frontend.meta.description.clone(),
         },
-        args: FlowArgs::default(),
+        args,
         vars,
         nodes,
     }
 }
 
+/// 从前端节点中提取 FlowArgs
+///
+/// 查找 Start 节点，提取：
+/// 1. 参数定义 -> FlowArgs.inputs
+/// 2. Start 节点的所有出边目标 -> FlowArgs.entry
+/// 3. 输出定义 -> FlowArgs.out
+fn extract_flow_args(
+    nodes: &[FrontendNode],
+    edges: &[FrontendEdge],
+    frontend_args: Option<&FrontendArgs>,
+) -> FlowArgs {
+    // 查找 Start 节点
+    let start_node = nodes.iter().find(|n| n.data.node_type == "start");
+
+    let start_node = match start_node {
+        Some(node) => node,
+        None => return FlowArgs::default(),
+    };
+
+    // 提取参数定义并转换为 inputs
+    let inputs: HashMap<String, ParamDef> = start_node
+        .data
+        .parameters
+        .as_ref()
+        .map(|params| {
+            params
+                .iter()
+                .map(|p| {
+                    let param_def = if let Some(ref default) = p.default_value {
+                        ParamDef::WithDefault {
+                            type_name: p.param_type.clone(),
+                            default: default.clone(),
+                        }
+                    } else {
+                        ParamDef::Simple(p.param_type.clone())
+                    };
+                    (p.name.clone(), param_def)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // 收集 Start 节点的所有出边目标作为 entry
+    // 支持 Start 节点连接到多个下游节点
+    let entry_nodes: Vec<String> = edges
+        .iter()
+        .filter(|e| e.source == start_node.id)
+        .map(|e| e.target.clone())
+        .collect();
+
+    let entry = if entry_nodes.is_empty() {
+        None
+    } else {
+        Some(entry_nodes)
+    };
+
+    // 转换输出定义：FrontendOutputDef[] -> OutputDef::Structured
+    let out = frontend_args
+        .and_then(|args| args.out.as_ref())
+        .map(|out_defs| {
+            let structured: HashMap<String, String> = out_defs
+                .iter()
+                .map(|def| (def.name.clone(), def.output_type.clone()))
+                .collect();
+            fdl_executor::types::OutputDef::Structured(structured)
+        });
+
+    FlowArgs {
+        defs: HashMap::new(),
+        inputs,
+        out,
+        entry,
+    }
+}
+
 /// 执行结果（用于 API 响应）
-/// 
+///
 /// 包含执行的成功状态、输出结果、各节点结果、错误信息和执行时长。
 #[derive(Debug, Clone, Serialize)]
 pub struct ExecutionResult {
@@ -263,6 +409,241 @@ pub struct ExecutionResult {
     pub node_results: HashMap<String, serde_json::Value>,
     pub error: Option<String>,
     pub duration_ms: u64,
+}
+
+/// 参数验证错误
+#[derive(Debug, Clone)]
+pub struct ValidationError {
+    pub field: String,
+    pub message: String,
+}
+
+impl std::fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.field, self.message)
+    }
+}
+
+/// 验证流程输入参数
+///
+/// 从 Start 节点提取参数定义，验证输入是否满足要求：
+/// 1. 必填参数必须提供
+/// 2. 应用默认值到缺失的可选参数
+///
+/// 返回验证后的输入（包含默认值）或验证错误列表
+pub fn validate_inputs(
+    frontend: &FrontendFlow,
+    inputs: &serde_json::Value,
+) -> Result<serde_json::Value, Vec<ValidationError>> {
+    // 查找 Start 节点
+    let start_node = frontend
+        .nodes
+        .iter()
+        .find(|n| n.data.node_type == "start");
+
+    // 如果没有 Start 节点，直接返回原始输入（无需验证）
+    let start_node = match start_node {
+        Some(node) => node,
+        None => return Ok(inputs.clone()),
+    };
+
+    // 获取参数定义
+    let parameters = match &start_node.data.parameters {
+        Some(params) => params,
+        None => return Ok(inputs.clone()), // 没有参数定义，直接返回
+    };
+
+    // 如果没有定义参数，直接返回
+    if parameters.is_empty() {
+        return Ok(inputs.clone());
+    }
+
+    let mut errors = Vec::new();
+    let mut validated_inputs = inputs.clone();
+
+    // 确保 validated_inputs 是一个对象
+    if !validated_inputs.is_object() {
+        validated_inputs = serde_json::json!({});
+    }
+
+    let inputs_obj = validated_inputs.as_object_mut().unwrap();
+
+    for param in parameters {
+        let has_value = inputs_obj.contains_key(&param.name)
+            && !inputs_obj.get(&param.name).unwrap().is_null();
+
+        if !has_value {
+            // 参数未提供
+            if param.required {
+                // 必填参数缺失
+                errors.push(ValidationError {
+                    field: param.name.clone(),
+                    message: format!("参数 '{}' 为必填项", param.name),
+                });
+            } else if let Some(ref default_value) = param.default_value {
+                // 可选参数有默认值，应用默认值
+                let parsed_default = parse_default_value(default_value, &param.param_type);
+                inputs_obj.insert(param.name.clone(), parsed_default);
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(validated_inputs)
+    } else {
+        Err(errors)
+    }
+}
+
+/// 解析默认值字符串为对应类型的 JSON 值
+fn parse_default_value(default: &str, param_type: &str) -> serde_json::Value {
+    match param_type {
+        "number" => default
+            .parse::<f64>()
+            .map(|n| serde_json::json!(n))
+            .unwrap_or(serde_json::Value::Null),
+        "boolean" => serde_json::json!(default == "true"),
+        "object" | "array" => serde_json::from_str(default).unwrap_or(serde_json::Value::Null),
+        _ => serde_json::Value::String(default.to_string()),
+    }
+}
+
+/// 根据流程定义的 out 字段过滤输出结果
+///
+/// 如果流程定义了 args.out，则只返回指定的字段。
+///
+/// 查找策略（按优先级）：
+/// 1. 优先从终止节点（merge, output, end, result 等）提取
+/// 2. 如果没找到，再从其他节点中查找
+///
+/// 如果没有定义 out，返回原始输出。
+pub fn filter_output_by_definition(
+    frontend: &FrontendFlow,
+    raw_outputs: &serde_json::Value,
+) -> serde_json::Value {
+    // 获取输出定义
+    let out_defs = match &frontend.args {
+        Some(args) => match &args.out {
+            Some(out) => out,
+            None => return raw_outputs.clone(),
+        },
+        None => return raw_outputs.clone(),
+    };
+
+    // 如果没有定义输出字段，返回原始输出
+    if out_defs.is_empty() {
+        return raw_outputs.clone();
+    }
+
+    // 获取原始输出对象
+    let raw_obj = match raw_outputs.as_object() {
+        Some(obj) => obj,
+        None => return raw_outputs.clone(),
+    };
+
+    // 查找终止节点（通常是最后执行的节点，用于聚合结果）
+    // 优先级：显式的输出节点 > 没有 next 的节点 > 任意节点
+    let terminal_node = find_terminal_node(frontend, raw_obj);
+
+    // 构建过滤后的输出
+    let mut filtered = serde_json::Map::new();
+
+    for out_def in out_defs {
+        let field_name = &out_def.name;
+        let mut found_value: Option<serde_json::Value> = None;
+
+        // 优先从终止节点提取
+        if let Some(ref terminal) = terminal_node {
+            if let Some(node_value) = raw_obj.get(terminal) {
+                if let Some(node_obj) = node_value.as_object() {
+                    if let Some(value) = node_obj.get(field_name) {
+                        found_value = Some(value.clone());
+                    }
+                }
+            }
+        }
+
+        // 如果终止节点没有该字段，从其他节点查找
+        if found_value.is_none() {
+            for (node_id, node_value) in raw_obj {
+                // 跳过系统变量
+                if node_id == "tenantId" || node_id == "buCode" {
+                    continue;
+                }
+
+                // 如果节点值是对象，检查是否包含目标字段
+                if let Some(node_obj) = node_value.as_object() {
+                    if let Some(value) = node_obj.get(field_name) {
+                        found_value = Some(value.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 如果找到了值，添加到过滤结果
+        if let Some(value) = found_value {
+            filtered.insert(field_name.clone(), value);
+        }
+    }
+
+    serde_json::Value::Object(filtered)
+}
+
+/// 查找终止节点
+///
+/// 终止节点是没有 next 的节点，通常是流程的最后一步，用于聚合和输出结果。
+/// 查找策略：
+/// 1. 查找名称包含 merge/output/end/result 的节点
+/// 2. 查找没有 next 边的节点
+fn find_terminal_node(
+    frontend: &FrontendFlow,
+    raw_obj: &serde_json::Map<String, serde_json::Value>,
+) -> Option<String> {
+    // 终止节点的常见名称关键字
+    const TERMINAL_KEYWORDS: &[&str] = &["merge", "output", "end", "result", "final"];
+
+    // 收集所有有 next 边的源节点
+    let sources_with_next: std::collections::HashSet<&String> = frontend
+        .edges
+        .iter()
+        .map(|e| &e.source)
+        .collect();
+
+    // 优先查找名称匹配的终止节点
+    for keyword in TERMINAL_KEYWORDS {
+        for node in &frontend.nodes {
+            if node.id.to_lowercase().contains(keyword)
+                && raw_obj.contains_key(&node.id)
+                && !sources_with_next.contains(&node.id)
+            {
+                return Some(node.id.clone());
+            }
+        }
+    }
+
+    // 查找没有 next 边的节点（终止节点）
+    for node in &frontend.nodes {
+        // 跳过 start 节点
+        if node.data.node_type == "start" {
+            continue;
+        }
+        // 如果节点没有出边，且在输出中存在，则为终止节点
+        if !sources_with_next.contains(&node.id) && raw_obj.contains_key(&node.id) {
+            return Some(node.id.clone());
+        }
+    }
+
+    None
+}
+
+/// 获取流程的输出定义字段名列表
+pub fn get_output_field_names(frontend: &FrontendFlow) -> Option<Vec<String>> {
+    frontend.args.as_ref().and_then(|args| {
+        args.out.as_ref().map(|out| {
+            out.iter().map(|def| def.name.clone()).collect()
+        })
+    })
 }
 
 #[cfg(test)]
@@ -350,6 +731,7 @@ mod tests {
                     with_expr: Some("result = 1 + 1".to_string()),
                     description: None,
                     only: None,
+                    parameters: None,
                     exec: None,
                     sets: None,
                     args: None,
@@ -368,6 +750,7 @@ mod tests {
             }],
             edges: vec![],
             vars: None,
+            args: None,
         };
 
         let flow = convert_frontend_to_executor(&frontend);
@@ -396,6 +779,7 @@ mod tests {
                         with_expr: Some("x = 1".to_string()),
                         description: None,
                         only: None,
+                        parameters: None,
                         exec: None,
                         sets: None,
                         args: None,
@@ -422,6 +806,7 @@ mod tests {
                         with_expr: Some("y = a.x + 1".to_string()),
                         description: None,
                         only: None,
+                        parameters: None,
                         exec: None,
                         sets: None,
                         args: None,
@@ -450,6 +835,7 @@ mod tests {
                 }),
             }],
             vars: None,
+            args: None,
         };
 
         let flow = convert_frontend_to_executor(&frontend);

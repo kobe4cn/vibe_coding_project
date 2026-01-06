@@ -25,7 +25,7 @@
  */
 
 import * as yaml from 'js-yaml'
-import type { FlowModel, FlowNode, FlowEdge, FlowNodeData, FlowNodeType, FlowEdgeData } from '@/types/flow'
+import type { FlowModel, FlowNode, FlowEdge, FlowNodeData, FlowNodeType, FlowEdgeData, StartNodeData } from '@/types/flow'
 import dagre from 'dagre'
 
 // Standard FDL YAML structure types
@@ -37,6 +37,7 @@ interface FDLYaml {
       in?: Record<string, unknown>
       out?: unknown
       defs?: Record<string, unknown>
+      entry?: string[]  // Start 节点连接的入口节点 ID 列表
     }
     vars?: string
     node?: Record<string, FDLNode>
@@ -120,28 +121,69 @@ export function flowToYaml(flow: FlowModel): string {
     fdl.flow.desp = flow.meta.description
   }
 
-  // Add args if present
-  if (flow.args) {
-    fdl.flow.args = {}
-    if (flow.args.defs && flow.args.defs.length > 0) {
-      fdl.flow.args.defs = {}
-      for (const def of flow.args.defs) {
-        const fields: Record<string, unknown> = {}
-        for (const field of def.fields) {
-          fields[field.name] = formatParameterType(field)
-        }
-        fdl.flow.args.defs[def.name] = fields
+  // Find Start node and its connections
+  const startNode = flow.nodes.find(n => n.data.nodeType === 'start')
+  const startEdges = startNode
+    ? flow.edges.filter(e => e.source === startNode.id)
+    : []
+  const entryNodeIds = startEdges.map(e => e.target)
+
+  // Build args section
+  fdl.flow.args = {}
+
+  // Add defs if present
+  if (flow.args?.defs && flow.args.defs.length > 0) {
+    fdl.flow.args.defs = {}
+    for (const def of flow.args.defs) {
+      const fields: Record<string, unknown> = {}
+      for (const field of def.fields) {
+        fields[field.name] = formatParameterType(field)
       }
+      fdl.flow.args.defs[def.name] = fields
     }
-    if (flow.args.inputs && flow.args.inputs.length > 0) {
+  }
+
+  // Export Start node's parameters as args.in
+  if (startNode) {
+    const startData = startNode.data as FlowNodeData & { parameters?: Array<{
+      name: string
+      type: string
+      required: boolean
+      defaultValue?: string
+      description?: string
+    }> }
+    if (startData.parameters && startData.parameters.length > 0) {
       fdl.flow.args.in = {}
-      for (const input of flow.args.inputs) {
-        fdl.flow.args.in[input.name] = formatParameterType(input)
+      for (const param of startData.parameters) {
+        // 转换为 YAML 格式：type? = defaultValue  # description
+        let typeStr = param.type
+        if (!param.required) typeStr += '?'
+        if (param.defaultValue) typeStr += ` = ${param.defaultValue}`
+        // 注释会在 YAML dump 时丢失，暂不处理 description
+        fdl.flow.args.in[param.name] = typeStr
       }
     }
-    if (flow.args.outputs) {
-      fdl.flow.args.out = flow.args.outputs
+  } else if (flow.args?.inputs && flow.args.inputs.length > 0) {
+    // Fallback: use flow.args.inputs if no Start node
+    fdl.flow.args.in = {}
+    for (const input of flow.args.inputs) {
+      fdl.flow.args.in[input.name] = formatParameterType(input)
     }
+  }
+
+  // Add outputs
+  if (flow.args?.outputs) {
+    fdl.flow.args.out = flow.args.outputs
+  }
+
+  // Add entry node IDs (Start node's targets)
+  if (entryNodeIds.length > 0) {
+    fdl.flow.args.entry = entryNodeIds
+  }
+
+  // Clean up empty args
+  if (Object.keys(fdl.flow.args).length === 0) {
+    delete fdl.flow.args
   }
 
   // Add vars if present
@@ -149,28 +191,31 @@ export function flowToYaml(flow: FlowModel): string {
     fdl.flow.vars = flow.vars
   }
 
-  // Build edge map for navigation
-  const edgeMap = buildEdgeMap(flow.edges)
+  // Build edge map for navigation (exclude edges from Start node)
+  const edgeMap = buildEdgeMap(flow.edges.filter(e => !startNode || e.source !== startNode.id))
+
+  // Filter out Start node for YAML export (it becomes args.in + args.entry)
+  const nonStartNodes = flow.nodes.filter(n => n.data.nodeType !== 'start')
 
   // Convert nodes to FDL node object (preserving order)
-  if (flow.nodes.length > 0) {
+  if (nonStartNodes.length > 0) {
     fdl.flow.node = {}
 
-    // Find root nodes (nodes with no incoming edges)
-    const targetIds = new Set(flow.edges.map((e) => e.target))
-    const rootNodes = flow.nodes.filter((n) => !targetIds.has(n.id))
+    // Find root nodes (nodes with no incoming edges from non-start nodes)
+    const targetIds = new Set(flow.edges.filter(e => !startNode || e.source !== startNode.id).map((e) => e.target))
+    const rootNodes = nonStartNodes.filter((n) => !targetIds.has(n.id))
 
     // Convert nodes in topological order
     const visited = new Set<string>()
 
     for (const root of rootNodes) {
-      convertNodeToFDL(root, flow.nodes, edgeMap, visited, fdl.flow.node)
+      convertNodeToFDL(root, nonStartNodes, edgeMap, visited, fdl.flow.node)
     }
 
     // Handle any unvisited nodes (disconnected)
-    for (const node of flow.nodes) {
+    for (const node of nonStartNodes) {
       if (!visited.has(node.id)) {
-        convertNodeToFDL(node, flow.nodes, edgeMap, visited, fdl.flow.node)
+        convertNodeToFDL(node, nonStartNodes, edgeMap, visited, fdl.flow.node)
       }
     }
   }
@@ -477,6 +522,55 @@ function parseStandardFDL(fdl: FDLYaml): { flow: FlowModel; error?: string } {
     }
   }
 
+  // Create Start node from args.in
+  const startNodeId = `start-${Date.now()}`
+  const inputParams = fdl.flow.args?.in
+  const startParameters: StartNodeData['parameters'] = []
+
+  if (inputParams) {
+    for (const [name, typeStr] of Object.entries(inputParams)) {
+      const parsed = parseTypeString(String(typeStr))
+      startParameters.push({
+        name,
+        type: (parsed.type as 'string' | 'number' | 'boolean' | 'object' | 'array') || 'string',
+        required: !parsed.nullable,
+        defaultValue: parsed.defaultValue,
+      })
+    }
+  }
+
+  const startNodeData: StartNodeData = {
+    nodeType: 'start',
+    label: '开始',
+    parameters: startParameters,
+  }
+
+  const startNode: FlowNode = {
+    id: startNodeId,
+    type: 'start',
+    position: { x: 0, y: 0 }, // Will be set by auto-layout
+    data: startNodeData,
+  }
+  nodes.unshift(startNode) // Add at beginning
+
+  // Determine entry nodes: use args.entry if specified, otherwise auto-detect
+  let entryNodeIds: string[] = []
+  if (fdl.flow.args?.entry && fdl.flow.args.entry.length > 0) {
+    // Use explicitly specified entry nodes
+    entryNodeIds = fdl.flow.args.entry.filter(id => nodeIdMap.has(id))
+  } else {
+    // Auto-detect: find nodes with no incoming edges
+    const targetIds = new Set(edges.map(e => e.target))
+    entryNodeIds = nodes
+      .filter(n => n.data.nodeType !== 'start' && !targetIds.has(n.id))
+      .map(n => n.id)
+  }
+
+  // Create edges from Start node to entry nodes
+  for (const targetId of entryNodeIds) {
+    edges.push(createEdge(startNodeId, targetId, 'next'))
+  }
+
   // Apply auto-layout
   const layoutedNodes = applyAutoLayout(nodes, edges)
 
@@ -489,7 +583,7 @@ function parseStandardFDL(fdl: FDLYaml): { flow: FlowModel; error?: string } {
     edges,
   }
 
-  // Parse args
+  // Parse args (excluding inputs since they're now in Start node)
   if (fdl.flow.args) {
     flow.args = parseArgs(fdl.flow.args)
   }
@@ -537,8 +631,14 @@ function parseArgs(args: FDLYaml['flow']['args']): FlowModel['args'] {
     if (typeof args.out === 'string') {
       // Simple output type
       result.outputs = parseTypeString(args.out)
+    } else if (Array.isArray(args.out)) {
+      // 数组格式: [{name: "id", type: "string"}, ...]
+      result.outputs = (args.out as Array<{ name: string; type: string }>).map(item => ({
+        name: item.name,
+        ...parseTypeString(item.type || 'string'),
+      }))
     } else if (typeof args.out === 'object') {
-      // Output fields
+      // 对象格式: {fieldName: "type", ...}
       result.outputs = Object.entries(args.out as Record<string, unknown>).map(([name, typeStr]) => ({
         name,
         ...parseTypeString(String(typeStr)),

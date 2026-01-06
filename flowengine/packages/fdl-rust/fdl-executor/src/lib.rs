@@ -107,10 +107,10 @@ impl Executor {
         Ok(self.filter_output(&flow.args, result))
     }
 
-    /// 过滤输出：
-    /// 1. 如果定义了 args.out，只保留指定字段
-    /// 2. 移除系统变量 (buCode, tenantId)
-    fn filter_output(&self, args: &types::FlowArgs, output: Value) -> Value {
+    /// 过滤输出：只移除系统变量 (buCode, tenantId)
+    ///
+    /// 注意：args.out 的过滤由 runtime 层处理，以便保留完整的节点结果用于调试
+    fn filter_output(&self, _args: &types::FlowArgs, output: Value) -> Value {
         let mut result = output;
 
         // 移除系统变量
@@ -120,59 +120,9 @@ impl Executor {
             }
         }
 
-        // 如果定义了输出字段，只保留指定字段
-        if let Some(out_def) = &args.out {
-            result = self.apply_output_filter(out_def, result);
-        }
-
+        // 不再在这里过滤 args.out，保留完整节点结果
+        // runtime 层会根据 args.out 过滤最终的 outputs 字段
         result
-    }
-
-    /// 根据 args.out 定义过滤输出字段
-    fn apply_output_filter(&self, out_def: &types::OutputDef, output: Value) -> Value {
-        match out_def {
-            types::OutputDef::Simple(_) => {
-                // 简单类型：返回整个输出
-                output
-            }
-            types::OutputDef::Structured(fields) => {
-                // 结构化输出：只保留定义的字段
-                let mut filtered = std::collections::HashMap::new();
-                if let Value::Object(obj) = &output {
-                    for field_name in fields.keys() {
-                        // 尝试从输出中提取字段值
-                        if let Some(value) = self.extract_output_field(field_name, obj) {
-                            filtered.insert(field_name.clone(), value);
-                        }
-                    }
-                }
-                Value::Object(filtered)
-            }
-        }
-    }
-
-    /// 从输出对象中提取指定字段的值
-    /// 支持从节点结果中提取嵌套字段
-    fn extract_output_field(
-        &self,
-        field_name: &str,
-        obj: &std::collections::HashMap<String, Value>,
-    ) -> Option<Value> {
-        // 首先检查顶层是否有该字段
-        if let Some(value) = obj.get(field_name) {
-            return Some(value.clone());
-        }
-
-        // 遍历所有节点结果，查找字段
-        for (_node_id, node_value) in obj {
-            if let Value::Object(node_obj) = node_value {
-                if let Some(value) = node_obj.get(field_name) {
-                    return Some(value.clone());
-                }
-            }
-        }
-
-        None
     }
 
     /// Get the current execution context

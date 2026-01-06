@@ -58,10 +58,14 @@ pub struct YamlArgs {
     /// 输出参数
     #[serde(default)]
     pub out: Option<Vec<YamlOutputField>>,
+    /// 入口节点列表：Start 节点连接的目标节点 ID
+    /// 如果未指定，将自动检测无入边的节点作为入口
+    #[serde(default)]
+    pub entry: Option<Vec<String>>,
 }
 
 /// YAML 参数定义（支持简单类型或带默认值）
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum YamlParamDef {
     /// 简单类型：`name: string`
@@ -71,7 +75,7 @@ pub enum YamlParamDef {
 }
 
 /// YAML 输出字段
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct YamlOutputField {
     pub name: String,
     pub r#type: String,
@@ -146,6 +150,12 @@ pub fn parse_yaml(yaml_str: &str) -> ExecutorResult<Flow> {
 }
 
 /// 将 YAML 流程转换为内部 Flow 结构
+///
+/// 转换过程：
+/// 1. 转换元数据和参数定义
+/// 2. 转换所有节点
+/// 3. 创建虚拟 Start 节点（从 args.in 生成参数定义）
+/// 4. 确定入口节点（从 args.entry 或自动检测）
 fn convert_yaml_to_flow(yaml: YamlFlow) -> ExecutorResult<Flow> {
     // 转换元数据
     let meta = FlowMeta {
@@ -153,27 +163,99 @@ fn convert_yaml_to_flow(yaml: YamlFlow) -> ExecutorResult<Flow> {
         description: yaml.desp,
     };
 
+    // 转换节点（先转换，用于后续入口检测）
+    let mut nodes: HashMap<String, FlowNode> = yaml
+        .node
+        .into_iter()
+        .map(|(k, v)| (k, convert_yaml_node(v)))
+        .collect();
+
     // 转换参数
-    let args = if let Some(yaml_args) = yaml.args {
+    let args = if let Some(yaml_args) = &yaml.args {
+        // 确定入口节点
+        let entry_nodes = if let Some(ref entry) = yaml_args.entry {
+            // 使用显式指定的入口节点
+            Some(entry.clone())
+        } else {
+            // 自动检测：找出所有无入边的节点
+            let targets: std::collections::HashSet<&str> = nodes
+                .values()
+                .filter_map(|n| n.next.as_deref())
+                .chain(nodes.values().filter_map(|n| n.then.as_deref()))
+                .chain(nodes.values().filter_map(|n| n.else_branch.as_deref()))
+                .chain(nodes.values().filter_map(|n| n.fail.as_deref()))
+                .collect();
+
+            let entry_ids: Vec<String> = nodes
+                .keys()
+                .filter(|id| !targets.contains(id.as_str()))
+                .cloned()
+                .collect();
+
+            if entry_ids.is_empty() {
+                None
+            } else {
+                Some(entry_ids)
+            }
+        };
+
         FlowArgs {
             defs: HashMap::new(),
             inputs: yaml_args
                 .inputs
-                .into_iter()
-                .map(|(k, v)| (k, convert_param_def(v)))
+                .iter()
+                .map(|(k, v)| (k.clone(), convert_param_def(v.clone())))
                 .collect(),
-            out: yaml_args.out.map(convert_output_def),
+            out: yaml_args.out.as_ref().map(|o| convert_output_def(o.clone())),
+            entry: entry_nodes,
         }
     } else {
         FlowArgs::default()
     };
 
-    // 转换节点
-    let nodes = yaml
-        .node
-        .into_iter()
-        .map(|(k, v)| (k, convert_yaml_node(v)))
-        .collect();
+    // 如果有输入参数，创建虚拟 Start 节点
+    if !args.inputs.is_empty() || args.entry.is_some() {
+        let start_node_id = "__start__".to_string();
+
+        // 从 args.inputs 生成 Start 节点的参数定义
+        let parameters: Vec<crate::types::InputParamDef> = args
+            .inputs
+            .iter()
+            .map(|(name, param_def)| {
+                let (param_type, default_value) = match param_def {
+                    ParamDef::Simple(t) => (t.clone(), None),
+                    ParamDef::WithDefault { type_name, default } => {
+                        (type_name.clone(), Some(default.clone()))
+                    }
+                };
+                crate::types::InputParamDef {
+                    name: name.clone(),
+                    param_type,
+                    required: default_value.is_none(),
+                    default_value,
+                    description: None,
+                }
+            })
+            .collect();
+
+        // Start 节点的 next 字段连接到所有入口节点
+        // 使用逗号分隔多个入口节点，调度器会解析并并行执行
+        let next = args.entry.as_ref().map(|entries| entries.join(", "));
+
+        let start_node = FlowNode {
+            name: Some("开始".to_string()),
+            node_type_str: Some("start".to_string()),
+            parameters: if parameters.is_empty() {
+                None
+            } else {
+                Some(parameters)
+            },
+            next,
+            ..Default::default()
+        };
+
+        nodes.insert(start_node_id, start_node);
+    }
 
     Ok(Flow {
         meta,
@@ -230,6 +312,9 @@ fn convert_yaml_node(yaml: YamlNode) -> FlowNode {
         }),
         agent: yaml.agent,
         mcp: yaml.mcp,
+        // YAML 格式不支持 Start 节点（前端可视化编辑器专用）
+        parameters: None,
+        node_type_str: None,
     }
 }
 
@@ -299,11 +384,19 @@ flow:
         assert!(flow.args.inputs.contains_key("from"));
         assert!(flow.args.out.is_some());
 
-        // 验证节点
-        assert_eq!(flow.nodes.len(), 3);
+        // 验证节点（3 个业务节点 + 1 个虚拟 Start 节点）
+        assert_eq!(flow.nodes.len(), 4);
         assert!(flow.nodes.contains_key("customer"));
         assert!(flow.nodes.contains_key("merge"));
         assert!(flow.nodes.contains_key("orderCount"));
+        assert!(flow.nodes.contains_key("__start__"));
+
+        // 验证虚拟 Start 节点
+        let start = flow.nodes.get("__start__").unwrap();
+        assert_eq!(start.node_type(), crate::types::NodeType::Start);
+        assert!(start.parameters.is_some());
+        // Start 节点连接到入口节点
+        assert!(start.next.is_some());
 
         // 验证 customer 节点
         let customer = flow.nodes.get("customer").unwrap();
@@ -423,7 +516,7 @@ flow:
 
     #[tokio::test]
     async fn test_output_filtering_with_args_out() {
-        // 测试带 args.out 的流程（输出过滤）
+        // 测试执行器返回完整的节点结果（args.out 过滤由 runtime 层处理）
         let yaml = r#"
 flow:
     name: 输出过滤测试
@@ -445,15 +538,18 @@ flow:
         let executor = Executor::new();
         let result = executor.execute(&flow, fdl_gml::Value::Null).await.unwrap();
 
-        println!("Filtered output: {:?}", result);
+        println!("Executor output: {:?}", result);
 
-        // 验证只有定义的输出字段
-        assert!(result.get("result").is_some(), "result should be in output");
-        assert!(result.get("message").is_some(), "message should be in output");
-        // extra 字段应该被过滤掉
-        assert!(result.get("extra").is_none(), "extra should be filtered out");
-        // compute 节点也应该被过滤掉
-        assert!(result.get("compute").is_none(), "compute node should be filtered out");
+        // 执行器现在返回完整的节点结果，args.out 过滤由 runtime 层处理
+        // 这样可以保留完整的节点结果用于调试
+        let compute = result.get("compute");
+        assert!(compute.is_some(), "compute node should be in output");
+
+        // 节点结果应该包含所有字段
+        let compute = compute.unwrap();
+        assert!(compute.get("result").is_some(), "result should be in compute output");
+        assert!(compute.get("message").is_some(), "message should be in compute output");
+        assert!(compute.get("extra").is_some(), "extra should be in compute output (runtime will filter)");
     }
 
     #[tokio::test]

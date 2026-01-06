@@ -20,6 +20,7 @@ use uuid::Uuid;
 use crate::storage::{
     Storage, StorageError,
     traits::{
+        ApiKeyRecord, CreateApiKeyRequest as StorageCreateApiKey,
         CreateFlowRequest as StorageCreateFlow, CreateVersionRequest as StorageCreateVersion,
         FlowRecord, ListOptions, UpdateFlowRequest as StorageUpdateFlow, VersionRecord,
     },
@@ -509,6 +510,104 @@ impl AppState {
         self.storage
             .as_flow_storage()
             .get_latest_version(tenant_uuid, flow_uuid)
+            .await
+    }
+
+    // Publish management
+
+    /// Publish a flow with a specific version
+    pub async fn publish_flow(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+        version_id: &str,
+    ) -> Result<FlowRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        let version_uuid = Uuid::parse_str(version_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid version ID: {}", version_id)))?;
+        self.storage
+            .as_flow_storage()
+            .publish_flow(tenant_uuid, flow_uuid, version_uuid)
+            .await
+    }
+
+    /// Unpublish a flow
+    pub async fn unpublish_flow(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+    ) -> Result<FlowRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage
+            .as_flow_storage()
+            .unpublish_flow(tenant_uuid, flow_uuid)
+            .await
+    }
+
+    // API Key management
+
+    /// List API keys for a flow
+    pub async fn list_api_keys(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+    ) -> Result<Vec<ApiKeyRecord>, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage
+            .as_flow_storage()
+            .list_api_keys(tenant_uuid, flow_uuid)
+            .await
+    }
+
+    /// Create a new API key
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_api_key(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+        name: &str,
+        description: Option<String>,
+        key_hash: &str,
+        key_prefix: &str,
+        rate_limit: Option<i32>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Result<ApiKeyRecord, StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let flow_uuid = Uuid::parse_str(flow_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
+        self.storage
+            .as_flow_storage()
+            .create_api_key(StorageCreateApiKey {
+                tenant_id: tenant_uuid,
+                flow_id: flow_uuid,
+                name: name.to_string(),
+                description,
+                key_hash: key_hash.to_string(),
+                key_prefix: key_prefix.to_string(),
+                rate_limit,
+                expires_at,
+            })
+            .await
+    }
+
+    /// Delete an API key
+    pub async fn delete_api_key(
+        &self,
+        tenant_id: &str,
+        key_id: &str,
+    ) -> Result<(), StorageError> {
+        let tenant_uuid = parse_tenant_id(tenant_id);
+        let key_uuid = Uuid::parse_str(key_id)
+            .map_err(|_| StorageError::NotFound(format!("Invalid key ID: {}", key_id)))?;
+        self.storage
+            .as_flow_storage()
+            .delete_api_key(tenant_uuid, key_uuid)
             .await
     }
 

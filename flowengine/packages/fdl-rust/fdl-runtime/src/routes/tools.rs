@@ -509,11 +509,15 @@ async fn get_datasource(
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
 
+    // 返回掩码后的连接字符串，保护敏感信息
+    let masked_connection_string = mask_connection_string(&ds.connection_string);
+
     Ok(Json(serde_json::json!({
         "name": ds.name,
         "display_name": ds.display_name,
         "description": ds.description,
         "db_type": format!("{:?}", ds.db_type),
+        "connection_string": masked_connection_string,
         "schema": ds.schema,
         "table": ds.table,
         "pool_size": ds.pool_size,
@@ -887,4 +891,35 @@ fn parse_udf_type(s: &str) -> UdfType {
         "http" => UdfType::Http,
         _ => UdfType::Builtin,
     }
+}
+
+/// 掩码连接字符串中的敏感信息（用户名和密码）
+///
+/// 支持的格式：
+/// - `postgres://user:password@host:port/database`
+/// - `mysql://user:password@host:port/database`
+/// - `mongodb://user:password@host:port/database`
+///
+/// 掩码后：`postgres://***:***@host:port/database`
+fn mask_connection_string(conn_str: &str) -> String {
+    // 尝试解析 URL 格式的连接字符串
+    if let Some(at_pos) = conn_str.find('@') {
+        if let Some(scheme_end) = conn_str.find("://") {
+            let scheme = &conn_str[..scheme_end + 3]; // 包含 "://"
+            let after_scheme = &conn_str[scheme_end + 3..at_pos];
+            let after_at = &conn_str[at_pos..];
+
+            // 检查是否有用户名:密码格式
+            if after_scheme.contains(':') {
+                // 用户名和密码都掩码
+                return format!("{}***:***{}", scheme, after_at);
+            } else if !after_scheme.is_empty() {
+                // 只有用户名，没有密码
+                return format!("{}***{}", scheme, after_at);
+            }
+        }
+    }
+
+    // 无法解析或不包含凭证，返回原字符串
+    conn_str.to_string()
 }

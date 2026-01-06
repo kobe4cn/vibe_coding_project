@@ -1,11 +1,13 @@
 /**
  * Property Panel Component
  * Professional styled property editor with improved UX
+ *
+ * Start 节点作为普通可拖拽节点，其参数定义存储在 node.data.parameters 中
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useFlowStore } from '@/stores/flowStore'
-import type { FlowNode, FlowNodeData, FlowNodeType } from '@/types/flow'
+import type { FlowNode, FlowNodeData, FlowNodeType, StartParameterDef } from '@/types/flow'
 import { NODE_LABELS, NODE_COLORS } from '@/types/flow'
 
 // Lucide style icons
@@ -26,6 +28,12 @@ const Icons = {
 
 // Node type icons - matching NodePalette.tsx
 const NODE_ICONS: Record<FlowNodeType, React.ReactNode> = {
+  start: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
   exec: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/>
@@ -530,6 +538,221 @@ function ApprovalNodeEditor({ node }: { node: FlowNode }) {
   )
 }
 
+// Parameter type options
+const PARAM_TYPE_OPTIONS = [
+  { value: 'string', label: 'String' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'object', label: 'Object' },
+  { value: 'array', label: 'Array' },
+]
+
+// Single parameter editor component
+function ParameterEditor({
+  param,
+  index,
+  onUpdate,
+  onRemove,
+}: {
+  param: StartParameterDef
+  index: number
+  onUpdate: (field: keyof StartParameterDef, value: unknown) => void
+  onRemove: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div
+      className="rounded-lg border transition-all"
+      style={{
+        borderColor: 'var(--outline-variant)',
+        backgroundColor: 'var(--surface-container-highest)',
+      }}
+    >
+      {/* Parameter header */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span
+          className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+          style={{ backgroundColor: 'var(--primary-container)', color: 'var(--on-primary-container)' }}
+        >
+          {index + 1}
+        </span>
+        <span className="flex-1 text-[12px] font-medium truncate" style={{ color: 'var(--on-surface)' }}>
+          {param.name || '未命名参数'}
+        </span>
+        <span
+          className="text-[10px] px-1.5 py-0.5 rounded"
+          style={{ backgroundColor: 'var(--surface-container)', color: 'var(--on-surface-variant)' }}
+        >
+          {param.type}
+        </span>
+        {param.required && (
+          <span className="text-[10px] text-red-500">*</span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="p-1 rounded hover:bg-red-100 text-red-500 transition-colors"
+          title="删除参数"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Expanded editor */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 space-y-3 border-t" style={{ borderColor: 'var(--outline-variant)' }}>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--on-surface-variant)' }}>
+                参数名
+              </label>
+              <input
+                type="text"
+                value={param.name}
+                onChange={(e) => onUpdate('name', e.target.value)}
+                placeholder="paramName"
+                className="w-full px-2 py-1.5 text-[12px] font-mono rounded border focus:outline-none focus:ring-1"
+                style={{
+                  backgroundColor: 'var(--surface-container)',
+                  borderColor: 'var(--outline-variant)',
+                  color: 'var(--on-surface)',
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--on-surface-variant)' }}>
+                类型
+              </label>
+              <select
+                value={param.type}
+                onChange={(e) => onUpdate('type', e.target.value)}
+                className="w-full px-2 py-1.5 text-[12px] rounded border focus:outline-none focus:ring-1 cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--surface-container)',
+                  borderColor: 'var(--outline-variant)',
+                  color: 'var(--on-surface)',
+                }}
+              >
+                {PARAM_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={param.required}
+                onChange={(e) => onUpdate('required', e.target.checked)}
+                className="w-3.5 h-3.5 rounded accent-[var(--primary)]"
+              />
+              <span className="text-[11px]" style={{ color: 'var(--on-surface-variant)' }}>必填</span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--on-surface-variant)' }}>
+              默认值
+            </label>
+            <input
+              type="text"
+              value={param.defaultValue || ''}
+              onChange={(e) => onUpdate('defaultValue', e.target.value)}
+              placeholder="可选默认值"
+              className="w-full px-2 py-1.5 text-[12px] font-mono rounded border focus:outline-none focus:ring-1"
+              style={{
+                backgroundColor: 'var(--surface-container)',
+                borderColor: 'var(--outline-variant)',
+                color: 'var(--on-surface)',
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--on-surface-variant)' }}>
+              描述
+            </label>
+            <input
+              type="text"
+              value={param.description || ''}
+              onChange={(e) => onUpdate('description', e.target.value)}
+              placeholder="参数说明"
+              className="w-full px-2 py-1.5 text-[12px] rounded border focus:outline-none focus:ring-1"
+              style={{
+                backgroundColor: 'var(--surface-container)',
+                borderColor: 'var(--outline-variant)',
+                color: 'var(--on-surface)',
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Start node editor - parameter definition (for real start nodes stored in nodes array)
+function StartNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & { parameters?: StartParameterDef[] }
+  const parameters = data.parameters || []
+
+  const addParameter = () => {
+    const newParam: StartParameterDef = {
+      name: `param${parameters.length + 1}`,
+      type: 'string',
+      required: false,
+    }
+    updateNode(node.id, { parameters: [...parameters, newParam] })
+  }
+
+  const updateParameter = (index: number, field: keyof StartParameterDef, value: unknown) => {
+    const updated = [...parameters]
+    updated[index] = { ...updated[index], [field]: value }
+    updateNode(node.id, { parameters: updated })
+  }
+
+  const removeParameter = (index: number) => {
+    const updated = parameters.filter((_, i) => i !== index)
+    updateNode(node.id, { parameters: updated })
+  }
+
+  return (
+    <Field label="输入参数" hint="定义流程启动时需要传入的参数">
+      <div className="space-y-2">
+        {parameters.map((param, index) => (
+          <ParameterEditor
+            key={index}
+            param={param}
+            index={index}
+            onUpdate={(field, value) => updateParameter(index, field, value)}
+            onRemove={() => removeParameter(index)}
+          />
+        ))}
+
+        <button
+          onClick={addParameter}
+          className="w-full py-2 px-3 text-[12px] font-medium rounded-lg border border-dashed transition-all hover:border-solid"
+          style={{
+            borderColor: 'var(--outline-variant)',
+            color: 'var(--primary)',
+            backgroundColor: 'transparent',
+          }}
+        >
+          + 添加参数
+        </button>
+      </div>
+    </Field>
+  )
+}
+
 // Main PropertyPanel component
 export function PropertyPanel() {
   const { flow, selectedNodeIds, updateNode } = useFlowStore()
@@ -660,6 +883,8 @@ export function PropertyPanel() {
 
 function renderNodeEditor(node: FlowNode) {
   switch (node.data.nodeType) {
+    case 'start':
+      return <StartNodeEditor node={node} />
     case 'exec':
       return <ExecNodeEditor node={node} />
     case 'mapping':
