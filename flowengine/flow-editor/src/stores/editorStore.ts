@@ -105,7 +105,7 @@ export const useEditorStore = create<EditorState>()(
     yamlError: null,
     isSyncing: false,
 
-    zoom: 1,
+    zoom: 0.8,
     minZoom: 0.1,
     maxZoom: 2,
 

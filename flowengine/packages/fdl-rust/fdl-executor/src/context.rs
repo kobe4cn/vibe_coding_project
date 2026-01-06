@@ -1,11 +1,24 @@
-//! Execution context management
+//! 执行上下文管理
+//!
+//! 执行上下文维护流程执行过程中的所有变量和状态，包括：
+//! - 输入参数
+//! - 节点输出变量
+//! - 全局变量
+//! - 执行路径跟踪
+//! - 节点完成/失败状态
+//! - 工具注册表
 
 use fdl_gml::Value;
+use fdl_tools::{ManagedToolRegistry, ToolContext, ToolRegistry};
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
-/// Execution context holds all variables and state during flow execution
-#[derive(Debug, Clone)]
+/// 执行上下文：保存流程执行过程中的所有变量和状态
+///
+/// 上下文是执行引擎的核心数据结构，所有节点都可以访问和修改上下文。
+/// 支持多租户隔离和子流程执行（通过子上下文）。
+#[derive(Clone)]
 pub struct ExecutionContext {
     /// Unique execution ID
     pub execution_id: String,
@@ -27,6 +40,12 @@ pub struct ExecutionContext {
     failed_nodes: Vec<String>,
     /// Current path in the execution tree
     execution_path: Vec<String>,
+    /// Tool registry for exec nodes (simple)
+    tool_registry: Option<Arc<ToolRegistry>>,
+    /// Managed tool registry for exec nodes (with config store)
+    managed_registry: Option<Arc<ManagedToolRegistry>>,
+    /// Tool execution context
+    tool_context: ToolContext,
 }
 
 impl Default for ExecutionContext {
@@ -49,6 +68,9 @@ impl ExecutionContext {
             completed_nodes: Vec::new(),
             failed_nodes: Vec::new(),
             execution_path: Vec::new(),
+            tool_registry: None,
+            managed_registry: None,
+            tool_context: ToolContext::default(),
         }
     }
 
@@ -58,6 +80,36 @@ impl ExecutionContext {
         ctx.tenant_id = tenant_id.to_string();
         ctx.bu_code = bu_code.to_string();
         ctx
+    }
+
+    /// Set the tool registry
+    pub fn set_tool_registry(&mut self, registry: Arc<ToolRegistry>) {
+        self.tool_registry = Some(registry);
+    }
+
+    /// Get the tool registry
+    pub fn tool_registry(&self) -> Option<Arc<ToolRegistry>> {
+        self.tool_registry.clone()
+    }
+
+    /// Set the managed tool registry
+    pub fn set_managed_registry(&mut self, registry: Arc<ManagedToolRegistry>) {
+        self.managed_registry = Some(registry);
+    }
+
+    /// Get the managed tool registry
+    pub fn managed_registry(&self) -> Option<Arc<ManagedToolRegistry>> {
+        self.managed_registry.clone()
+    }
+
+    /// Set the tool context
+    pub fn set_tool_context(&mut self, context: ToolContext) {
+        self.tool_context = context;
+    }
+
+    /// Get the tool context
+    pub fn tool_context(&self) -> &ToolContext {
+        &self.tool_context
     }
 
     /// Set input parameters
@@ -95,26 +147,33 @@ impl ExecutionContext {
         self.globals.get(name)
     }
 
-    /// Build the evaluation context for GML
+    /// 构建 GML 求值上下文
+    /// 
+    /// 将执行上下文转换为 GML 表达式求值器可以使用的 Value 对象。
+    /// 变量优先级（从低到高）：
+    /// 1. 输入参数
+    /// 2. 内置变量（tenantId, buCode）
+    /// 3. 全局变量
+    /// 4. 节点输出变量（最高优先级，可以覆盖前面的变量）
     pub fn build_eval_context(&self) -> Value {
         let mut ctx = HashMap::new();
 
-        // Add inputs
+        // 添加输入参数（最低优先级）
         if let Value::Object(inputs) = &self.inputs {
             ctx.extend(inputs.clone());
         }
 
-        // Add built-in variables
+        // 添加内置变量（供 GML 表达式使用）
         ctx.insert(
             "tenantId".to_string(),
             Value::String(self.tenant_id.clone()),
         );
         ctx.insert("buCode".to_string(), Value::String(self.bu_code.clone()));
 
-        // Add globals
+        // 添加全局变量
         ctx.extend(self.globals.clone());
 
-        // Add node outputs (node outputs override globals)
+        // 添加节点输出变量（最高优先级，可以覆盖全局变量和输入）
         ctx.extend(self.variables.clone());
 
         Value::Object(ctx)
@@ -179,12 +238,19 @@ impl ExecutionContext {
         &self.execution_path
     }
 
-    /// Create a child context for sub-flow execution
+    /// 创建子上下文用于子流程执行
+    ///
+    /// 子上下文继承父上下文的租户信息和所有变量（作为只读上下文）。
+    /// 子流程执行完成后，可以将结果合并回父上下文。
     pub fn child_context(&self) -> Self {
         let mut child = Self::new();
         child.tenant_id = self.tenant_id.clone();
         child.bu_code = self.bu_code.clone();
-        // Child inherits parent's variables as read-only context
+        child.tool_registry = self.tool_registry.clone();
+        child.managed_registry = self.managed_registry.clone();
+        child.tool_context = self.tool_context.clone();
+        // 子上下文继承父上下文的所有变量作为只读上下文（存储在 globals 中）
+        // 这样子流程可以访问父流程的变量，但不会意外修改父流程状态
         child.globals = self
             .build_eval_context()
             .as_object()
@@ -193,9 +259,12 @@ impl ExecutionContext {
         child
     }
 
-    /// Merge results from child context back to parent
+    /// 将子上下文的结果合并回父上下文
+    /// 
+    /// 只合并子流程的变量输出，不会覆盖父流程的变量。
+    /// 这允许子流程返回结果给父流程，同时保持父流程状态的独立性。
     pub fn merge_child_results(&mut self, child: &ExecutionContext) {
-        // Only merge explicitly exported variables
+        // 只合并子流程显式导出的变量（节点输出）
         for (k, v) in child.variables() {
             self.variables.insert(k.clone(), v.clone());
         }

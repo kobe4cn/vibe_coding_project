@@ -1,9 +1,18 @@
-//! Application state management
+//! 应用状态管理
+//!
+//! 管理应用的全局状态，包括：
+//! - JWT 认证服务
+//! - 流程存储（内存或数据库）
+//! - 执行器管理
+//! - 执行状态跟踪
+//! 
+//! 使用 DashMap 实现线程安全的并发访问。
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use fdl_auth::{JwtConfig, JwtService};
 use fdl_executor::Executor;
+use fdl_tools::{ConfigStore, InMemoryConfigStore, PostgresConfigStore};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -131,22 +140,30 @@ pub enum StorageMode {
     Database,
 }
 
-/// Application state shared across handlers
+/// 应用状态：在所有处理器之间共享
+///
+/// 使用 Arc 实现共享所有权，DashMap 实现线程安全的并发访问。
+/// 支持内存和数据库两种存储模式，根据配置自动选择。
 pub struct AppState {
-    /// JWT service for authentication
+    /// JWT 认证服务（用于 token 生成和验证）
     pub jwt_service: Arc<JwtService>,
-    /// Active executors by execution ID
+    /// 活跃的执行器（按执行 ID 索引）
+    /// 用于管理长时间运行的流程执行
     pub executors: DashMap<String, Arc<Executor>>,
-    /// Execution states
+    /// 执行状态（按执行 ID 索引）
+    /// 用于跟踪执行进度和结果
     pub executions: DashMap<String, ExecutionState>,
-    /// Server configuration
+    /// 服务器配置
     pub config: ServerConfig,
-    /// Current storage mode
+    /// 当前存储模式（内存或数据库）
     pub storage_mode: StorageMode,
-    /// Database connection pool (optional)
+    /// 数据库连接池（可选，仅在数据库模式下使用）
     pub db_pool: Option<sqlx::PgPool>,
-    /// Storage backend (memory or postgres)
+    /// 存储后端（内存或 PostgreSQL）
+    /// 通过 trait 抽象，支持运行时切换
     pub storage: Storage,
+    /// 工具配置存储（API 服务、数据源、UDF 配置）
+    config_store: Arc<dyn ConfigStore>,
 }
 
 impl AppState {
@@ -154,6 +171,7 @@ impl AppState {
     pub fn new() -> Self {
         let jwt_config = JwtConfig::default();
         let jwt_service = Arc::new(JwtService::new(jwt_config));
+        let config_store = Arc::new(InMemoryConfigStore::new());
 
         Self {
             jwt_service,
@@ -163,6 +181,7 @@ impl AppState {
             storage_mode: StorageMode::Memory,
             db_pool: None,
             storage: Storage::memory(),
+            config_store,
         }
     }
 
@@ -176,26 +195,50 @@ impl AppState {
         };
         let jwt_service = Arc::new(JwtService::new(jwt_config));
 
-        // Initialize storage backend
-        let (storage_mode, db_pool, storage) = match Storage::new(&config.database).await {
+        // 初始化存储后端
+        // 根据配置选择内存或数据库存储，失败时回退到内存模式
+        let (storage_mode, db_pool, storage, config_store): (
+            StorageMode,
+            Option<sqlx::PgPool>,
+            Storage,
+            Arc<dyn ConfigStore>,
+        ) = match Storage::new(&config.database).await {
             Ok(s) => {
                 let is_db = s.is_database();
                 if is_db {
                     tracing::info!("Database storage initialized successfully");
-                    // Get db_pool for compatibility
-                    let pool = Self::init_database(&config.database).await.ok();
-                    (StorageMode::Database, pool, s)
+                    // 获取数据库连接池
+                    match Self::init_database(&config.database).await {
+                        Ok(pool) => {
+                            // 使用 PostgreSQL 配置存储
+                            let pg_config_store =
+                                Arc::new(PostgresConfigStore::new(pool.clone()));
+                            tracing::info!("Using PostgreSQL config store");
+                            (StorageMode::Database, Some(pool), s, pg_config_store)
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to init database pool for config store: {}, using in-memory",
+                                e
+                            );
+                            let memory_store = Arc::new(InMemoryConfigStore::new());
+                            (StorageMode::Database, None, s, memory_store)
+                        }
+                    }
                 } else {
                     tracing::info!("Using in-memory storage");
-                    (StorageMode::Memory, None, s)
+                    let memory_store = Arc::new(InMemoryConfigStore::new());
+                    (StorageMode::Memory, None, s, memory_store)
                 }
             }
             Err(e) => {
+                // 存储初始化失败时回退到内存模式，确保服务可以启动
                 tracing::error!(
                     "Failed to initialize storage: {}, falling back to memory",
                     e
                 );
-                (StorageMode::Memory, None, Storage::memory())
+                let memory_store = Arc::new(InMemoryConfigStore::new());
+                (StorageMode::Memory, None, Storage::memory(), memory_store)
             }
         };
 
@@ -207,6 +250,7 @@ impl AppState {
             storage_mode,
             db_pool,
             storage,
+            config_store,
         }
     }
 
@@ -232,6 +276,7 @@ impl AppState {
     /// Create with custom JWT config (sync, in-memory only)
     pub fn with_jwt_config(jwt_config: JwtConfig) -> Self {
         let jwt_service = Arc::new(JwtService::new(jwt_config));
+        let config_store = Arc::new(InMemoryConfigStore::new());
 
         Self {
             jwt_service,
@@ -241,7 +286,18 @@ impl AppState {
             storage_mode: StorageMode::Memory,
             db_pool: None,
             storage: Storage::memory(),
+            config_store,
         }
+    }
+
+    /// Get config store reference
+    pub fn config_store(&self) -> &dyn ConfigStore {
+        self.config_store.as_ref()
+    }
+
+    /// Get config store Arc for sharing
+    pub fn config_store_arc(&self) -> Arc<dyn ConfigStore> {
+        self.config_store.clone()
     }
 
     /// Check if using database storage
@@ -518,15 +574,22 @@ impl Default for AppState {
     }
 }
 
-/// Parse tenant ID string to UUID
-/// Uses a static UUID for "default" tenant, otherwise parses or generates from hash
+/// 解析租户 ID 字符串为 UUID
+/// 
+/// 处理三种情况：
+/// 1. "default" 租户：使用固定的已知 UUID
+/// 2. 有效的 UUID 字符串：直接解析
+/// 3. 其他字符串：通过哈希生成确定性 UUID（确保相同字符串生成相同 UUID）
+/// 
+/// 这种设计允许使用字符串租户 ID（如 "tenant-1"），同时保持数据库中的 UUID 类型。
 fn parse_tenant_id(tenant_id: &str) -> Uuid {
     if tenant_id == "default" {
-        // Well-known UUID for "default" tenant
+        // "default" 租户使用固定的已知 UUID
         Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
     } else {
         Uuid::parse_str(tenant_id).unwrap_or_else(|_| {
-            // Generate UUID from hash of the string
+            // 从字符串哈希生成确定性 UUID
+            // 确保相同字符串总是生成相同的 UUID
             use std::collections::hash_map::DefaultHasher;
             use std::hash::{Hash, Hasher};
             let mut hasher = DefaultHasher::new();

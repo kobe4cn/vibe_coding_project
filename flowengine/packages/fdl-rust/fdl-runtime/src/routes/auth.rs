@@ -1,11 +1,14 @@
-//! Authentication routes
+//! 认证路由
+//!
+//! 提供用户认证和 token 刷新功能。
+//! 注意：当前实现为占位符，生产环境需要验证用户名密码。
 
 use crate::state::AppState;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// Login request
+/// 登录请求
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub username: String,
@@ -38,14 +41,15 @@ async fn login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
 ) -> Json<serde_json::Value> {
-    // Placeholder: In production, validate credentials against database
+    // 注意：这是占位符实现，生产环境需要验证用户名密码
+    // 应该查询数据库验证用户凭据，并根据用户信息设置角色
     let tenant_id = req.tenant_id.unwrap_or_else(|| "default".to_string());
 
     match state.jwt_service.generate_access_token(
         &req.username,
         &tenant_id,
-        "BU001",
-        vec!["editor".to_string()],
+        "BU001", // 默认业务单元，应从用户信息中获取
+        vec!["editor".to_string()], // 默认角色，应从用户信息中获取
     ) {
         Ok(access_token) => {
             let refresh_token = state

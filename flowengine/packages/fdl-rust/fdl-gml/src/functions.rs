@@ -1,13 +1,19 @@
-//! GML Built-in Functions (UDF)
+//! GML 内置函数（UDF）
+//!
+//! 提供数学、字符串、日期、数组等常用操作的内置函数。
+//! 函数注册表使用函数指针实现，支持运行时动态调用。
 
 use crate::error::{GmlError, GmlResult};
 use crate::value::Value;
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use std::collections::HashMap;
 
+/// 函数实现类型：接受参数数组，返回结果或错误
 type FunctionImpl = fn(&[Value]) -> GmlResult<Value>;
 
-/// Built-in functions registry
+/// 内置函数注册表
+/// 
+/// 在初始化时注册所有内置函数，提供统一的函数调用接口。
 pub struct Functions {
     registry: HashMap<String, FunctionImpl>,
 }
@@ -80,10 +86,14 @@ impl Functions {
 // Math functions
 
 fn fn_sum(args: &[Value]) -> GmlResult<Value> {
+    // SUM 函数支持两种模式：
+    // 1. SUM(array, 'field') - 对数组中对象的指定字段求和
+    // 2. SUM(a, b, c, ...) - 对多个数值求和
     if args.is_empty() {
         return Ok(Value::Float(0.0));
     }
     if let Some(Value::Array(arr)) = args.first() {
+        // 数组模式：支持按字段求和，如 SUM(orders, 'amount')
         let field = args.get(1).and_then(|v| v.as_str());
         let sum: f64 = arr
             .iter()
@@ -97,6 +107,7 @@ fn fn_sum(args: &[Value]) -> GmlResult<Value> {
             .sum();
         Ok(Value::Float(sum))
     } else {
+        // 多参数模式：直接对参数求和
         let sum: f64 = args.iter().filter_map(|v| v.as_float()).sum();
         Ok(Value::Float(sum))
     }
@@ -379,11 +390,14 @@ fn fn_format_date(args: &[Value]) -> GmlResult<Value> {
 }
 
 fn apply_date_offset(dt: DateTime<Local>, offset: &str) -> GmlResult<DateTime<Local>> {
+    // 解析日期偏移量字符串，格式如 "1d", "2w", "-3M" 等
+    // 支持单位：s(秒), m(分钟), h(小时), d(天), w(周), M(月), y(年)
     let offset = offset.trim();
     if offset.is_empty() || offset == "0" {
         return Ok(dt);
     }
 
+    // 分离数字和单位：如果以字母结尾，则最后一个是单位；否则默认为天
     let (num_str, unit) = if offset.ends_with(|c: char| c.is_alphabetic()) {
         let unit_start = offset.len() - 1;
         (&offset[..unit_start], &offset[unit_start..])
@@ -401,8 +415,9 @@ fn apply_date_offset(dt: DateTime<Local>, offset: &str) -> GmlResult<DateTime<Lo
         "h" => Duration::hours(num),
         "d" => Duration::days(num),
         "w" => Duration::weeks(num),
-        "M" => Duration::days(num * 30),  // Approximate month
-        "y" => Duration::days(num * 365), // Approximate year
+        // 注意：月和年使用近似值，因为月份和年份长度不固定
+        "M" => Duration::days(num * 30),  // 近似月份（30天）
+        "y" => Duration::days(num * 365), // 近似年份（365天）
         _ => {
             return Err(GmlError::InvalidArgument(format!(
                 "Invalid offset unit: {}",
@@ -538,14 +553,18 @@ fn fn_md5(args: &[Value]) -> GmlResult<Value> {
         .ok_or(GmlError::InvalidArgument(
             "MD5 requires a string".to_string(),
         ))?;
-    // Simple MD5 hash placeholder - in production use a proper crypto library
+    // 注意：这是简化的 MD5 实现，仅用于演示
+    // 生产环境应使用标准的加密库（如 md5 crate）以确保安全性和正确性
     let hash = format!("{:x}", md5_hash(s.as_bytes()));
     Ok(Value::String(hash))
 }
 
-// Simple MD5 implementation for demo purposes
+// 简化的 MD5 哈希实现（仅用于演示）
+// 
+// 警告：这不是真正的 MD5 算法，仅用于演示目的。
+// 生产环境必须使用标准的 MD5 实现（如 md5 crate）。
 fn md5_hash(data: &[u8]) -> u128 {
-    // This is a placeholder - use md5 crate in production
+    // 这是占位符实现 - 生产环境应使用 md5 crate
     let mut hash: u128 = 0;
     for (i, &byte) in data.iter().enumerate() {
         hash = hash.wrapping_add((byte as u128).wrapping_mul((i as u128).wrapping_add(1)));

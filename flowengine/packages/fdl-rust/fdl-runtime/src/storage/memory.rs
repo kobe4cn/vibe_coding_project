@@ -1,4 +1,12 @@
-//! In-memory storage implementation
+//! 内存存储实现
+//!
+//! 使用 DashMap 实现线程安全的并发访问。
+//! 适用于开发和测试，数据在服务重启后丢失。
+//! 
+//! 特点：
+//! - 快速：无 I/O 操作
+//! - 简单：无需数据库配置
+//! - 临时：数据不持久化
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -10,7 +18,10 @@ use super::traits::{
     ListResult, StorageError, UpdateFlowRequest, VersionRecord,
 };
 
-/// In-memory storage implementation
+/// 内存存储实现
+/// 
+/// 使用 DashMap 存储流程、版本和执行记录。
+/// DashMap 提供线程安全的并发访问，适合多线程环境。
 pub struct MemoryStorage {
     flows: DashMap<Uuid, FlowRecord>,
     versions: DashMap<Uuid, VersionRecord>,
@@ -108,7 +119,7 @@ impl FlowStorage for MemoryStorage {
     }
 
     async fn delete_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<(), StorageError> {
-        // Check tenant ownership
+        // 检查租户所有权（确保多租户隔离）
         if !self
             .flows
             .get(&flow_id)
@@ -121,7 +132,7 @@ impl FlowStorage for MemoryStorage {
             )));
         }
 
-        // Delete versions
+        // 级联删除：先删除所有版本
         let version_ids: Vec<Uuid> = self
             .versions
             .iter()
@@ -132,7 +143,7 @@ impl FlowStorage for MemoryStorage {
             self.versions.remove(&vid);
         }
 
-        // Delete flow
+        // 删除流程
         self.flows.remove(&flow_id);
         Ok(())
     }
@@ -141,7 +152,7 @@ impl FlowStorage for MemoryStorage {
         &self,
         req: CreateVersionRequest,
     ) -> Result<VersionRecord, StorageError> {
-        // Get next version number
+        // 获取下一个版本号：查找该流程的最大版本号并加 1
         let version_number = self
             .versions
             .iter()

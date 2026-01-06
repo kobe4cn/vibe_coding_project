@@ -1,4 +1,9 @@
-//! Axum authentication middleware
+//! Axum 认证中间件
+//!
+//! 提供 HTTP 请求的认证拦截和 claims 注入功能，支持：
+//! - Bearer token 验证
+//! - 开发模式（可选认证）
+//! - Claims 注入到请求扩展中
 
 use crate::error::AuthError;
 use crate::jwt::{Claims, JwtService};
@@ -12,7 +17,9 @@ use axum::{
 use chrono::Utc;
 use std::sync::Arc;
 
-/// Authentication layer for Axum
+/// Axum 认证层
+/// 
+/// 配置认证中间件的行为，包括是否必需认证、开发模式等。
 #[derive(Clone)]
 pub struct AuthLayer {
     jwt_service: Arc<JwtService>,
@@ -84,9 +91,12 @@ impl AuthLayer {
     }
 }
 
-/// Authentication middleware function
+/// 认证中间件函数
+/// 
+/// 从请求头中提取 Bearer token，验证后注入 claims 到请求扩展中。
+/// 支持可选认证和开发模式，方便开发和测试。
 pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next: Next) -> Response {
-    // Extract Authorization header
+    // 提取 Authorization 头
     let auth_header = request
         .headers()
         .get("Authorization")
@@ -94,10 +104,10 @@ pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next:
 
     let claims = match auth_header {
         Some(header) => {
-            // Parse Bearer token
+            // 解析 Bearer token
             if !header.starts_with("Bearer ") {
                 if layer.optional {
-                    // In dev mode, use default claims
+                    // 可选认证模式：开发模式下使用默认 claims
                     if layer.dev_mode {
                         layer.dev_claims.clone()
                     } else {
@@ -107,12 +117,12 @@ pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next:
                     return AuthError::InvalidAuthHeader.into_response();
                 }
             } else {
-                let token = &header[7..];
+                let token = &header[7..]; // 跳过 "Bearer " 前缀
                 match layer.jwt_service.validate_token(token) {
                     Ok(claims) => Some(claims),
                     Err(e) => {
                         if layer.optional {
-                            // In dev mode, use default claims on validation failure
+                            // 可选认证模式：验证失败时，开发模式使用默认 claims
                             if layer.dev_mode {
                                 layer.dev_claims.clone()
                             } else {
@@ -127,7 +137,7 @@ pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next:
         }
         None => {
             if layer.optional {
-                // In dev mode, use default claims when no token provided
+                // 没有 token：可选认证模式下，开发模式使用默认 claims
                 if layer.dev_mode {
                     layer.dev_claims.clone()
                 } else {
@@ -139,7 +149,7 @@ pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next:
         }
     };
 
-    // Insert claims into request extensions
+    // 将 claims 注入到请求扩展中，供后续处理器使用
     if let Some(claims) = claims {
         request.extensions_mut().insert(claims);
     }

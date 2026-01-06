@@ -1,4 +1,9 @@
-//! Storage traits
+//! 存储 trait 定义
+//!
+//! 定义存储后端的统一接口，包括：
+//! - FlowStorage trait：所有存储后端必须实现的接口
+//! - 数据记录类型：FlowRecord、VersionRecord、ExecutionRecord
+//! - 错误类型：StorageError
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -6,7 +11,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-/// Storage error types
+/// 存储错误类型
+/// 
+/// 涵盖所有存储操作可能出现的错误。
 #[derive(Error, Debug)]
 pub enum StorageError {
     #[error("Connection error: {0}")]
@@ -106,10 +113,13 @@ pub struct ListResult<T> {
     pub total: usize,
 }
 
-/// Flow storage trait
+/// 流程存储 trait
+/// 
+/// 定义所有存储后端必须实现的统一接口。
+/// 所有操作都包含 tenant_id 参数，确保多租户数据隔离。
 #[async_trait]
 pub trait FlowStorage: Send + Sync {
-    // Flow operations
+    // 流程操作
     async fn create_flow(&self, req: CreateFlowRequest) -> Result<FlowRecord, StorageError>;
     async fn get_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<FlowRecord, StorageError>;
     async fn list_flows(

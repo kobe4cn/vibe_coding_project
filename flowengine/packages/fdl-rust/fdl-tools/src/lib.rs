@@ -5,19 +5,35 @@
 //!
 //! ## Tool Types
 //!
-//! - `api://` - HTTP API calls
-//! - `db://` - Database operations
-//! - `mcp://` - MCP service calls
-//! - `flow://` - Sub-flow invocation
-//! - `agent://` - AI agent calls
+//! - `api://service-name/endpoint` - HTTP API calls
+//! - `db://datasource-name/udf` - Database operations with UDF
+//! - `mcp://server/tool` - MCP service calls
+//! - `flow://flow-id` - Sub-flow invocation
+//! - `agent://model/prompt` - AI agent calls
+//!
+//! ## Configuration
+//!
+//! Tools are configured through the config module:
+//! - `ApiServiceConfig` - REST API service configuration
+//! - `DatasourceConfig` - Database datasource configuration
+//! - `UdfConfig` - User-defined function configuration
 
 pub mod api;
+pub mod config;
 pub mod database;
 pub mod error;
+pub mod managed;
 pub mod mcp;
+pub mod postgres_config;
 pub mod registry;
 
+pub use config::{
+    ApiServiceConfig, AuthType, ConfigStore, DatabaseType, DatasourceConfig, InMemoryConfigStore,
+    UdfConfig, UdfType,
+};
 pub use error::{ToolError, ToolResult};
+pub use managed::{ManagedToolRegistry, ParsedUri};
+pub use postgres_config::PostgresConfigStore;
 pub use registry::{ToolHandler, ToolRegistry};
 
 use serde_json::Value;

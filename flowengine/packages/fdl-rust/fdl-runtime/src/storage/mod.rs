@@ -1,7 +1,10 @@
-//! Storage abstraction layer
+//! 存储抽象层
 //!
-//! Provides a unified interface for flow storage that can use either
-//! in-memory storage or PostgreSQL database.
+//! 提供统一的存储接口，支持两种后端：
+//! - 内存存储：用于开发和测试
+//! - PostgreSQL 存储：用于生产环境
+//!
+//! 通过 trait 抽象实现存储后端的可替换性。
 
 mod memory;
 mod postgres;
@@ -15,7 +18,10 @@ use crate::db::Database;
 use crate::state::DatabaseConfig;
 use std::sync::Arc;
 
-/// Storage backend type
+/// 存储后端类型
+/// 
+/// 枚举类型，支持内存和数据库两种存储方式。
+/// 运行时根据配置选择，失败时回退到内存存储。
 pub enum Storage {
     Memory(MemoryStorage),
     Postgres(PostgresStorage),

@@ -9,6 +9,7 @@ import { StorageProviderComponent, checkMigrationNeeded } from '@/lib/storage'
 import { MigrationDialog } from '@/components/ui/MigrationDialog'
 import { FlowListPage } from '@/pages/FlowListPage'
 import { FlowEditorPage } from '@/pages/FlowEditorPage'
+import { ToolsPage } from '@/pages/ToolsPage'
 import { useEditorStore } from '@/stores/editorStore'
 
 // Helper function to check if it's night time (6PM - 6AM)
@@ -94,6 +95,7 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/" element={<FlowListPage />} />
+      <Route path="/tools" element={<ToolsPage />} />
       <Route path="/editor/:flowId" element={<FlowEditorPage />} />
       <Route path="/editor/:flowId/version/:versionId" element={<FlowEditorPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

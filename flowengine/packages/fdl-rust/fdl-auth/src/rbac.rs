@@ -1,9 +1,14 @@
-//! Role-based access control
+//! 基于角色的访问控制（RBAC）
+//!
+//! 实现细粒度的权限控制，通过角色到权限的映射来管理访问权限。
+//! 支持多角色，用户可以有多个角色，权限取并集。
 
 use crate::jwt::Claims;
 use std::collections::HashSet;
 
-/// Permission types
+/// 权限类型
+/// 
+/// 定义了系统中所有可用的权限，包括流程、版本、管理和系统权限。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Permission {
     // Flow permissions
@@ -42,27 +47,34 @@ pub enum Role {
 }
 
 impl Role {
-    /// Get permissions for a role
+    /// 获取角色的权限集合
+    /// 
+    /// 每个角色都有预定义的权限集合，采用最小权限原则。
+    /// SuperAdmin 拥有所有权限，包括系统管理权限。
     pub fn permissions(&self) -> HashSet<Permission> {
         let mut perms = HashSet::new();
 
         match self {
             Role::Viewer => {
+                // 查看者：只能读取流程和版本
                 perms.insert(Permission::FlowRead);
                 perms.insert(Permission::VersionRead);
             }
             Role::Editor => {
+                // 编辑者：可以读取和编辑流程，但不能执行或删除
                 perms.insert(Permission::FlowRead);
                 perms.insert(Permission::FlowWrite);
                 perms.insert(Permission::VersionRead);
                 perms.insert(Permission::VersionWrite);
             }
             Role::Executor => {
+                // 执行者：可以读取和执行流程，但不能编辑
                 perms.insert(Permission::FlowRead);
                 perms.insert(Permission::FlowExecute);
                 perms.insert(Permission::VersionRead);
             }
             Role::Admin => {
+                // 管理员：拥有租户内所有权限（除系统管理）
                 perms.insert(Permission::FlowRead);
                 perms.insert(Permission::FlowWrite);
                 perms.insert(Permission::FlowDelete);
@@ -74,8 +86,9 @@ impl Role {
                 perms.insert(Permission::ConfigManage);
             }
             Role::SuperAdmin => {
+                // 超级管理员：拥有所有权限，包括系统管理
                 perms.insert(Permission::SystemAdmin);
-                // Super admin has all permissions
+                // 显式添加所有权限，确保完整性
                 for perm in [
                     Permission::FlowRead,
                     Permission::FlowWrite,
@@ -109,7 +122,10 @@ impl Role {
     }
 }
 
-/// Check if claims have a specific permission
+/// 检查 claims 是否具有特定权限
+/// 
+/// 遍历用户的所有角色，如果任一角色拥有该权限，则返回 true。
+/// 这实现了多角色的权限并集逻辑。
 pub fn has_permission(claims: &Claims, permission: Permission) -> bool {
     for role_str in &claims.roles {
         if let Some(role) = Role::from_strs(role_str)

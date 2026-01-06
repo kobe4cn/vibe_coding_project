@@ -1,9 +1,16 @@
-//! FDL type definitions
+//! FDL 类型定义
+//!
+//! 定义了流程定义语言（FDL）的核心数据结构，包括：
+//! - Flow: 流程定义
+//! - FlowNode: 流程节点
+//! - NodeType: 节点类型枚举
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Flow definition
+/// 流程定义
+/// 
+/// 包含流程的元数据、参数定义、全局变量和节点定义。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Flow {
     /// Flow metadata
@@ -150,7 +157,19 @@ pub struct FlowNode {
 }
 
 impl FlowNode {
-    /// Determine the node type from its fields
+    /// 根据节点字段确定节点类型
+    /// 
+    /// 节点类型通过检查特定字段的存在来确定，优先级顺序：
+    /// 1. exec -> Exec（工具调用）
+    /// 2. agent -> Agent（AI 代理）
+    /// 3. mcp -> Mcp（MCP 协议）
+    /// 4. when + then -> Condition（条件分支）
+    /// 5. case -> Switch（多分支）
+    /// 6. wait -> Delay（延迟）
+    /// 7. each -> Each（迭代）
+    /// 8. vars + when + node -> Loop（循环）
+    /// 9. with_expr -> Mapping（数据映射）
+    /// 10. 其他 -> Unknown（未知类型）
     pub fn node_type(&self) -> NodeType {
         if self.exec.is_some() {
             NodeType::Exec

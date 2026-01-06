@@ -1,7 +1,10 @@
-//! State persistence for flow execution
+//! 流程执行状态持久化
 //!
-//! Provides snapshot-based persistence for long-running flow executions.
-//! Supports saving execution state and recovering from failures.
+//! 提供基于快照的持久化机制，支持：
+//! - 长时间运行的流程执行状态保存
+//! - 从失败中恢复执行
+//! - 执行历史记录
+//! - 多租户隔离
 
 use crate::context::ExecutionContext;
 use crate::error::{ExecutorError, ExecutorResult};
@@ -13,7 +16,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// Execution status
+/// 执行状态
+/// 
+/// 表示流程执行的当前状态，用于跟踪执行进度和恢复执行。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     /// Execution is pending (not started)
@@ -59,7 +64,13 @@ pub enum NodeStatus {
     Skipped,
 }
 
-/// Execution snapshot for persistence
+/// 执行快照：用于持久化的执行状态快照
+/// 
+/// 快照包含恢复执行所需的所有信息：
+/// - 执行上下文（变量、输入）
+/// - 节点执行状态（已完成、失败、进行中）
+/// - 执行历史记录
+/// - 元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionSnapshot {
     /// Unique execution ID
@@ -163,16 +174,19 @@ impl ExecutionSnapshot {
     }
 }
 
-/// Persistence configuration
+/// 持久化配置
+/// 
+/// 控制何时和如何保存执行快照，平衡性能和可靠性。
 #[derive(Debug, Clone)]
 pub struct PersistenceConfig {
-    /// Interval between automatic snapshots (in completed nodes)
+    /// 自动快照间隔（按完成的节点数计算）
+    /// 例如：5 表示每完成 5 个节点保存一次快照
     pub snapshot_interval: u32,
-    /// Maximum history records to keep
+    /// 最大历史记录数（防止内存/存储无限增长）
     pub max_history_size: usize,
-    /// Whether to persist on every node completion
+    /// 是否在每个节点完成时持久化（更频繁但更安全）
     pub persist_on_node_complete: bool,
-    /// Async write mode (non-blocking)
+    /// 异步写入模式（非阻塞，提高性能但可能丢失最新状态）
     pub async_write: bool,
 }
 

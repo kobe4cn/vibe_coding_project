@@ -1,6 +1,11 @@
-//! FDL Runtime Server
+//! FDL Runtime 服务器
 //!
-//! Main entry point for the FDL runtime service.
+//! FDL 运行时服务的主入口点，提供：
+//! - REST API 端点（流程管理、执行等）
+//! - WebSocket 支持（实时执行更新）
+//! - OpenAPI 文档（Swagger UI）
+//! - 多租户支持
+//! - 数据库和内存存储后端
 
 use axum::{Json, Router, routing::get};
 use fdl_runtime::{
@@ -38,10 +43,11 @@ struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
-    // Load .env file if it exists (ignores errors if file doesn't exist)
+    // 加载 .env 文件（如果存在，忽略文件不存在的错误）
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
+    // 初始化日志追踪系统
+    // 支持通过 RUST_LOG 环境变量控制日志级别
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG")
@@ -50,7 +56,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Load configuration
+    // 从环境变量加载配置
     let config = ServerConfig::from_env();
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
 
@@ -80,22 +86,23 @@ async fn main() {
         tracing::info!("  Pool size: {}", config.database.pool_size);
     }
 
-    // Create application state
+    // 创建应用状态（共享所有处理器）
+    // 包含 JWT 服务、存储后端、执行器管理等
     let state = Arc::new(AppState::with_config(config).await);
 
-    // Build router
+    // 构建路由
     let app = Router::new()
-        // Root endpoint
+        // 根端点（服务信息）
         .route("/", get(root))
-        // Swagger UI (also provides /openapi.json endpoint)
+        // Swagger UI（同时提供 /openapi.json 端点）
         .merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", ApiDoc::openapi()))
-        // API routes
+        // API 路由（流程管理、执行等）
         .nest("/api", routes::api_routes(state.clone()))
-        // WebSocket endpoint
+        // WebSocket 端点（实时执行更新）
         .route("/ws", get(ws::ws_handler))
-        // Middleware
-        .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
+        // 中间件
+        .layer(TraceLayer::new_for_http()) // HTTP 请求追踪
+        .layer(CorsLayer::permissive()) // CORS 支持（开发模式）
         .with_state(state);
 
     // Start server

@@ -1,9 +1,14 @@
-//! GML value types
+//! GML 值类型
+//!
+//! 定义了 GML 语言中所有可能的值类型，支持 JSON 序列化/反序列化。
+//! 使用 untagged 枚举实现，确保 JSON 格式的兼容性。
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// GML value type representing all possible values in GML
+/// GML 值类型，表示 GML 中所有可能的值
+/// 
+/// 使用 untagged 枚举确保序列化为标准 JSON 格式（无类型标签）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(untagged)]
 pub enum Value {
@@ -74,7 +79,14 @@ impl Value {
         matches!(self, Value::Null)
     }
 
-    /// Check if value is truthy
+    /// 检查值是否为真值（truthy）
+    /// 
+    /// GML 的真值规则：
+    /// - Null: false
+    /// - Bool: 直接使用布尔值
+    /// - 数字: 0 为 false，非 0 为 true
+    /// - 字符串: 空字符串为 false，非空为 true
+    /// - 数组/对象: 空集合为 false，非空为 true
     pub fn is_truthy(&self) -> bool {
         match self {
             Value::Null => false,

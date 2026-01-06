@@ -1,4 +1,7 @@
-//! Tool registry and handler trait
+//! 工具注册表和处理器 trait
+//!
+//! 提供工具的统一注册和调用机制，支持多种工具类型（API、数据库、MCP 等）。
+//! 通过 trait 抽象实现工具的可扩展性。
 
 use crate::error::ToolResult;
 use crate::{ToolContext, ToolOutput};
@@ -7,7 +10,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Tool handler trait
+/// 工具处理器 trait
+/// 
+/// 所有工具类型（API、数据库、MCP 等）都必须实现此 trait。
+/// 提供统一的执行接口和元数据查询功能。
 #[async_trait]
 pub trait ToolHandler: Send + Sync {
     /// Execute the tool with the given arguments
@@ -31,7 +37,10 @@ pub struct ToolMetadata {
     pub output_schema: Option<Value>,
 }
 
-/// Tool registry for managing tool handlers
+/// 工具注册表
+/// 
+/// 管理所有已注册的工具处理器，支持按工具类型查找和执行。
+/// 使用 Arc 实现共享所有权，允许多线程安全访问。
 pub struct ToolRegistry {
     handlers: HashMap<String, Arc<dyn ToolHandler>>,
 }
@@ -60,7 +69,12 @@ impl ToolRegistry {
         self.handlers.get(tool_type).cloned()
     }
 
-    /// Execute a tool by URI
+    /// 通过 URI 执行工具
+    /// 
+    /// URI 格式：`tool_type://path?options`
+    /// 例如：`api://crm-service/customer?timeout=5000`
+    /// 
+    /// 解析 URI 后，根据工具类型查找对应的处理器并执行。
     pub async fn execute(
         &self,
         uri: &str,

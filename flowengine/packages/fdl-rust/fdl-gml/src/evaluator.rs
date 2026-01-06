@@ -38,27 +38,40 @@ impl Evaluator {
         let mut output = HashMap::new();
         let mut has_assignments = false;
 
+        // 按顺序执行所有语句，赋值语句的结果可以在后续表达式中使用
         for stmt in &script.statements {
             match stmt {
                 Statement::Assignment(assign) => {
                     has_assignments = true;
                     let value = self.eval_expr(&assign.expression, context, &output)?;
-                    // Store both temp and regular variables in output for use in subsequent expressions
-                    // Temp variables (with $ prefix) will be filtered out in final output (line 66)
+                    // 将临时变量和普通变量都存储在 output 中，供后续表达式使用
+                    // 临时变量（$ 前缀）在最终输出时会被过滤掉
                     output.insert(assign.field.clone(), value);
                 }
                 Statement::Expression(expr) => {
-                    result = self.eval_expr(expr, context, &output)?;
+                    // 特殊处理展开运算符：将对象属性展开到输出中
+                    // 这允许 `...data` 作为独立语句使用，将 data 的属性合并到输出
+                    if let Expression::Spread(inner) = expr {
+                        let spread_val = self.eval_expr(inner, context, &output)?;
+                        if let Value::Object(spread_obj) = spread_val {
+                            has_assignments = true; // 展开操作视为赋值
+                            output.extend(spread_obj);
+                        }
+                    } else {
+                        // 表达式语句：计算表达式值作为结果（用于单值映射场景）
+                        result = self.eval_expr(expr, context, &output)?;
+                    }
                 }
                 Statement::Return(expr) => {
+                    // return 语句：立即返回，不执行后续语句
                     return self.eval_expr(expr, context, &output);
                 }
             }
         }
 
-        // Determine output mode
+        // 根据是否有赋值语句决定输出模式
         if has_assignments {
-            // Filter out temp variables
+            // 有赋值语句：返回对象，过滤掉临时变量（$ 前缀）
             let final_output: HashMap<String, Value> = output
                 .into_iter()
                 .filter(|(k, _)| !k.starts_with('$'))
@@ -70,6 +83,7 @@ impl Evaluator {
                 Ok(Value::Object(final_output))
             }
         } else {
+            // 无赋值语句：返回最后一个表达式的值（单值映射模式）
             Ok(result)
         }
     }
@@ -84,7 +98,8 @@ impl Evaluator {
             Expression::Literal(v) => Ok(v.clone()),
 
             Expression::Variable(path) => {
-                // First check scope, then context
+                // 变量解析优先级：先检查作用域（赋值语句创建的变量），再检查上下文
+                // 这允许赋值语句的结果覆盖上下文中的同名变量
                 if let Some(first) = path.first()
                     && let Some(value) = scope.get(first)
                 {
@@ -103,6 +118,7 @@ impl Evaluator {
                 let target_val = self.eval_expr(target, context, scope)?;
                 match (target_val, index) {
                     (Value::Array(arr), IndexType::Number(i)) => {
+                        // 支持负索引：-1 表示最后一个元素，-2 表示倒数第二个，以此类推
                         let idx = if *i < 0 {
                             (arr.len() as i64 + *i) as usize
                         } else {
@@ -114,12 +130,14 @@ impl Evaluator {
                         })
                     }
                     (Value::Array(arr), IndexType::Last) => {
+                        // # 索引：获取最后一个元素
                         arr.last().cloned().ok_or(GmlError::IndexOutOfBounds {
                             index: -1,
                             length: arr.len(),
                         })
                     }
                     (Value::Array(arr), IndexType::Expression(idx_expr)) => {
+                        // 表达式索引：运行时计算索引值
                         let idx_val = self.eval_expr(idx_expr, context, scope)?;
                         let idx = idx_val.as_int().ok_or(GmlError::TypeError {
                             expected: "int".to_string(),
@@ -133,11 +151,13 @@ impl Evaluator {
                             })
                     }
                     (Value::Object(obj), IndexType::Expression(key_expr)) => {
+                        // 对象动态键访问：使用表达式计算键名
                         let key_val = self.eval_expr(key_expr, context, scope)?;
                         let key = key_val.as_str().ok_or(GmlError::TypeError {
                             expected: "string".to_string(),
                             actual: key_val.type_name().to_string(),
                         })?;
+                        // 键不存在时返回 Null，而不是错误（空值安全设计）
                         Ok(obj.get(key).cloned().unwrap_or(Value::Null))
                     }
                     (Value::Null, _) => Ok(Value::Null),
@@ -151,7 +171,8 @@ impl Evaluator {
             Expression::Binary { left, op, right } => {
                 let left_val = self.eval_expr(left, context, scope)?;
 
-                // Short-circuit evaluation for && and ||
+                // 短路求值：对于 && 和 ||，如果左操作数已能确定结果，则不计算右操作数
+                // 这提高了性能，也允许安全的空值检查，如 "obj && obj.field"
                 match op {
                     BinaryOp::And => {
                         if !left_val.is_truthy() {
@@ -338,6 +359,7 @@ impl Evaluator {
             BinaryOp::Sub => self.numeric_op(left, right, |a, b| a - b, |a, b| a - b),
             BinaryOp::Mul => self.numeric_op(left, right, |a, b| a * b, |a, b| a * b),
             BinaryOp::Div => {
+                // 除零检查：防止运行时错误
                 if let Some(0) = right.as_int() {
                     return Err(GmlError::DivisionByZero);
                 }
@@ -407,14 +429,18 @@ impl Evaluator {
     }
 
     fn values_equal(&self, left: &Value, right: &Value) -> bool {
+        // 值相等性比较：支持类型转换和浮点数精度处理
         match (left, right) {
             (Value::Null, Value::Null) => true,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Int(a), Value::Int(b)) => a == b,
+            // 浮点数比较使用 epsilon 处理精度问题，避免 0.1 + 0.2 != 0.3 的问题
             (Value::Float(a), Value::Float(b)) => (a - b).abs() < f64::EPSILON,
+            // 整数和浮点数可以比较（类型提升）
             (Value::Int(a), Value::Float(b)) => (*a as f64 - b).abs() < f64::EPSILON,
             (Value::Float(a), Value::Int(b)) => (a - *b as f64).abs() < f64::EPSILON,
             (Value::String(a), Value::String(b)) => a == b,
+            // 数组深度比较：递归比较每个元素
             (Value::Array(a), Value::Array(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| self.values_equal(x, y))
             }

@@ -1,4 +1,12 @@
-//! PostgreSQL storage implementation
+//! PostgreSQL 存储实现
+//!
+//! 使用 SQLx 实现 PostgreSQL 数据库存储。
+//! 所有查询都包含 tenant_id 条件，确保多租户数据隔离。
+//! 
+//! 特点：
+//! - 持久化：数据存储在数据库中
+//! - 事务支持：通过数据库事务保证一致性
+//! - 查询优化：使用索引和分页提高性能
 
 use async_trait::async_trait;
 use sqlx::Row;
@@ -11,7 +19,9 @@ use super::traits::{
 };
 use crate::db::Database;
 
-/// PostgreSQL storage implementation
+/// PostgreSQL 存储实现
+/// 
+/// 封装数据库连接，实现 FlowStorage trait。
 pub struct PostgresStorage {
     db: Arc<Database>,
 }
@@ -79,14 +89,14 @@ impl FlowStorage for PostgresStorage {
         tenant_id: Uuid,
         opts: ListOptions,
     ) -> Result<ListResult<FlowRecord>, StorageError> {
-        // Get total count
+        // 获取总数（用于分页信息）
         let count_row = sqlx::query("SELECT COUNT(*) as count FROM flows WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_one(self.db.pool())
             .await?;
         let total: i64 = count_row.get("count");
 
-        // Get paginated results
+        // 获取分页结果：按更新时间倒序排列，支持 limit 和 offset
         let rows = sqlx::query(
             r#"
             SELECT id, tenant_id, name, description, thumbnail, created_at, updated_at
@@ -127,6 +137,8 @@ impl FlowStorage for PostgresStorage {
         flow_id: Uuid,
         req: UpdateFlowRequest,
     ) -> Result<FlowRecord, StorageError> {
+        // 使用 COALESCE 实现部分更新：如果参数为 NULL，则保持原值
+        // 这允许只更新部分字段，而不需要提供所有字段
         let row = sqlx::query(
             r#"
             UPDATE flows
@@ -179,7 +191,8 @@ impl FlowStorage for PostgresStorage {
         &self,
         req: CreateVersionRequest,
     ) -> Result<VersionRecord, StorageError> {
-        // Get next version number
+        // 获取下一个版本号：使用 SQL 查询当前最大版本号并加 1
+        // COALESCE 确保如果没有版本时返回 1
         let version_row = sqlx::query(
             "SELECT COALESCE(MAX(version_number), 0) + 1 as next_version FROM flow_versions WHERE flow_id = $1"
         )

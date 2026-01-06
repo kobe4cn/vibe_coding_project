@@ -212,6 +212,7 @@ export function FlowCanvas() {
         snapToGrid={snapToGrid}
         snapGrid={[gridSize, gridSize]}
         fitView
+        fitViewOptions={{ padding: 0.2, maxZoom: 0.8, minZoom: 0.8 }}
         deleteKeyCode={['Backspace', 'Delete']}
         onMoveEnd={(_, viewport) => setZoom(viewport.zoom)}
         proOptions={{ hideAttribution: true }}

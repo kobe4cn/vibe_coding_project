@@ -20,6 +20,7 @@ export function Toolbar() {
     toggleMinimap,
     viewMode,
     setViewMode,
+    zoom,
   } = useEditorStore()
 
   const canUndo = historyIndex > 0
@@ -42,6 +43,9 @@ export function Toolbar() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
           </svg>
         </button>
+        <span className="px-1.5 text-xs text-gray-600 font-medium min-w-[40px] text-center" title="当前缩放比例">
+          {Math.round(zoom * 100)}%
+        </span>
         <button
           onClick={() => zoomIn()}
           className="p-1.5 hover:bg-gray-100 rounded text-gray-600"

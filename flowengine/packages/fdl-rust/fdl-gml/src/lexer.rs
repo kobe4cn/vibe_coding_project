@@ -1,8 +1,13 @@
 //! GML Lexer - tokenizes GML source code
+//!
+//! 词法分析器将 GML 源代码转换为 token 序列，为后续的语法分析做准备。
+//! 采用单字符前瞻（lookahead）策略来区分多字符操作符（如 ==, =>, ...）。
 
 use crate::error::{GmlError, GmlResult};
 
-/// Token types
+/// Token 类型
+/// 
+/// 定义了 GML 语言中所有可能的词法单元，包括字面量、标识符、关键字、操作符和分隔符。
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Literals
@@ -179,11 +184,13 @@ impl<'a> Lexer<'a> {
     }
 
     fn minus_or_number(&mut self) -> GmlResult<Token> {
-        self.advance(); // consume '-'
+        self.advance(); // 消费 '-'
+        // 注意：即使后面是数字，也返回 Minus token，让解析器处理负数的优先级
+        // 这样可以正确处理表达式如 "a - 5" 和 "-5"，避免词法分析器需要理解语法上下文
         if let Some(ch) = self.peek()
             && ch.is_ascii_digit()
         {
-            // Negative number - but we return minus and let parser handle it
+            // 负数情况：返回 Minus token，由解析器处理一元负号
             return Ok(Token::Minus);
         }
         Ok(Token::Minus)
@@ -356,7 +363,8 @@ impl<'a> Lexer<'a> {
             if ch.is_ascii_digit() {
                 self.advance();
             } else if ch == '.' && !has_dot {
-                // Check if next char is a digit (not a method call)
+                // 需要区分小数点和方法调用：如果 '.' 后面是数字，则是浮点数；否则是方法调用
+                // 例如 "3.14" 是浮点数，而 "arr.length()" 中的 '.' 是方法调用
                 let next_pos = pos + 1;
                 if next_pos < self.input.len() {
                     let next_ch = self.input[next_pos..].chars().next();

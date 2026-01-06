@@ -1,22 +1,29 @@
-//! JSON-RPC 2.0 protocol implementation
+//! JSON-RPC 2.0 协议实现
+//!
+//! 提供 JSON-RPC 2.0 标准的请求/响应处理，支持：
+//! - 标准请求和通知（无 ID）
+//! - 错误响应
+//! - 批量请求（类型定义）
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// JSON-RPC version
+/// JSON-RPC 版本号（必须为 "2.0"）
 pub const JSONRPC_VERSION: &str = "2.0";
 
-/// JSON-RPC request
+/// JSON-RPC 请求
+/// 
+/// 符合 JSON-RPC 2.0 规范的请求结构。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
-    /// JSON-RPC version (must be "2.0")
+    /// JSON-RPC 版本（必须为 "2.0"）
     pub jsonrpc: String,
-    /// Method name
+    /// 方法名
     pub method: String,
-    /// Parameters (optional)
+    /// 参数（可选）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub params: Option<Value>,
-    /// Request ID (optional for notifications)
+    /// 请求 ID（可选，无 ID 表示通知请求）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<JsonRpcId>,
 }
@@ -57,7 +64,11 @@ pub struct JsonRpcError {
     pub data: Option<Value>,
 }
 
-/// Standard JSON-RPC error codes
+/// 标准 JSON-RPC 错误代码
+/// 
+/// 遵循 JSON-RPC 2.0 规范：
+/// - -32700 到 -32603：标准错误代码
+/// - -32000 到 -32099：自定义错误代码（保留范围）
 pub mod error_codes {
     pub const PARSE_ERROR: i32 = -32700;
     pub const INVALID_REQUEST: i32 = -32600;
@@ -65,7 +76,7 @@ pub mod error_codes {
     pub const INVALID_PARAMS: i32 = -32602;
     pub const INTERNAL_ERROR: i32 = -32603;
 
-    // Custom error codes (-32000 to -32099)
+    // 自定义错误代码（-32000 到 -32099 是保留范围）
     pub const EXECUTION_ERROR: i32 = -32000;
     pub const AUTH_ERROR: i32 = -32001;
     pub const NOT_FOUND: i32 = -32002;
@@ -88,7 +99,10 @@ impl JsonRpcRequest {
         self.id.is_none()
     }
 
-    /// Validate the request
+    /// 验证请求
+    /// 
+    /// 检查 JSON-RPC 版本和方法名的有效性。
+    /// 方法名不能为空，且不能以 "rpc." 开头（保留前缀）。
     pub fn validate(&self) -> Result<(), JsonRpcError> {
         if self.jsonrpc != JSONRPC_VERSION {
             return Err(JsonRpcError {
@@ -97,6 +111,7 @@ impl JsonRpcRequest {
                 data: None,
             });
         }
+        // 方法名不能为空，且不能使用保留前缀 "rpc."
         if self.method.is_empty() || self.method.starts_with("rpc.") {
             return Err(JsonRpcError {
                 code: error_codes::INVALID_REQUEST,

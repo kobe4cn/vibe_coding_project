@@ -1,4 +1,7 @@
-//! Runtime error types
+//! 运行时错误类型
+//!
+//! 定义所有运行时错误，并提供到 HTTP 响应的转换。
+//! 使用 thiserror 自动生成错误消息，使用 IntoResponse 自动转换为 HTTP 响应。
 
 use axum::{
     Json,
@@ -8,7 +11,9 @@ use axum::{
 use serde_json::json;
 use thiserror::Error;
 
-/// Runtime error type
+/// 运行时错误类型
+/// 
+/// 涵盖所有可能的运行时错误，每个错误对应特定的 HTTP 状态码。
 #[derive(Debug, Error)]
 pub enum RuntimeError {
     #[error("Not found: {0}")]
@@ -40,6 +45,9 @@ pub enum RuntimeError {
 }
 
 impl RuntimeError {
+    /// 获取对应的 HTTP 状态码
+    /// 
+    /// 根据错误类型返回合适的 HTTP 状态码，遵循 REST API 最佳实践。
     pub fn status_code(&self) -> StatusCode {
         match self {
             RuntimeError::NotFound(_) => StatusCode::NOT_FOUND,

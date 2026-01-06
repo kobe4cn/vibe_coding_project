@@ -1,11 +1,16 @@
 //! GML Parser - parses tokens into AST
+//!
+//! 使用递归下降解析器（Recursive Descent Parser）将 token 序列转换为抽象语法树（AST）。
+//! 采用运算符优先级解析（Operator Precedence Parsing）来处理表达式，确保正确的运算顺序。
 
 use crate::ast::*;
 use crate::error::{GmlError, GmlResult};
 use crate::lexer::{Lexer, Token};
 use crate::value::Value;
 
-/// GML Parser
+/// GML 解析器
+/// 
+/// 维护 token 序列和当前位置，通过递归下降方法解析各种语法结构。
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
@@ -40,16 +45,17 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> GmlResult<Statement> {
-        // Check for return statement
+        // 检查 return 语句
         if self.check(&Token::Return) {
             self.advance();
             let expr = self.parse_expression()?;
             return Ok(Statement::Return(expr));
         }
 
-        // Check if this looks like an assignment
+        // 尝试解析赋值语句：需要前瞻检查 '=' 操作符
+        // 如果看到标识符后跟 '='，则解析为赋值；否则回退并解析为表达式
         if let Some(Token::Ident(name)) = self.peek().cloned() {
-            // Check for $temp variable
+            // 检查是否为临时变量（$ 前缀），临时变量在最终输出中会被过滤
             let (field, is_temp) = if self.check(&Token::Dollar) {
                 self.advance();
                 if let Some(Token::Ident(n)) = self.peek().cloned() {
@@ -63,7 +69,7 @@ impl Parser {
                 (name, false)
             };
 
-            // Check for assignment
+            // 检查是否有赋值操作符
             if self.check(&Token::Eq) {
                 self.advance();
                 let expr = self.parse_expression()?;
@@ -73,7 +79,7 @@ impl Parser {
                     expression: expr,
                 }));
             } else {
-                // Not an assignment, backtrack
+                // 不是赋值语句，回退位置以便作为表达式解析
                 self.position -= 1;
                 if is_temp {
                     self.position -= 1;
@@ -81,7 +87,7 @@ impl Parser {
             }
         }
 
-        // Parse as expression
+        // 解析为表达式语句（用于单值映射场景）
         let expr = self.parse_expression()?;
         Ok(Statement::Expression(expr))
     }
@@ -91,11 +97,13 @@ impl Parser {
     }
 
     fn parse_ternary(&mut self) -> GmlResult<Expression> {
+        // 三元运算符具有最低优先级，所以从它开始解析
+        // 这样确保条件表达式可以包含所有其他运算符
         let expr = self.parse_or()?;
 
         if self.check(&Token::Question) {
             self.advance();
-            let then_branch = self.parse_expression()?;
+            let then_branch = self.parse_expression()?; // 递归解析，支持嵌套三元
             self.expect(&Token::Colon)?;
             let else_branch = self.parse_expression()?;
             return Ok(Expression::Ternary {
@@ -250,6 +258,8 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> GmlResult<Expression> {
+        // 后置运算符（方法调用、属性访问、数组索引）具有最高优先级
+        // 使用循环处理链式调用，如 "obj.method().field[0]"
         let mut expr = self.parse_primary()?;
 
         loop {
@@ -258,7 +268,7 @@ impl Parser {
                 if let Some(Token::Ident(method)) = self.peek().cloned() {
                     self.advance();
                     if self.check(&Token::LParen) {
-                        // Method call
+                        // 方法调用：需要括号和参数
                         self.advance();
                         let args = self.parse_args()?;
                         self.expect(&Token::RParen)?;
@@ -268,7 +278,7 @@ impl Parser {
                             args,
                         };
                     } else {
-                        // Property access - convert to variable path
+                        // 属性访问：将变量路径扩展，如 "user.name" -> Variable(["user", "name"])
                         expr = match expr {
                             Expression::Variable(mut path) => {
                                 path.push(method);
@@ -286,11 +296,13 @@ impl Parser {
                 }
             } else if self.check(&Token::LBracket) {
                 self.advance();
+                // 支持三种索引类型：数字索引、最后元素（#）、表达式索引
                 let index = if self.check(&Token::Hash) {
                     self.advance();
                     IndexType::Last
                 } else {
                     let idx_expr = self.parse_expression()?;
+                    // 优化：如果是字面量整数，直接存储为 Number 类型，避免运行时计算
                     match idx_expr {
                         Expression::Literal(Value::Int(i)) => IndexType::Number(i),
                         _ => IndexType::Expression(Box::new(idx_expr)),
@@ -365,17 +377,17 @@ impl Parser {
             // CASE expression
             Some(Token::Case) => self.parse_case(),
 
-            // Identifier (variable or function call)
+            // 标识符：可能是变量、函数调用或 lambda 表达式
             Some(Token::Ident(name)) => {
                 self.advance();
                 if self.check(&Token::LParen) {
-                    // Function call
+                    // 函数调用：标识符后跟括号
                     self.advance();
                     let args = self.parse_args()?;
                     self.expect(&Token::RParen)?;
                     Ok(Expression::FunctionCall { name, args })
                 } else if self.check(&Token::Arrow) {
-                    // Lambda: `item => expr`
+                    // Lambda 表达式：`item => expr`，用于数组方法如 map、filter
                     self.advance();
                     let body = self.parse_expression()?;
                     Ok(Expression::Lambda {
@@ -383,22 +395,21 @@ impl Parser {
                         body: Box::new(body),
                     })
                 } else {
-                    // Variable - only parse simple property access here
-                    // Method calls (with parentheses) are handled by parse_postfix
+                    // 变量：解析属性访问路径，如 "user.profile.name"
+                    // 注意：方法调用（带括号）由 parse_postfix 处理，这里只处理简单属性访问
                     let mut path = vec![name];
                     while self.check(&Token::Dot) {
-                        // Peek ahead to see if this is a method call
+                        // 前瞻检查：如果是方法调用（有括号），回退让 parse_postfix 处理
                         let dot_pos = self.position;
-                        self.advance(); // consume '.'
+                        self.advance(); // 消费 '.'
                         if let Some(Token::Ident(n)) = self.peek().cloned() {
-                            // Look one more ahead to check for method call
-                            self.advance(); // consume identifier
+                            self.advance(); // 消费标识符
                             if self.check(&Token::LParen) {
-                                // This is a method call - backtrack and let parse_postfix handle it
+                                // 这是方法调用，回退位置让 parse_postfix 处理
                                 self.position = dot_pos;
                                 break;
                             }
-                            // Not a method call, add to path
+                            // 不是方法调用，添加到路径
                             path.push(n);
                         } else {
                             return Err(self.error("Expected identifier after '.'"));

@@ -17,6 +17,7 @@ pub mod nodes;
 pub mod persistence;
 pub mod scheduler;
 pub mod types;
+pub mod yaml_parser;
 
 pub use context::ExecutionContext;
 pub use error::{ExecutorError, ExecutorResult};
@@ -28,13 +29,20 @@ pub use scheduler::Scheduler;
 pub use types::{Flow, FlowNode, NodeType};
 
 use fdl_gml::Value;
+use fdl_tools::{ManagedToolRegistry, ToolContext, ToolRegistry};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+/// 系统变量列表（在输出时过滤）
+const SYSTEM_VARS: &[&str] = &["buCode", "tenantId"];
 
 /// Flow executor
 pub struct Executor {
     context: Arc<RwLock<ExecutionContext>>,
     scheduler: Scheduler,
+    tool_registry: Option<Arc<ToolRegistry>>,
+    managed_registry: Option<Arc<ManagedToolRegistry>>,
+    tool_context: ToolContext,
 }
 
 impl Executor {
@@ -43,24 +51,143 @@ impl Executor {
         Self {
             context: Arc::new(RwLock::new(ExecutionContext::new())),
             scheduler: Scheduler::new(),
+            tool_registry: None,
+            managed_registry: None,
+            tool_context: ToolContext::default(),
         }
+    }
+
+    /// Create executor with simple tool registry
+    pub fn with_registry(registry: ToolRegistry) -> Self {
+        Self {
+            context: Arc::new(RwLock::new(ExecutionContext::new())),
+            scheduler: Scheduler::new(),
+            tool_registry: Some(Arc::new(registry)),
+            managed_registry: None,
+            tool_context: ToolContext::default(),
+        }
+    }
+
+    /// Create executor with managed tool registry (uses ConfigStore)
+    pub fn with_managed_registry(registry: Arc<ManagedToolRegistry>) -> Self {
+        Self {
+            context: Arc::new(RwLock::new(ExecutionContext::new())),
+            scheduler: Scheduler::new(),
+            tool_registry: None,
+            managed_registry: Some(registry),
+            tool_context: ToolContext::default(),
+        }
+    }
+
+    /// Set tool context (tenant_id, bu_code, etc.)
+    pub fn with_tool_context(mut self, context: ToolContext) -> Self {
+        self.tool_context = context;
+        self
     }
 
     /// Execute a flow
     pub async fn execute(&self, flow: &Flow, inputs: Value) -> ExecutorResult<Value> {
-        // Initialize context with inputs
+        // Initialize context with inputs and tool registry
         {
             let mut ctx = self.context.write().await;
             ctx.set_inputs(inputs);
+            if let Some(registry) = &self.tool_registry {
+                ctx.set_tool_registry(registry.clone());
+            }
+            if let Some(registry) = &self.managed_registry {
+                ctx.set_managed_registry(registry.clone());
+            }
+            ctx.set_tool_context(self.tool_context.clone());
         }
 
         // Build execution graph and run
-        self.scheduler.execute(flow, self.context.clone()).await
+        let result = self.scheduler.execute(flow, self.context.clone()).await?;
+
+        // Filter output based on args.out and remove system variables
+        Ok(self.filter_output(&flow.args, result))
+    }
+
+    /// 过滤输出：
+    /// 1. 如果定义了 args.out，只保留指定字段
+    /// 2. 移除系统变量 (buCode, tenantId)
+    fn filter_output(&self, args: &types::FlowArgs, output: Value) -> Value {
+        let mut result = output;
+
+        // 移除系统变量
+        if let Value::Object(ref mut obj) = result {
+            for var in SYSTEM_VARS {
+                obj.remove(*var);
+            }
+        }
+
+        // 如果定义了输出字段，只保留指定字段
+        if let Some(out_def) = &args.out {
+            result = self.apply_output_filter(out_def, result);
+        }
+
+        result
+    }
+
+    /// 根据 args.out 定义过滤输出字段
+    fn apply_output_filter(&self, out_def: &types::OutputDef, output: Value) -> Value {
+        match out_def {
+            types::OutputDef::Simple(_) => {
+                // 简单类型：返回整个输出
+                output
+            }
+            types::OutputDef::Structured(fields) => {
+                // 结构化输出：只保留定义的字段
+                let mut filtered = std::collections::HashMap::new();
+                if let Value::Object(obj) = &output {
+                    for field_name in fields.keys() {
+                        // 尝试从输出中提取字段值
+                        if let Some(value) = self.extract_output_field(field_name, obj) {
+                            filtered.insert(field_name.clone(), value);
+                        }
+                    }
+                }
+                Value::Object(filtered)
+            }
+        }
+    }
+
+    /// 从输出对象中提取指定字段的值
+    /// 支持从节点结果中提取嵌套字段
+    fn extract_output_field(
+        &self,
+        field_name: &str,
+        obj: &std::collections::HashMap<String, Value>,
+    ) -> Option<Value> {
+        // 首先检查顶层是否有该字段
+        if let Some(value) = obj.get(field_name) {
+            return Some(value.clone());
+        }
+
+        // 遍历所有节点结果，查找字段
+        for (_node_id, node_value) in obj {
+            if let Value::Object(node_obj) = node_value {
+                if let Some(value) = node_obj.get(field_name) {
+                    return Some(value.clone());
+                }
+            }
+        }
+
+        None
     }
 
     /// Get the current execution context
     pub fn context(&self) -> Arc<RwLock<ExecutionContext>> {
         self.context.clone()
+    }
+
+    /// Get the simple tool registry
+    pub fn tool_registry(&self) -> Option<Arc<ToolRegistry>> {
+        self.tool_registry.clone()
+    }
+
+    /// Get the managed tool registry
+    pub fn managed_registry(&self) -> Option<Arc<ManagedToolRegistry>> {
+        self.managed_registry.clone()
     }
 }
 

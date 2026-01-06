@@ -1,11 +1,15 @@
-//! Database connection pool and utilities
+//! 数据库连接池和工具函数
+//!
+//! 提供 PostgreSQL 数据库连接管理、健康检查和迁移功能。
 
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
 
 use crate::state::DatabaseConfig;
 
-/// Database connection pool wrapper
+/// 数据库连接池包装器
+/// 
+/// 封装 PostgreSQL 连接池，提供统一的数据库访问接口。
 #[derive(Clone)]
 pub struct Database {
     pool: PgPool,
@@ -46,7 +50,10 @@ impl Database {
         sqlx::migrate!("./migrations").run(&self.pool).await
     }
 
-    /// Set tenant context for row-level security
+    /// 设置租户上下文（用于行级安全）
+    /// 
+    /// 使用 PostgreSQL 的会话变量实现多租户数据隔离。
+    /// 设置后，所有查询都会自动过滤到当前租户的数据。
     pub async fn set_tenant_context(&self, tenant_id: &str) -> Result<(), sqlx::Error> {
         sqlx::query("SELECT set_config('app.current_tenant_id', $1, true)")
             .bind(tenant_id)

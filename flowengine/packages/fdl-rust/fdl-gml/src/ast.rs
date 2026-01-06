@@ -1,8 +1,13 @@
-//! GML Abstract Syntax Tree definitions
+//! GML 抽象语法树（AST）定义
+//!
+//! 定义了 GML 语言的语法结构，包括语句、表达式、操作符等。
+//! AST 是解析器的输出，也是求值器的输入。
 
 use crate::value::Value;
 
-/// GML script - a sequence of statements
+/// GML 脚本：一系列语句的集合
+/// 
+/// 脚本可以包含多个语句，语句之间用逗号分隔（可选）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Script {
     pub statements: Vec<Statement>,
@@ -19,14 +24,17 @@ pub enum Statement {
     Return(Expression),
 }
 
-/// Assignment statement
+/// 赋值语句
+/// 
+/// 用于在 GML 脚本中创建变量，支持临时变量（$ 前缀）用于中间计算。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
-    /// Field name (may start with $ for temp variables)
+    /// 字段名（可能以 $ 开头表示临时变量）
     pub field: String,
-    /// Whether this is a temporary variable ($prefix)
+    /// 是否为临时变量（$ 前缀）
+    /// 临时变量在最终输出时会被过滤，仅用于中间计算
     pub is_temp: bool,
-    /// The expression to assign
+    /// 要赋值的表达式
     pub expression: Expression,
 }
 
@@ -42,7 +50,12 @@ pub enum Expression {
     /// This reference: `this.field`
     This(Vec<String>),
 
-    /// Array index access: `arr[0]` or `arr[#]`
+    /// 数组/对象索引访问：`arr[0]`、`arr[#]` 或 `obj[key]`
+    /// 
+    /// 支持三种索引类型：
+    /// - 数字索引：`arr[0]`
+    /// - 最后元素：`arr[#]`
+    /// - 表达式索引：`arr[i]` 或 `obj[key]`
     Index {
         target: Box<Expression>,
         index: IndexType,
@@ -103,14 +116,16 @@ pub enum Expression {
     Template(Vec<TemplatePart>),
 }
 
-/// Index type for array access
+/// 索引类型
+/// 
+/// 区分不同类型的索引，以便求值器进行优化处理。
 #[derive(Debug, Clone, PartialEq)]
 pub enum IndexType {
-    /// Numeric index
+    /// 数字索引：编译时已知的整数索引，可直接访问
     Number(i64),
-    /// Last element (#)
+    /// 最后元素：使用 # 符号，如 `arr[#]`
     Last,
-    /// Expression index
+    /// 表达式索引：运行时计算的索引，需要先求值表达式
     Expression(Box<Expression>),
 }
 
