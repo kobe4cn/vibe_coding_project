@@ -112,22 +112,73 @@ pub trait FlowStorage: Send + Sync {
     // Flow operations
     async fn create_flow(&self, req: CreateFlowRequest) -> Result<FlowRecord, StorageError>;
     async fn get_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<FlowRecord, StorageError>;
-    async fn list_flows(&self, tenant_id: Uuid, opts: ListOptions) -> Result<ListResult<FlowRecord>, StorageError>;
-    async fn update_flow(&self, tenant_id: Uuid, flow_id: Uuid, req: UpdateFlowRequest) -> Result<FlowRecord, StorageError>;
+    async fn list_flows(
+        &self,
+        tenant_id: Uuid,
+        opts: ListOptions,
+    ) -> Result<ListResult<FlowRecord>, StorageError>;
+    async fn update_flow(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        req: UpdateFlowRequest,
+    ) -> Result<FlowRecord, StorageError>;
     async fn delete_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<(), StorageError>;
 
     // Version operations
-    async fn create_version(&self, req: CreateVersionRequest) -> Result<VersionRecord, StorageError>;
-    async fn get_version(&self, tenant_id: Uuid, flow_id: Uuid, version_id: Uuid) -> Result<VersionRecord, StorageError>;
-    async fn list_versions(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<Vec<VersionRecord>, StorageError>;
-    async fn delete_version(&self, tenant_id: Uuid, flow_id: Uuid, version_id: Uuid) -> Result<(), StorageError>;
-    async fn get_latest_version(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<Option<VersionRecord>, StorageError>;
+    async fn create_version(
+        &self,
+        req: CreateVersionRequest,
+    ) -> Result<VersionRecord, StorageError>;
+    async fn get_version(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        version_id: Uuid,
+    ) -> Result<VersionRecord, StorageError>;
+    async fn list_versions(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<Vec<VersionRecord>, StorageError>;
+    async fn delete_version(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        version_id: Uuid,
+    ) -> Result<(), StorageError>;
+    async fn get_latest_version(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+    ) -> Result<Option<VersionRecord>, StorageError>;
 
     // Execution operations
-    async fn create_execution(&self, flow_id: Uuid, version_id: Option<Uuid>, tenant_id: Uuid, inputs: Option<serde_json::Value>) -> Result<ExecutionRecord, StorageError>;
-    async fn get_execution(&self, tenant_id: Uuid, execution_id: Uuid) -> Result<ExecutionRecord, StorageError>;
-    async fn update_execution_status(&self, execution_id: Uuid, status: &str, outputs: Option<serde_json::Value>, error: Option<String>) -> Result<(), StorageError>;
-    async fn list_executions(&self, tenant_id: Uuid, flow_id: Uuid, opts: ListOptions) -> Result<ListResult<ExecutionRecord>, StorageError>;
+    async fn create_execution(
+        &self,
+        flow_id: Uuid,
+        version_id: Option<Uuid>,
+        tenant_id: Uuid,
+        inputs: Option<serde_json::Value>,
+    ) -> Result<ExecutionRecord, StorageError>;
+    async fn get_execution(
+        &self,
+        tenant_id: Uuid,
+        execution_id: Uuid,
+    ) -> Result<ExecutionRecord, StorageError>;
+    async fn update_execution_status(
+        &self,
+        execution_id: Uuid,
+        status: &str,
+        outputs: Option<serde_json::Value>,
+        error: Option<String>,
+    ) -> Result<(), StorageError>;
+    async fn list_executions(
+        &self,
+        tenant_id: Uuid,
+        flow_id: Uuid,
+        opts: ListOptions,
+    ) -> Result<ListResult<ExecutionRecord>, StorageError>;
 
     // Health check
     async fn is_healthy(&self) -> bool;

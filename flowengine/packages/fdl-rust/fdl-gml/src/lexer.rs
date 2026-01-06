@@ -45,7 +45,7 @@ pub enum Token {
     Comma,
     Hash, // #
     Dollar,
-    Arrow, // =>
+    Arrow,  // =>
     Spread, // ...
 
     // Delimiters
@@ -180,11 +180,11 @@ impl<'a> Lexer<'a> {
 
     fn minus_or_number(&mut self) -> GmlResult<Token> {
         self.advance(); // consume '-'
-        if let Some(ch) = self.peek() {
-            if ch.is_ascii_digit() {
-                // Negative number - but we return minus and let parser handle it
-                return Ok(Token::Minus);
-            }
+        if let Some(ch) = self.peek()
+            && ch.is_ascii_digit()
+        {
+            // Negative number - but we return minus and let parser handle it
+            return Ok(Token::Minus);
         }
         Ok(Token::Minus)
     }
@@ -296,7 +296,7 @@ impl<'a> Lexer<'a> {
                             return Err(GmlError::LexerError {
                                 position: self.position,
                                 message: "Unexpected end of input in string".to_string(),
-                            })
+                            });
                         }
                     }
                 }
@@ -305,7 +305,7 @@ impl<'a> Lexer<'a> {
                     return Err(GmlError::LexerError {
                         position: self.position,
                         message: "Unterminated string".to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -331,7 +331,7 @@ impl<'a> Lexer<'a> {
                             return Err(GmlError::LexerError {
                                 position: self.position,
                                 message: "Unexpected end of input in template".to_string(),
-                            })
+                            });
                         }
                     }
                 }
@@ -340,7 +340,7 @@ impl<'a> Lexer<'a> {
                     return Err(GmlError::LexerError {
                         position: self.position,
                         message: "Unterminated template string".to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -360,12 +360,12 @@ impl<'a> Lexer<'a> {
                 let next_pos = pos + 1;
                 if next_pos < self.input.len() {
                     let next_ch = self.input[next_pos..].chars().next();
-                    if let Some(c) = next_ch {
-                        if c.is_ascii_digit() {
-                            has_dot = true;
-                            self.advance();
-                            continue;
-                        }
+                    if let Some(c) = next_ch
+                        && c.is_ascii_digit()
+                    {
+                        has_dot = true;
+                        self.advance();
+                        continue;
                     }
                 }
                 break;

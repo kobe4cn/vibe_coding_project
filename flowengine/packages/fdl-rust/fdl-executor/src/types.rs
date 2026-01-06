@@ -70,7 +70,7 @@ pub enum OutputDef {
 }
 
 /// Flow node
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FlowNode {
     /// Node display name
     #[serde(default)]
@@ -237,31 +237,5 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(condition_node.node_type(), NodeType::Condition);
-    }
-}
-
-impl Default for FlowNode {
-    fn default() -> Self {
-        Self {
-            name: None,
-            description: None,
-            next: None,
-            fail: None,
-            only: None,
-            exec: None,
-            args: None,
-            with_expr: None,
-            sets: None,
-            when: None,
-            then: None,
-            else_branch: None,
-            case: None,
-            wait: None,
-            vars: None,
-            node: None,
-            each: None,
-            agent: None,
-            mcp: None,
-        }
     }
 }

@@ -63,12 +63,21 @@ mod tests {
     fn test_error_status_codes() {
         assert_eq!(AuthError::MissingAuthHeader.status_code(), 401);
         assert_eq!(AuthError::InvalidAuthHeader.status_code(), 401);
-        assert_eq!(AuthError::InvalidToken("test".to_string()).status_code(), 401);
+        assert_eq!(
+            AuthError::InvalidToken("test".to_string()).status_code(),
+            401
+        );
         assert_eq!(AuthError::TokenExpired.status_code(), 401);
         assert_eq!(AuthError::InsufficientPermissions.status_code(), 403);
-        assert_eq!(AuthError::TenantNotFound("t1".to_string()).status_code(), 403);
+        assert_eq!(
+            AuthError::TenantNotFound("t1".to_string()).status_code(),
+            403
+        );
         assert_eq!(AuthError::TenantDisabled.status_code(), 403);
-        assert_eq!(AuthError::QuotaExceeded("limit".to_string()).status_code(), 429);
+        assert_eq!(
+            AuthError::QuotaExceeded("limit".to_string()).status_code(),
+            429
+        );
         assert_eq!(AuthError::Internal("error".to_string()).status_code(), 500);
     }
 
@@ -78,10 +87,7 @@ mod tests {
             format!("{}", AuthError::MissingAuthHeader),
             "Missing authorization header"
         );
-        assert_eq!(
-            format!("{}", AuthError::TokenExpired),
-            "Token expired"
-        );
+        assert_eq!(format!("{}", AuthError::TokenExpired), "Token expired");
         assert_eq!(
             format!("{}", AuthError::QuotaExceeded("daily limit".to_string())),
             "Quota exceeded: daily limit"

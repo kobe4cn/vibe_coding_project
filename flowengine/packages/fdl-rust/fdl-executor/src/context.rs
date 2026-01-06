@@ -105,7 +105,10 @@ impl ExecutionContext {
         }
 
         // Add built-in variables
-        ctx.insert("tenantId".to_string(), Value::String(self.tenant_id.clone()));
+        ctx.insert(
+            "tenantId".to_string(),
+            Value::String(self.tenant_id.clone()),
+        );
         ctx.insert("buCode".to_string(), Value::String(self.bu_code.clone()));
 
         // Add globals
@@ -182,7 +185,11 @@ impl ExecutionContext {
         child.tenant_id = self.tenant_id.clone();
         child.bu_code = self.bu_code.clone();
         // Child inherits parent's variables as read-only context
-        child.globals = self.build_eval_context().as_object().cloned().unwrap_or_default();
+        child.globals = self
+            .build_eval_context()
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         child
     }
 

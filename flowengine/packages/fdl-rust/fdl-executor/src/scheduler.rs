@@ -80,15 +80,15 @@ impl Scheduler {
             }
 
             // Process then/else for condition nodes
-            if let Some(then) = &node.then {
-                if let Some(deps) = graph.get_mut(then) {
-                    deps.push(node_id.clone());
-                }
+            if let Some(then) = &node.then
+                && let Some(deps) = graph.get_mut(then)
+            {
+                deps.push(node_id.clone());
             }
-            if let Some(else_branch) = &node.else_branch {
-                if let Some(deps) = graph.get_mut(else_branch) {
-                    deps.push(node_id.clone());
-                }
+            if let Some(else_branch) = &node.else_branch
+                && let Some(deps) = graph.get_mut(else_branch)
+            {
+                deps.push(node_id.clone());
             }
 
             // Process case branches
@@ -105,16 +105,10 @@ impl Scheduler {
     }
 
     /// Find start nodes (nodes with no dependencies)
-    fn find_start_nodes(
-        &self,
-        flow: &Flow,
-        graph: &HashMap<String, Vec<String>>,
-    ) -> Vec<String> {
+    fn find_start_nodes(&self, flow: &Flow, graph: &HashMap<String, Vec<String>>) -> Vec<String> {
         graph
             .iter()
-            .filter(|(node_id, deps)| {
-                deps.is_empty() && flow.nodes.contains_key(*node_id)
-            })
+            .filter(|(node_id, deps)| deps.is_empty() && flow.nodes.contains_key(*node_id))
             .map(|(node_id, _)| node_id.clone())
             .collect()
     }
@@ -164,12 +158,13 @@ impl Scheduler {
 
             // Wait for all spawned tasks
             for handle in handles {
-                let (node_id, result) = handle.await.map_err(|e| {
-                    ExecutorError::NodeExecutionError {
-                        node: "scheduler".to_string(),
-                        message: e.to_string(),
-                    }
-                })?;
+                let (node_id, result) =
+                    handle
+                        .await
+                        .map_err(|e| ExecutorError::NodeExecutionError {
+                            node: "scheduler".to_string(),
+                            message: e.to_string(),
+                        })?;
 
                 executing.remove(&node_id);
 
@@ -230,17 +225,11 @@ async fn execute_single_node(
     let result = match node.node_type() {
         NodeType::Exec => nodes::execute_exec_node(node_id, node, context.clone()).await,
         NodeType::Mapping => nodes::execute_mapping_node(node_id, node, context.clone()).await,
-        NodeType::Condition => {
-            nodes::execute_condition_node(node_id, node, context.clone()).await
-        }
+        NodeType::Condition => nodes::execute_condition_node(node_id, node, context.clone()).await,
         NodeType::Switch => nodes::execute_switch_node(node_id, node, context.clone()).await,
         NodeType::Delay => nodes::execute_delay_node(node_id, node, context.clone()).await,
-        NodeType::Each => {
-            nodes::execute_each_node(flow, node_id, node, context.clone()).await
-        }
-        NodeType::Loop => {
-            nodes::execute_loop_node(flow, node_id, node, context.clone()).await
-        }
+        NodeType::Each => nodes::execute_each_node(flow, node_id, node, context.clone()).await,
+        NodeType::Loop => nodes::execute_loop_node(flow, node_id, node, context.clone()).await,
         NodeType::Agent => nodes::execute_agent_node(node_id, node, context.clone()).await,
         NodeType::Mcp => nodes::execute_mcp_node(node_id, node, context.clone()).await,
         NodeType::Unknown => Err(ExecutorError::InvalidFlow(format!(

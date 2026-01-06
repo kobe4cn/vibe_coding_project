@@ -261,9 +261,8 @@ impl TenantQueryBuilder {
         let all_columns: Vec<&str> = std::iter::once("tenant_id")
             .chain(columns.iter().copied())
             .collect();
-        let placeholders: Vec<String> = (1..=all_columns.len())
-            .map(|i| format!("${}", i))
-            .collect();
+        let placeholders: Vec<String> =
+            (1..=all_columns.len()).map(|i| format!("${}", i)).collect();
         format!(
             "INSERT INTO {} ({}) VALUES ({})",
             table,

@@ -85,11 +85,7 @@ impl AuthLayer {
 }
 
 /// Authentication middleware function
-pub async fn auth_middleware(
-    layer: AuthLayer,
-    mut request: Request<Body>,
-    next: Next,
-) -> Response {
+pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next: Next) -> Response {
     // Extract Authorization header
     let auth_header = request
         .headers()
@@ -153,7 +149,8 @@ pub async fn auth_middleware(
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let status = StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status =
+            StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         let body = serde_json::json!({
             "error": self.to_string(),
             "code": self.status_code(),

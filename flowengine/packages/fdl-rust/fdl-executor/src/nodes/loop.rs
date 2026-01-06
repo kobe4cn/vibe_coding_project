@@ -16,12 +16,14 @@ pub async fn execute_loop_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let vars_expr = node.vars.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidFlow(format!("Loop node {} missing vars", node_id))
-    })?;
-    let when_expr = node.when.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidFlow(format!("Loop node {} missing when", node_id))
-    })?;
+    let vars_expr = node
+        .vars
+        .as_ref()
+        .ok_or_else(|| ExecutorError::InvalidFlow(format!("Loop node {} missing vars", node_id)))?;
+    let when_expr = node
+        .when
+        .as_ref()
+        .ok_or_else(|| ExecutorError::InvalidFlow(format!("Loop node {} missing when", node_id)))?;
     let sub_nodes = node.node.as_ref().ok_or_else(|| {
         ExecutorError::InvalidFlow(format!("Loop node {} has no sub-nodes", node_id))
     })?;

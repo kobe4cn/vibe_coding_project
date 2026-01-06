@@ -4,8 +4,8 @@ use crate::jsonrpc::{JsonRpcRequest, JsonRpcResponse, RpcMethod};
 use crate::state::AppState;
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::Response,
 };
@@ -13,7 +13,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tracing::{info, warn};
 
 /// WebSocket connection state
@@ -54,7 +54,11 @@ pub enum ExecutionEventType {
 }
 
 impl ExecutionEvent {
-    pub fn new(execution_id: &str, event_type: ExecutionEventType, data: serde_json::Value) -> Self {
+    pub fn new(
+        execution_id: &str,
+        event_type: ExecutionEventType,
+        data: serde_json::Value,
+    ) -> Self {
         Self {
             execution_id: execution_id.to_string(),
             event_type,
@@ -75,10 +79,7 @@ impl ExecutionEvent {
 }
 
 /// WebSocket handler
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> Response {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
@@ -166,7 +167,7 @@ async fn handle_rpc_request(
         return JsonRpcResponse::error(request.id, e);
     }
 
-    let method = match RpcMethod::from_str(&request.method) {
+    let method = match RpcMethod::from_strs(&request.method) {
         Some(m) => m,
         None => return JsonRpcResponse::method_not_found(request.id, &request.method),
     };
@@ -233,14 +234,9 @@ async fn handle_unsubscribe(
     }
 }
 
-async fn handle_execute_status(
-    request: JsonRpcRequest,
-    state: &Arc<AppState>,
-) -> JsonRpcResponse {
+async fn handle_execute_status(request: JsonRpcRequest, state: &Arc<AppState>) -> JsonRpcResponse {
     let params = request.params.unwrap_or_default();
-    let execution_id = params
-        .get("execution_id")
-        .and_then(|v| v.as_str());
+    let execution_id = params.get("execution_id").and_then(|v| v.as_str());
 
     match execution_id {
         Some(id) => {
@@ -266,10 +262,7 @@ async fn handle_execute_status(
     }
 }
 
-async fn handle_flow_list(
-    request: JsonRpcRequest,
-    _state: &Arc<AppState>,
-) -> JsonRpcResponse {
+async fn handle_flow_list(request: JsonRpcRequest, _state: &Arc<AppState>) -> JsonRpcResponse {
     // Placeholder: return empty list
     JsonRpcResponse::success(
         request.id,
@@ -280,10 +273,7 @@ async fn handle_flow_list(
     )
 }
 
-async fn handle_flow_get(
-    request: JsonRpcRequest,
-    _state: &Arc<AppState>,
-) -> JsonRpcResponse {
+async fn handle_flow_get(request: JsonRpcRequest, _state: &Arc<AppState>) -> JsonRpcResponse {
     let params = request.params.unwrap_or_default();
     let flow_id = params.get("flow_id").and_then(|v| v.as_str());
 

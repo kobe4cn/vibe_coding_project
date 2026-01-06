@@ -142,7 +142,10 @@ mod tests {
         assert!(result.is_ok());
 
         let output = result.unwrap();
-        assert_eq!(output.value.get("path"), Some(&serde_json::json!("test/path")));
+        assert_eq!(
+            output.value.get("path"),
+            Some(&serde_json::json!("test/path"))
+        );
         assert_eq!(output.value.get("mock"), Some(&serde_json::json!(true)));
     }
 
@@ -151,7 +154,9 @@ mod tests {
         let registry = ToolRegistry::new();
         let context = crate::ToolContext::default();
 
-        let result = registry.execute("unknown://path", serde_json::json!({}), &context).await;
+        let result = registry
+            .execute("unknown://path", serde_json::json!({}), &context)
+            .await;
         assert!(result.is_err());
     }
 }

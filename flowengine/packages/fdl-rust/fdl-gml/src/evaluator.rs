@@ -43,11 +43,9 @@ impl Evaluator {
                 Statement::Assignment(assign) => {
                     has_assignments = true;
                     let value = self.eval_expr(&assign.expression, context, &output)?;
-                    if !assign.is_temp {
-                        output.insert(assign.field.clone(), value);
-                    } else {
-                        output.insert(assign.field.clone(), value);
-                    }
+                    // Store both temp and regular variables in output for use in subsequent expressions
+                    // Temp variables (with $ prefix) will be filtered out in final output (line 66)
+                    output.insert(assign.field.clone(), value);
                 }
                 Statement::Expression(expr) => {
                     result = self.eval_expr(expr, context, &output)?;
@@ -87,11 +85,12 @@ impl Evaluator {
 
             Expression::Variable(path) => {
                 // First check scope, then context
-                if let Some(first) = path.first() {
-                    if let Some(value) = scope.get(first) {
-                        return self.resolve_path(value, &path[1..]);
-                    }
+                if let Some(first) = path.first()
+                    && let Some(value) = scope.get(first)
+                {
+                    return self.resolve_path(value, &path[1..]);
                 }
+
                 self.resolve_path(context, path)
             }
 
@@ -126,10 +125,12 @@ impl Evaluator {
                             expected: "int".to_string(),
                             actual: idx_val.type_name().to_string(),
                         })?;
-                        arr.get(idx as usize).cloned().ok_or(GmlError::IndexOutOfBounds {
-                            index: idx,
-                            length: arr.len(),
-                        })
+                        arr.get(idx as usize)
+                            .cloned()
+                            .ok_or(GmlError::IndexOutOfBounds {
+                                index: idx,
+                                length: arr.len(),
+                            })
                     }
                     (Value::Object(obj), IndexType::Expression(key_expr)) => {
                         let key_val = self.eval_expr(key_expr, context, scope)?;
@@ -314,7 +315,7 @@ impl Evaluator {
                     return Err(GmlError::TypeError {
                         expected: "object".to_string(),
                         actual: current.type_name().to_string(),
-                    })
+                    });
                 }
             };
         }
@@ -385,15 +386,21 @@ impl Evaluator {
     {
         let ord = match (left, right) {
             (Value::Int(a), Value::Int(b)) => a.cmp(b),
-            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
-            (Value::Int(a), Value::Float(b)) => (*a as f64).partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
-            (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(*b as f64)).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Float(a), Value::Float(b)) => {
+                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+            }
+            (Value::Int(a), Value::Float(b)) => (*a as f64)
+                .partial_cmp(b)
+                .unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Float(a), Value::Int(b)) => a
+                .partial_cmp(&(*b as f64))
+                .unwrap_or(std::cmp::Ordering::Equal),
             (Value::String(a), Value::String(b)) => a.cmp(b),
             _ => {
                 return Err(GmlError::TypeError {
                     expected: "comparable types".to_string(),
                     actual: format!("{} and {}", left.type_name(), right.type_name()),
-                })
+                });
             }
         };
         Ok(Value::Bool(f(ord)))
@@ -542,7 +549,9 @@ impl Evaluator {
                 let search = args.first().ok_or(GmlError::InvalidArgument(
                     "includes requires an argument".to_string(),
                 ))?;
-                Ok(Value::Bool(arr.iter().any(|item| self.values_equal(item, search))))
+                Ok(Value::Bool(
+                    arr.iter().any(|item| self.values_equal(item, search)),
+                ))
             }
 
             "push" | "add" => {
@@ -574,12 +583,12 @@ impl Evaluator {
     ) -> GmlResult<Value> {
         match method {
             "proj" => {
-                let fields = args
-                    .first()
-                    .and_then(|v| v.as_str())
-                    .ok_or(GmlError::InvalidArgument(
-                        "proj requires field names".to_string(),
-                    ))?;
+                let fields =
+                    args.first()
+                        .and_then(|v| v.as_str())
+                        .ok_or(GmlError::InvalidArgument(
+                            "proj requires field names".to_string(),
+                        ))?;
                 let field_list: Vec<&str> = fields.split(',').map(|s| s.trim()).collect();
                 let mut result = HashMap::new();
                 for field in field_list {
@@ -604,7 +613,8 @@ impl Evaluator {
             "trim" => Ok(Value::String(s.trim().to_string())),
             "split" => {
                 let sep = _args.first().and_then(|v| v.as_str()).unwrap_or(",");
-                let parts: Vec<Value> = s.split(sep).map(|p| Value::String(p.to_string())).collect();
+                let parts: Vec<Value> =
+                    s.split(sep).map(|p| Value::String(p.to_string())).collect();
                 Ok(Value::Array(parts))
             }
             "startsWith" => {
@@ -655,7 +665,9 @@ mod tests {
     fn test_object_construction() {
         let evaluator = Evaluator::new();
         let context = Value::object([("name", Value::string("Alice"))]);
-        let result = evaluator.evaluate("greeting = 'Hello', user = name", &context).unwrap();
+        let result = evaluator
+            .evaluate("greeting = 'Hello', user = name", &context)
+            .unwrap();
         assert!(result.get("greeting").is_some());
         assert!(result.get("user").is_some());
     }
@@ -673,7 +685,10 @@ mod tests {
     #[test]
     fn test_array_methods() {
         let evaluator = Evaluator::new();
-        let context = Value::object([("nums", Value::array(vec![Value::int(1), Value::int(2), Value::int(3)]))]);
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3)]),
+        )]);
         let result = evaluator.evaluate("nums.sum()", &context).unwrap();
         assert_eq!(result, Value::Float(6.0));
     }
@@ -681,7 +696,10 @@ mod tests {
     #[test]
     fn test_array_avg() {
         let evaluator = Evaluator::new();
-        let context = Value::object([("nums", Value::array(vec![Value::int(2), Value::int(4), Value::int(6)]))]);
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(2), Value::int(4), Value::int(6)]),
+        )]);
         let result = evaluator.evaluate("nums.avg()", &context).unwrap();
         assert_eq!(result, Value::Float(4.0));
     }
@@ -700,11 +718,26 @@ mod tests {
         let context = Value::Object(HashMap::new());
 
         // Arithmetic
-        assert_eq!(evaluator.evaluate("2 + 3", &context).unwrap(), Value::Int(5));
-        assert_eq!(evaluator.evaluate("10 - 4", &context).unwrap(), Value::Int(6));
-        assert_eq!(evaluator.evaluate("3 * 4", &context).unwrap(), Value::Int(12));
-        assert_eq!(evaluator.evaluate("15 / 3", &context).unwrap(), Value::Int(5));
-        assert_eq!(evaluator.evaluate("17 % 5", &context).unwrap(), Value::Int(2));
+        assert_eq!(
+            evaluator.evaluate("2 + 3", &context).unwrap(),
+            Value::Int(5)
+        );
+        assert_eq!(
+            evaluator.evaluate("10 - 4", &context).unwrap(),
+            Value::Int(6)
+        );
+        assert_eq!(
+            evaluator.evaluate("3 * 4", &context).unwrap(),
+            Value::Int(12)
+        );
+        assert_eq!(
+            evaluator.evaluate("15 / 3", &context).unwrap(),
+            Value::Int(5)
+        );
+        assert_eq!(
+            evaluator.evaluate("17 % 5", &context).unwrap(),
+            Value::Int(2)
+        );
     }
 
     #[test]
@@ -712,10 +745,22 @@ mod tests {
         let evaluator = Evaluator::new();
         let context = Value::object([("a", Value::int(5)), ("b", Value::int(3))]);
 
-        assert_eq!(evaluator.evaluate("a > b", &context).unwrap(), Value::Bool(true));
-        assert_eq!(evaluator.evaluate("a < b", &context).unwrap(), Value::Bool(false));
-        assert_eq!(evaluator.evaluate("a == 5", &context).unwrap(), Value::Bool(true));
-        assert_eq!(evaluator.evaluate("a != b", &context).unwrap(), Value::Bool(true));
+        assert_eq!(
+            evaluator.evaluate("a > b", &context).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            evaluator.evaluate("a < b", &context).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            evaluator.evaluate("a == 5", &context).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            evaluator.evaluate("a != b", &context).unwrap(),
+            Value::Bool(true)
+        );
     }
 
     #[test]
@@ -723,9 +768,18 @@ mod tests {
         let evaluator = Evaluator::new();
         let context = Value::Object(HashMap::new());
 
-        assert_eq!(evaluator.evaluate("true && true", &context).unwrap(), Value::Bool(true));
-        assert_eq!(evaluator.evaluate("true && false", &context).unwrap(), Value::Bool(false));
-        assert_eq!(evaluator.evaluate("false || true", &context).unwrap(), Value::Bool(true));
+        assert_eq!(
+            evaluator.evaluate("true && true", &context).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            evaluator.evaluate("true && false", &context).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            evaluator.evaluate("false || true", &context).unwrap(),
+            Value::Bool(true)
+        );
     }
 
     #[test]

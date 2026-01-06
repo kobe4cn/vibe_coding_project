@@ -24,7 +24,7 @@ pub use jwt::{Claims, JwtConfig, JwtService};
 pub use middleware::AuthLayer;
 pub use rbac::{Permission, Role};
 pub use repository::{
-    InMemoryTenantRepository, TenantAwareRepository, TenantEntity, TenantOwned,
-    TenantQueryBuilder, TenantRepository,
+    InMemoryTenantRepository, TenantAwareRepository, TenantEntity, TenantOwned, TenantQueryBuilder,
+    TenantRepository,
 };
 pub use tenant::{TenantConfig, TenantContext, TenantQuota, TenantUsage};

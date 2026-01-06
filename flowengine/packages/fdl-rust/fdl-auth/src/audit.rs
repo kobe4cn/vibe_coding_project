@@ -318,25 +318,25 @@ impl AuditLogger for InMemoryAuditLogger {
         entries
             .iter()
             .filter(|e| {
-                if let Some(tid) = tenant_id {
-                    if e.tenant_id.as_deref() != Some(tid) {
-                        return false;
-                    }
+                if let Some(tid) = tenant_id
+                    && e.tenant_id.as_deref() != Some(tid)
+                {
+                    return false;
                 }
-                if let Some(et) = event_type {
-                    if e.event_type != et {
-                        return false;
-                    }
+                if let Some(et) = event_type
+                    && e.event_type != et
+                {
+                    return false;
                 }
-                if let Some(f) = from {
-                    if e.timestamp < f {
-                        return false;
-                    }
+                if let Some(f) = from
+                    && e.timestamp < f
+                {
+                    return false;
                 }
-                if let Some(t) = to {
-                    if e.timestamp > t {
-                        return false;
-                    }
+                if let Some(t) = to
+                    && e.timestamp > t
+                {
+                    return false;
                 }
                 true
             })
@@ -479,8 +479,10 @@ mod tests {
     async fn test_log_cross_tenant_access() {
         let logger = InMemoryAuditLogger::new();
 
-        log_cross_tenant_access(&logger, "user-1", "tenant-1", "tenant-2", "flow", "flow-123")
-            .await;
+        log_cross_tenant_access(
+            &logger, "user-1", "tenant-1", "tenant-2", "flow", "flow-123",
+        )
+        .await;
 
         let entries = logger.entries().await;
         assert_eq!(entries.len(), 1);

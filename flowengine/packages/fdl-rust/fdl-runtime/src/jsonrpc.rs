@@ -211,7 +211,7 @@ pub enum RpcMethod {
 }
 
 impl RpcMethod {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s {
             "flow.list" => Some(Self::FlowList),
             "flow.get" => Some(Self::FlowGet),
@@ -289,11 +289,14 @@ mod tests {
     #[test]
     fn test_rpc_method_from_str() {
         assert!(matches!(
-            RpcMethod::from_str("flow.list"),
+            RpcMethod::from_strs("flow.list"),
             Some(RpcMethod::FlowList)
         ));
-        assert!(matches!(RpcMethod::from_str("execute"), Some(RpcMethod::Execute)));
-        assert!(RpcMethod::from_str("unknown").is_none());
+        assert!(matches!(
+            RpcMethod::from_strs("execute"),
+            Some(RpcMethod::Execute)
+        ));
+        assert!(RpcMethod::from_strs("unknown").is_none());
     }
 
     #[test]

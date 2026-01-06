@@ -1,10 +1,10 @@
 //! Flow execution routes
 
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use fdl_executor::Executor;
 use fdl_gml::Value;
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::converter::{convert_frontend_to_executor, ExecutionResult, FrontendFlow};
+use crate::converter::{ExecutionResult, FrontendFlow, convert_frontend_to_executor};
 use crate::state::{AppState, ExecutionStatus as ExecStatus};
 
 /// Execute flow request
@@ -98,7 +98,7 @@ async fn execute_flow(
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({"error": "Flow not found"})),
-            ))
+            ));
         }
     };
 
@@ -109,13 +109,13 @@ async fn execute_flow(
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"error": "Flow has no versions"})),
-            ))
+            ));
         }
         Err(e) => {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Failed to get version: {}", e)})),
-            ))
+            ));
         }
     };
 
@@ -126,7 +126,7 @@ async fn execute_flow(
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Invalid flow data: {}", e)})),
-            ))
+            ));
         }
     };
 
@@ -147,18 +147,21 @@ async fn execute_version(
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({"error": "Flow not found"})),
-            ))
+            ));
         }
     };
 
     // Get specific version
-    let version = match state.get_version(&req.tenant_id, &flow_id, &version_id).await {
+    let version = match state
+        .get_version(&req.tenant_id, &flow_id, &version_id)
+        .await
+    {
         Ok(v) => v,
         Err(_) => {
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({"error": "Version not found"})),
-            ))
+            ));
         }
     };
 
@@ -169,7 +172,7 @@ async fn execute_version(
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Invalid flow data: {}", e)})),
-            ))
+            ));
         }
     };
 
@@ -398,9 +401,7 @@ fn json_to_gml_value(json: &serde_json::Value) -> Value {
             }
         }
         serde_json::Value::String(s) => Value::String(s.clone()),
-        serde_json::Value::Array(arr) => {
-            Value::Array(arr.iter().map(json_to_gml_value).collect())
-        }
+        serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_to_gml_value).collect()),
         serde_json::Value::Object(obj) => {
             let map: std::collections::HashMap<String, Value> = obj
                 .iter()
@@ -419,9 +420,7 @@ fn gml_value_to_json(value: &Value) -> serde_json::Value {
         Value::Int(i) => serde_json::json!(*i),
         Value::Float(f) => serde_json::json!(*f),
         Value::String(s) => serde_json::Value::String(s.clone()),
-        Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(gml_value_to_json).collect())
-        }
+        Value::Array(arr) => serde_json::Value::Array(arr.iter().map(gml_value_to_json).collect()),
         Value::Object(obj) => {
             let map: serde_json::Map<String, serde_json::Value> = obj
                 .iter()

@@ -74,9 +74,10 @@ pub async fn execute_mcp_node(
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
     // Get MCP URI (e.g., "mcp://filesystem/read_file")
-    let mcp_uri = node.mcp.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidNode(format!("Node {} missing MCP URI", node_id))
-    })?;
+    let mcp_uri = node
+        .mcp
+        .as_ref()
+        .ok_or_else(|| ExecutorError::InvalidNode(format!("Node {} missing MCP URI", node_id)))?;
 
     // Parse MCP URI
     let (server_name, tool_name) = parse_mcp_uri(mcp_uri)?;
@@ -151,10 +152,10 @@ pub async fn execute_mcp_node(
     context.write().await.set_variable(node_id, output);
 
     // Handle error routing
-    if mcp_result.is_error {
-        if let Some(fail_node) = &node.fail {
-            return Ok(vec![fail_node.clone()]);
-        }
+    if mcp_result.is_error
+        && let Some(fail_node) = &node.fail
+    {
+        return Ok(vec![fail_node.clone()]);
     }
 
     // Return next nodes
@@ -216,20 +217,14 @@ async fn execute_mcp_call(
             vec![McpContent::Text("File written successfully".to_string())]
         }
         "list_directory" => {
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or(".");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             vec![McpContent::Text(format!(
                 "[Simulated directory listing for {}]",
                 path
             ))]
         }
         "search" => {
-            let query = args
-                .get("query")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
             vec![McpContent::Text(format!(
                 "[Simulated search results for: {}]",
                 query
@@ -289,7 +284,10 @@ impl McpClientManager {
                     ("type", Value::string("object")),
                     (
                         "properties",
-                        Value::object([("path", Value::object([("type", Value::string("string"))]))]),
+                        Value::object([(
+                            "path",
+                            Value::object([("type", Value::string("string"))]),
+                        )]),
                     ),
                     ("required", Value::Array(vec![Value::string("path")])),
                 ]),
@@ -303,7 +301,10 @@ impl McpClientManager {
                         "properties",
                         Value::object([
                             ("path", Value::object([("type", Value::string("string"))])),
-                            ("content", Value::object([("type", Value::string("string"))])),
+                            (
+                                "content",
+                                Value::object([("type", Value::string("string"))]),
+                            ),
                         ]),
                     ),
                     (

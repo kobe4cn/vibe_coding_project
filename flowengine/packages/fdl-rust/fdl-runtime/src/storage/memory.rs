@@ -6,8 +6,8 @@ use dashmap::DashMap;
 use uuid::Uuid;
 
 use super::traits::{
-    CreateFlowRequest, CreateVersionRequest, ExecutionRecord, FlowRecord, FlowStorage,
-    ListOptions, ListResult, StorageError, UpdateFlowRequest, VersionRecord,
+    CreateFlowRequest, CreateVersionRequest, ExecutionRecord, FlowRecord, FlowStorage, ListOptions,
+    ListResult, StorageError, UpdateFlowRequest, VersionRecord,
 };
 
 /// In-memory storage implementation
@@ -72,7 +72,11 @@ impl FlowStorage for MemoryStorage {
 
         flows.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         let total = flows.len();
-        let items = flows.into_iter().skip(opts.offset).take(opts.limit).collect();
+        let items = flows
+            .into_iter()
+            .skip(opts.offset)
+            .take(opts.limit)
+            .collect();
 
         Ok(ListResult { items, total })
     }
@@ -105,8 +109,16 @@ impl FlowStorage for MemoryStorage {
 
     async fn delete_flow(&self, tenant_id: Uuid, flow_id: Uuid) -> Result<(), StorageError> {
         // Check tenant ownership
-        if !self.flows.get(&flow_id).map(|f| f.tenant_id == tenant_id).unwrap_or(false) {
-            return Err(StorageError::NotFound(format!("Flow {} not found", flow_id)));
+        if !self
+            .flows
+            .get(&flow_id)
+            .map(|f| f.tenant_id == tenant_id)
+            .unwrap_or(false)
+        {
+            return Err(StorageError::NotFound(format!(
+                "Flow {} not found",
+                flow_id
+            )));
         }
 
         // Delete versions
@@ -125,7 +137,10 @@ impl FlowStorage for MemoryStorage {
         Ok(())
     }
 
-    async fn create_version(&self, req: CreateVersionRequest) -> Result<VersionRecord, StorageError> {
+    async fn create_version(
+        &self,
+        req: CreateVersionRequest,
+    ) -> Result<VersionRecord, StorageError> {
         // Get next version number
         let version_number = self
             .versions
@@ -258,10 +273,9 @@ impl FlowStorage for MemoryStorage {
         outputs: Option<serde_json::Value>,
         error: Option<String>,
     ) -> Result<(), StorageError> {
-        let mut entry = self
-            .executions
-            .get_mut(&execution_id)
-            .ok_or_else(|| StorageError::NotFound(format!("Execution {} not found", execution_id)))?;
+        let mut entry = self.executions.get_mut(&execution_id).ok_or_else(|| {
+            StorageError::NotFound(format!("Execution {} not found", execution_id))
+        })?;
 
         entry.status = status.to_string();
         if let Some(out) = outputs {
@@ -292,7 +306,11 @@ impl FlowStorage for MemoryStorage {
 
         executions.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         let total = executions.len();
-        let items = executions.into_iter().skip(opts.offset).take(opts.limit).collect();
+        let items = executions
+            .into_iter()
+            .skip(opts.offset)
+            .take(opts.limit)
+            .collect();
 
         Ok(ListResult { items, total })
     }
@@ -344,7 +362,13 @@ mod tests {
 
         // List
         let result = storage
-            .list_flows(tenant_id, ListOptions { limit: 10, offset: 0 })
+            .list_flows(
+                tenant_id,
+                ListOptions {
+                    limit: 10,
+                    offset: 0,
+                },
+            )
             .await
             .unwrap();
         assert_eq!(result.total, 1);
@@ -397,11 +421,18 @@ mod tests {
         assert_eq!(versions.len(), 2);
 
         // Get latest
-        let latest = storage.get_latest_version(tenant_id, flow.id).await.unwrap().unwrap();
+        let latest = storage
+            .get_latest_version(tenant_id, flow.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(latest.version_number, 2);
 
         // Delete
-        storage.delete_version(tenant_id, flow.id, v1.id).await.unwrap();
+        storage
+            .delete_version(tenant_id, flow.id, v1.id)
+            .await
+            .unwrap();
         let versions = storage.list_versions(tenant_id, flow.id).await.unwrap();
         assert_eq!(versions.len(), 1);
     }
@@ -426,7 +457,13 @@ mod tests {
 
         // Tenant2's list should be empty
         let result = storage
-            .list_flows(tenant2, ListOptions { limit: 10, offset: 0 })
+            .list_flows(
+                tenant2,
+                ListOptions {
+                    limit: 10,
+                    offset: 0,
+                },
+            )
             .await
             .unwrap();
         assert_eq!(result.total, 0);

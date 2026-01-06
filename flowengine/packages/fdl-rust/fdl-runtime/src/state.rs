@@ -10,8 +10,10 @@ use uuid::Uuid;
 
 use crate::storage::{
     Storage, StorageError,
-    traits::{CreateFlowRequest as StorageCreateFlow, CreateVersionRequest as StorageCreateVersion,
-             UpdateFlowRequest as StorageUpdateFlow, ListOptions, FlowRecord, VersionRecord},
+    traits::{
+        CreateFlowRequest as StorageCreateFlow, CreateVersionRequest as StorageCreateVersion,
+        FlowRecord, ListOptions, UpdateFlowRequest as StorageUpdateFlow, VersionRecord,
+    },
 };
 
 /// Database configuration
@@ -189,7 +191,10 @@ impl AppState {
                 }
             }
             Err(e) => {
-                tracing::error!("Failed to initialize storage: {}, falling back to memory", e);
+                tracing::error!(
+                    "Failed to initialize storage: {}, falling back to memory",
+                    e
+                );
                 (StorageMode::Memory, None, Storage::memory())
             }
         };
@@ -207,9 +212,10 @@ impl AppState {
 
     /// Initialize database connection pool
     async fn init_database(config: &DatabaseConfig) -> Result<sqlx::PgPool, sqlx::Error> {
-        let url = config.url.as_ref().ok_or_else(|| {
-            sqlx::Error::Configuration("DATABASE_URL not set".into())
-        })?;
+        let url = config
+            .url
+            .as_ref()
+            .ok_or_else(|| sqlx::Error::Configuration("DATABASE_URL not set".into()))?;
 
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(config.pool_size)
@@ -268,40 +274,77 @@ impl AppState {
     // Flow management (async, using Storage abstraction)
 
     /// Create a new flow
-    pub async fn create_flow(&self, tenant_id: &str, name: &str, description: Option<String>) -> Result<FlowRecord, StorageError> {
+    pub async fn create_flow(
+        &self,
+        tenant_id: &str,
+        name: &str,
+        description: Option<String>,
+    ) -> Result<FlowRecord, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
-        self.storage.as_flow_storage().create_flow(StorageCreateFlow {
-            tenant_id: tenant_uuid,
-            name: name.to_string(),
-            description,
-        }).await
+        self.storage
+            .as_flow_storage()
+            .create_flow(StorageCreateFlow {
+                tenant_id: tenant_uuid,
+                name: name.to_string(),
+                description,
+            })
+            .await
     }
 
     /// Get flow by ID
-    pub async fn get_flow(&self, tenant_id: &str, flow_id: &str) -> Result<FlowRecord, StorageError> {
+    pub async fn get_flow(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+    ) -> Result<FlowRecord, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
-        self.storage.as_flow_storage().get_flow(tenant_uuid, flow_uuid).await
+        self.storage
+            .as_flow_storage()
+            .get_flow(tenant_uuid, flow_uuid)
+            .await
     }
 
     /// List flows for a tenant
-    pub async fn list_flows(&self, tenant_id: &str, limit: usize, offset: usize) -> Result<(Vec<FlowRecord>, usize), StorageError> {
+    pub async fn list_flows(
+        &self,
+        tenant_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<(Vec<FlowRecord>, usize), StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
-        let result = self.storage.as_flow_storage().list_flows(tenant_uuid, ListOptions { limit, offset }).await?;
+        let result = self
+            .storage
+            .as_flow_storage()
+            .list_flows(tenant_uuid, ListOptions { limit, offset })
+            .await?;
         Ok((result.items, result.total))
     }
 
     /// Update flow
-    pub async fn update_flow(&self, tenant_id: &str, flow_id: &str, name: Option<String>, description: Option<String>) -> Result<FlowRecord, StorageError> {
+    pub async fn update_flow(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+        name: Option<String>,
+        description: Option<String>,
+    ) -> Result<FlowRecord, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
-        self.storage.as_flow_storage().update_flow(tenant_uuid, flow_uuid, StorageUpdateFlow {
-            name,
-            description,
-            thumbnail: None,
-        }).await
+        self.storage
+            .as_flow_storage()
+            .update_flow(
+                tenant_uuid,
+                flow_uuid,
+                StorageUpdateFlow {
+                    name,
+                    description,
+                    thumbnail: None,
+                },
+            )
+            .await
     }
 
     /// Delete flow
@@ -309,50 +352,85 @@ impl AppState {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
-        self.storage.as_flow_storage().delete_flow(tenant_uuid, flow_uuid).await
+        self.storage
+            .as_flow_storage()
+            .delete_flow(tenant_uuid, flow_uuid)
+            .await
     }
 
     // Version management (async, using Storage abstraction)
 
     /// Create a new version
-    pub async fn create_version(&self, flow_id: &str, tenant_id: &str, data: serde_json::Value, label: Option<String>) -> Result<VersionRecord, StorageError> {
+    pub async fn create_version(
+        &self,
+        flow_id: &str,
+        tenant_id: &str,
+        data: serde_json::Value,
+        label: Option<String>,
+    ) -> Result<VersionRecord, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
-        self.storage.as_flow_storage().create_version(StorageCreateVersion {
-            flow_id: flow_uuid,
-            tenant_id: tenant_uuid,
-            data,
-            label,
-        }).await
+        self.storage
+            .as_flow_storage()
+            .create_version(StorageCreateVersion {
+                flow_id: flow_uuid,
+                tenant_id: tenant_uuid,
+                data,
+                label,
+            })
+            .await
     }
 
     /// Get version by ID
-    pub async fn get_version(&self, tenant_id: &str, flow_id: &str, version_id: &str) -> Result<VersionRecord, StorageError> {
+    pub async fn get_version(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+        version_id: &str,
+    ) -> Result<VersionRecord, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
         let version_uuid = Uuid::parse_str(version_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid version ID: {}", version_id)))?;
-        self.storage.as_flow_storage().get_version(tenant_uuid, flow_uuid, version_uuid).await
+        self.storage
+            .as_flow_storage()
+            .get_version(tenant_uuid, flow_uuid, version_uuid)
+            .await
     }
 
     /// List versions for a flow
-    pub async fn list_versions(&self, tenant_id: &str, flow_id: &str) -> Result<Vec<VersionRecord>, StorageError> {
+    pub async fn list_versions(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+    ) -> Result<Vec<VersionRecord>, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
-        self.storage.as_flow_storage().list_versions(tenant_uuid, flow_uuid).await
+        self.storage
+            .as_flow_storage()
+            .list_versions(tenant_uuid, flow_uuid)
+            .await
     }
 
     /// Delete version
-    pub async fn delete_version(&self, tenant_id: &str, flow_id: &str, version_id: &str) -> Result<(), StorageError> {
+    pub async fn delete_version(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+        version_id: &str,
+    ) -> Result<(), StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
         let version_uuid = Uuid::parse_str(version_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid version ID: {}", version_id)))?;
-        self.storage.as_flow_storage().delete_version(tenant_uuid, flow_uuid, version_uuid).await
+        self.storage
+            .as_flow_storage()
+            .delete_version(tenant_uuid, flow_uuid, version_uuid)
+            .await
     }
 
     /// Get version count for a flow
@@ -364,11 +442,18 @@ impl AppState {
     }
 
     /// Get latest version for a flow
-    pub async fn get_latest_version(&self, tenant_id: &str, flow_id: &str) -> Result<Option<VersionRecord>, StorageError> {
+    pub async fn get_latest_version(
+        &self,
+        tenant_id: &str,
+        flow_id: &str,
+    ) -> Result<Option<VersionRecord>, StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let flow_uuid = Uuid::parse_str(flow_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid flow ID: {}", flow_id)))?;
-        self.storage.as_flow_storage().get_latest_version(tenant_uuid, flow_uuid).await
+        self.storage
+            .as_flow_storage()
+            .get_latest_version(tenant_uuid, flow_uuid)
+            .await
     }
 
     // Execution management
@@ -386,7 +471,8 @@ impl AppState {
             started_at: Utc::now(),
             completed_at: None,
         };
-        self.executions.insert(execution.execution_id.clone(), execution.clone());
+        self.executions
+            .insert(execution.execution_id.clone(), execution.clone());
         execution
     }
 
@@ -396,12 +482,21 @@ impl AppState {
     }
 
     /// Update execution status
-    pub fn update_execution(&self, execution_id: &str, status: ExecutionStatus, progress: f32, current_node: Option<String>) {
+    pub fn update_execution(
+        &self,
+        execution_id: &str,
+        status: ExecutionStatus,
+        progress: f32,
+        current_node: Option<String>,
+    ) {
         if let Some(mut exec) = self.executions.get_mut(execution_id) {
             exec.status = status;
             exec.progress = progress;
             exec.current_node = current_node;
-            if matches!(status, ExecutionStatus::Completed | ExecutionStatus::Failed | ExecutionStatus::Cancelled) {
+            if matches!(
+                status,
+                ExecutionStatus::Completed | ExecutionStatus::Failed | ExecutionStatus::Cancelled
+            ) {
                 exec.completed_at = Some(Utc::now());
             }
         }
@@ -458,7 +553,10 @@ mod tests {
         let tenant_id = "tenant-1";
 
         // Create
-        let flow = state.create_flow(tenant_id, "Test Flow", Some("Description".to_string())).await.unwrap();
+        let flow = state
+            .create_flow(tenant_id, "Test Flow", Some("Description".to_string()))
+            .await
+            .unwrap();
         assert_eq!(flow.name, "Test Flow");
 
         // Get
@@ -467,7 +565,10 @@ mod tests {
         assert_eq!(retrieved.name, "Test Flow");
 
         // Update
-        let updated = state.update_flow(tenant_id, &flow_id, Some("Updated".to_string()), None).await.unwrap();
+        let updated = state
+            .update_flow(tenant_id, &flow_id, Some("Updated".to_string()), None)
+            .await
+            .unwrap();
         assert_eq!(updated.name, "Updated");
 
         // List
@@ -489,8 +590,19 @@ mod tests {
         let flow_id = flow.id.to_string();
 
         // Create versions
-        let v1 = state.create_version(&flow_id, tenant_id, serde_json::json!({"v": 1}), Some("v1.0".to_string())).await.unwrap();
-        let v2 = state.create_version(&flow_id, tenant_id, serde_json::json!({"v": 2}), None).await.unwrap();
+        let v1 = state
+            .create_version(
+                &flow_id,
+                tenant_id,
+                serde_json::json!({"v": 1}),
+                Some("v1.0".to_string()),
+            )
+            .await
+            .unwrap();
+        let v2 = state
+            .create_version(&flow_id, tenant_id, serde_json::json!({"v": 2}), None)
+            .await
+            .unwrap();
 
         assert_eq!(v1.version_number, 1);
         assert_eq!(v2.version_number, 2);
@@ -501,11 +613,17 @@ mod tests {
 
         // Get
         let v1_id = v1.id.to_string();
-        let retrieved = state.get_version(tenant_id, &flow_id, &v1_id).await.unwrap();
+        let retrieved = state
+            .get_version(tenant_id, &flow_id, &v1_id)
+            .await
+            .unwrap();
         assert_eq!(retrieved.version_number, 1);
 
         // Delete
-        state.delete_version(tenant_id, &flow_id, &v1_id).await.unwrap();
+        state
+            .delete_version(tenant_id, &flow_id, &v1_id)
+            .await
+            .unwrap();
         assert_eq!(state.version_count(tenant_id, &flow_id).await, 1);
     }
 
@@ -516,7 +634,12 @@ mod tests {
         let exec = state.create_execution("flow-1", "tenant-1");
         assert_eq!(exec.status, ExecutionStatus::Pending);
 
-        state.update_execution(&exec.execution_id, ExecutionStatus::Running, 0.5, Some("node-1".to_string()));
+        state.update_execution(
+            &exec.execution_id,
+            ExecutionStatus::Running,
+            0.5,
+            Some("node-1".to_string()),
+        );
         let running = state.get_execution(&exec.execution_id).unwrap();
         assert_eq!(running.status, ExecutionStatus::Running);
         assert_eq!(running.progress, 0.5);

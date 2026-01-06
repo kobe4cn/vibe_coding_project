@@ -14,9 +14,10 @@ pub struct Database {
 impl Database {
     /// Create a new database connection pool from configuration
     pub async fn connect(config: &DatabaseConfig) -> Result<Self, sqlx::Error> {
-        let url = config.url.as_ref().ok_or_else(|| {
-            sqlx::Error::Configuration("DATABASE_URL not set".into())
-        })?;
+        let url = config
+            .url
+            .as_ref()
+            .ok_or_else(|| sqlx::Error::Configuration("DATABASE_URL not set".into()))?;
 
         let pool = PgPoolOptions::new()
             .max_connections(config.pool_size)
@@ -37,17 +38,12 @@ impl Database {
 
     /// Check if database is healthy
     pub async fn is_healthy(&self) -> bool {
-        sqlx::query("SELECT 1")
-            .fetch_one(&self.pool)
-            .await
-            .is_ok()
+        sqlx::query("SELECT 1").fetch_one(&self.pool).await.is_ok()
     }
 
     /// Run pending migrations
     pub async fn run_migrations(&self) -> Result<(), sqlx::migrate::MigrateError> {
-        sqlx::migrate!("./migrations")
-            .run(&self.pool)
-            .await
+        sqlx::migrate!("./migrations").run(&self.pool).await
     }
 
     /// Set tenant context for row-level security

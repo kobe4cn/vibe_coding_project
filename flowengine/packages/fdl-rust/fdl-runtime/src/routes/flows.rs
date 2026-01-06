@@ -1,14 +1,14 @@
 //! Flow management routes
 
+use crate::state::AppState;
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{delete, get, post, put},
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::state::AppState;
 
 /// Flow list item response
 #[derive(Serialize)]
@@ -96,7 +96,8 @@ async fn list_flows(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let (flows, total) = state.list_flows(&query.tenant_id, query.limit, query.offset)
+    let (flows, total) = state
+        .list_flows(&query.tenant_id, query.limit, query.offset)
         .await
         .map_err(|e| {
             tracing::error!("Failed to list flows: {}", e);
@@ -130,22 +131,26 @@ async fn create_flow(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateFlowRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
-    let flow = state.create_flow(&req.tenant_id, &req.name, req.description)
+    let flow = state
+        .create_flow(&req.tenant_id, &req.name, req.description)
         .await
         .map_err(|e| {
             tracing::error!("Failed to create flow: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    Ok((StatusCode::CREATED, Json(serde_json::json!({
-        "id": flow.id.to_string(),
-        "name": flow.name,
-        "description": flow.description,
-        "tenant_id": flow.tenant_id.to_string(),
-        "version_count": 0,
-        "created_at": flow.created_at.to_rfc3339(),
-        "updated_at": flow.updated_at.to_rfc3339()
-    }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "id": flow.id.to_string(),
+            "name": flow.name,
+            "description": flow.description,
+            "tenant_id": flow.tenant_id.to_string(),
+            "version_count": 0,
+            "created_at": flow.created_at.to_rfc3339(),
+            "updated_at": flow.updated_at.to_rfc3339()
+        })),
+    ))
 }
 
 async fn get_flow(
@@ -153,7 +158,8 @@ async fn get_flow(
     Path(id): Path<String>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let flow = state.get_flow(&query.tenant_id, &id)
+    let flow = state
+        .get_flow(&query.tenant_id, &id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -177,7 +183,8 @@ async fn update_flow(
     Path(id): Path<String>,
     Json(req): Json<UpdateFlowRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let flow = state.update_flow(&req.tenant_id, &id, req.name, req.description)
+    let flow = state
+        .update_flow(&req.tenant_id, &id, req.name, req.description)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -194,7 +201,8 @@ async fn delete_flow(
     Path(id): Path<String>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    state.delete_flow(&query.tenant_id, &id)
+    state
+        .delete_flow(&query.tenant_id, &id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -210,11 +218,13 @@ async fn list_versions(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     // Check if flow exists
-    state.get_flow(&query.tenant_id, &flow_id)
+    state
+        .get_flow(&query.tenant_id, &flow_id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let versions = state.list_versions(&query.tenant_id, &flow_id)
+    let versions = state
+        .list_versions(&query.tenant_id, &flow_id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to list versions: {}", e);
@@ -245,24 +255,29 @@ async fn create_version(
     Json(req): Json<CreateVersionRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
     // Check if flow exists
-    state.get_flow(&req.tenant_id, &flow_id)
+    state
+        .get_flow(&req.tenant_id, &flow_id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let version = state.create_version(&flow_id, &req.tenant_id, req.data, req.label)
+    let version = state
+        .create_version(&flow_id, &req.tenant_id, req.data, req.label)
         .await
         .map_err(|e| {
             tracing::error!("Failed to create version: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    Ok((StatusCode::CREATED, Json(serde_json::json!({
-        "id": version.id.to_string(),
-        "flow_id": version.flow_id.to_string(),
-        "version_number": version.version_number,
-        "label": version.label,
-        "created_at": version.created_at.to_rfc3339()
-    }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "id": version.id.to_string(),
+            "flow_id": version.flow_id.to_string(),
+            "version_number": version.version_number,
+            "label": version.label,
+            "created_at": version.created_at.to_rfc3339()
+        })),
+    ))
 }
 
 async fn get_version(
@@ -270,7 +285,8 @@ async fn get_version(
     Path((flow_id, version_id)): Path<(String, String)>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let version = state.get_version(&query.tenant_id, &flow_id, &version_id)
+    let version = state
+        .get_version(&query.tenant_id, &flow_id, &version_id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -289,7 +305,8 @@ async fn delete_version(
     Path((flow_id, version_id)): Path<(String, String)>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    state.delete_version(&query.tenant_id, &flow_id, &version_id)
+    state
+        .delete_version(&query.tenant_id, &flow_id, &version_id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 

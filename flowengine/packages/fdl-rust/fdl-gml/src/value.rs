@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// GML value type representing all possible values in GML
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(untagged)]
 pub enum Value {
     /// Null value
+    #[default]
     Null,
     /// Boolean value
     Bool(bool),
@@ -173,12 +174,6 @@ impl Value {
             Value::Array(_) => "array",
             Value::Object(_) => "object",
         }
-    }
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Value::Null
     }
 }
 

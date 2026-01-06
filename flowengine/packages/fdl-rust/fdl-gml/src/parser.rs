@@ -414,19 +414,17 @@ impl Parser {
                 // Check for lambda: `(a, b) => expr`
                 if let Some(Token::Ident(_)) = self.peek() {
                     let mut params = Vec::new();
-                    loop {
-                        if let Some(Token::Ident(name)) = self.peek().cloned() {
+
+                    while let Some(Token::Ident(name)) = self.peek().cloned() {
+                        self.advance();
+                        params.push(name);
+                        if self.check(&Token::Comma) {
                             self.advance();
-                            params.push(name);
-                            if self.check(&Token::Comma) {
-                                self.advance();
-                            } else {
-                                break;
-                            }
                         } else {
                             break;
                         }
                     }
+
                     if self.check(&Token::RParen) {
                         self.advance();
                         if self.check(&Token::Arrow) {
@@ -470,10 +468,8 @@ impl Parser {
                 while !self.check(&Token::RBrace) && !self.is_at_end() {
                     let field = self.parse_object_field()?;
                     fields.push(field);
-                    if !self.check(&Token::RBrace) {
-                        if self.check(&Token::Comma) {
-                            self.advance();
-                        }
+                    if !self.check(&Token::RBrace) && self.check(&Token::Comma) {
+                        self.advance();
                     }
                 }
                 self.expect(&Token::RBrace)?;
@@ -564,7 +560,7 @@ impl Parser {
                 // Collect expression
                 let mut expr_str = String::new();
                 let mut brace_count = 1;
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c == '{' {
                         brace_count += 1;
                         expr_str.push(c);

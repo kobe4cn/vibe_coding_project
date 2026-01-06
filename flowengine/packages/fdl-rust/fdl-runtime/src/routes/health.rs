@@ -1,9 +1,9 @@
 //! Health check routes
 
-use axum::{routing::get, Json, Router};
+use crate::state::AppState;
+use axum::{Json, Router, routing::get};
 use serde::Serialize;
 use std::sync::Arc;
-use crate::state::AppState;
 
 /// Health check response
 #[derive(Serialize)]

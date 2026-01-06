@@ -34,22 +34,14 @@ impl ToolHandler for McpHandler {
         // Parse path: service/method
         let parts: Vec<&str> = path.splitn(2, '/').collect();
         if parts.len() != 2 {
-            return Err(ToolError::InvalidUri(format!(
-                "Invalid MCP path: {}",
-                path
-            )));
+            return Err(ToolError::InvalidUri(format!("Invalid MCP path: {}", path)));
         }
 
         let service = parts[0];
         let method = parts[1];
 
         // Placeholder: In production, call the MCP server
-        tracing::info!(
-            "MCP call: {}/{} with args: {}",
-            service,
-            method,
-            args
-        );
+        tracing::info!("MCP call: {}/{} with args: {}", service, method, args);
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -95,13 +87,21 @@ mod tests {
         let context = crate::ToolContext::default();
         let args = serde_json::json!({ "path": "/test/file.txt" });
 
-        let result = handler.execute("filesystem/read_file", args, &context).await;
+        let result = handler
+            .execute("filesystem/read_file", args, &context)
+            .await;
         assert!(result.is_ok());
 
         let output = result.unwrap();
         assert_eq!(output.value.get("success"), Some(&serde_json::json!(true)));
-        assert_eq!(output.value.get("service"), Some(&serde_json::json!("filesystem")));
-        assert_eq!(output.value.get("method"), Some(&serde_json::json!("read_file")));
+        assert_eq!(
+            output.value.get("service"),
+            Some(&serde_json::json!("filesystem"))
+        );
+        assert_eq!(
+            output.value.get("method"),
+            Some(&serde_json::json!("read_file"))
+        );
     }
 
     #[tokio::test]
@@ -109,7 +109,9 @@ mod tests {
         let handler = McpHandler::new("http://localhost:3000");
         let context = crate::ToolContext::default();
 
-        let result = handler.execute("invalid_path", serde_json::json!({}), &context).await;
+        let result = handler
+            .execute("invalid_path", serde_json::json!({}), &context)
+            .await;
         assert!(result.is_err());
     }
 }

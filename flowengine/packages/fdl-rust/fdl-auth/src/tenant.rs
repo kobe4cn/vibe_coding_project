@@ -95,7 +95,9 @@ impl TenantContext {
             )));
         }
         if usage.storage_used_bytes >= quota.max_storage_bytes {
-            return Err(crate::AuthError::QuotaExceeded("Storage limit reached".to_string()));
+            return Err(crate::AuthError::QuotaExceeded(
+                "Storage limit reached".to_string(),
+            ));
         }
         Ok(())
     }
@@ -200,10 +202,15 @@ mod tests {
         config.max_concurrent_executions = Some(50);
         config.max_execution_time_seconds = Some(300);
         config.allowed_tool_types = Some(vec!["api".to_string(), "db".to_string()]);
-        config.settings.insert("custom_key".to_string(), serde_json::json!("custom_value"));
+        config
+            .settings
+            .insert("custom_key".to_string(), serde_json::json!("custom_value"));
 
         assert_eq!(config.max_concurrent_executions, Some(50));
         assert_eq!(config.max_execution_time_seconds, Some(300));
-        assert_eq!(config.allowed_tool_types, Some(vec!["api".to_string(), "db".to_string()]));
+        assert_eq!(
+            config.allowed_tool_types,
+            Some(vec!["api".to_string(), "db".to_string()])
+        );
     }
 }

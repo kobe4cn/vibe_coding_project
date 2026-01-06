@@ -97,7 +97,7 @@ impl Role {
     }
 
     /// Parse role from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "viewer" => Some(Role::Viewer),
             "editor" => Some(Role::Editor),
@@ -112,10 +112,10 @@ impl Role {
 /// Check if claims have a specific permission
 pub fn has_permission(claims: &Claims, permission: Permission) -> bool {
     for role_str in &claims.roles {
-        if let Some(role) = Role::from_str(role_str) {
-            if role.permissions().contains(&permission) {
-                return true;
-            }
+        if let Some(role) = Role::from_strs(role_str)
+            && role.permissions().contains(&permission)
+        {
+            return true;
         }
     }
     false
@@ -136,14 +136,14 @@ mod tests {
 
     #[test]
     fn test_role_parsing() {
-        assert_eq!(Role::from_str("viewer"), Some(Role::Viewer));
-        assert_eq!(Role::from_str("editor"), Some(Role::Editor));
-        assert_eq!(Role::from_str("executor"), Some(Role::Executor));
-        assert_eq!(Role::from_str("admin"), Some(Role::Admin));
-        assert_eq!(Role::from_str("superadmin"), Some(Role::SuperAdmin));
-        assert_eq!(Role::from_str("super_admin"), Some(Role::SuperAdmin));
-        assert_eq!(Role::from_str("ADMIN"), Some(Role::Admin)); // case insensitive
-        assert_eq!(Role::from_str("unknown"), None);
+        assert_eq!(Role::from_strs("viewer"), Some(Role::Viewer));
+        assert_eq!(Role::from_strs("editor"), Some(Role::Editor));
+        assert_eq!(Role::from_strs("executor"), Some(Role::Executor));
+        assert_eq!(Role::from_strs("admin"), Some(Role::Admin));
+        assert_eq!(Role::from_strs("superadmin"), Some(Role::SuperAdmin));
+        assert_eq!(Role::from_strs("super_admin"), Some(Role::SuperAdmin));
+        assert_eq!(Role::from_strs("ADMIN"), Some(Role::Admin)); // case insensitive
+        assert_eq!(Role::from_strs("unknown"), None);
     }
 
     #[test]

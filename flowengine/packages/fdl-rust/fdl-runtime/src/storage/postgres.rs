@@ -5,11 +5,11 @@ use sqlx::Row;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::db::Database;
 use super::traits::{
-    CreateFlowRequest, CreateVersionRequest, ExecutionRecord, FlowRecord, FlowStorage,
-    ListOptions, ListResult, StorageError, UpdateFlowRequest, VersionRecord,
+    CreateFlowRequest, CreateVersionRequest, ExecutionRecord, FlowRecord, FlowStorage, ListOptions,
+    ListResult, StorageError, UpdateFlowRequest, VersionRecord,
 };
+use crate::db::Database;
 
 /// PostgreSQL storage implementation
 pub struct PostgresStorage {
@@ -166,13 +166,19 @@ impl FlowStorage for PostgresStorage {
             .await?;
 
         if result.rows_affected() == 0 {
-            return Err(StorageError::NotFound(format!("Flow {} not found", flow_id)));
+            return Err(StorageError::NotFound(format!(
+                "Flow {} not found",
+                flow_id
+            )));
         }
 
         Ok(())
     }
 
-    async fn create_version(&self, req: CreateVersionRequest) -> Result<VersionRecord, StorageError> {
+    async fn create_version(
+        &self,
+        req: CreateVersionRequest,
+    ) -> Result<VersionRecord, StorageError> {
         // Get next version number
         let version_row = sqlx::query(
             "SELECT COALESCE(MAX(version_number), 0) + 1 as next_version FROM flow_versions WHERE flow_id = $1"
@@ -287,7 +293,10 @@ impl FlowStorage for PostgresStorage {
         .await?;
 
         if result.rows_affected() == 0 {
-            return Err(StorageError::NotFound(format!("Version {} not found", version_id)));
+            return Err(StorageError::NotFound(format!(
+                "Version {} not found",
+                version_id
+            )));
         }
 
         Ok(())

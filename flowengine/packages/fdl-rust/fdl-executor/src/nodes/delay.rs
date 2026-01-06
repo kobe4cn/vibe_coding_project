@@ -49,9 +49,9 @@ fn parse_duration(s: &str) -> ExecutorResult<Duration> {
         )));
     };
 
-    let num: u64 = num_str.parse().map_err(|_| {
-        ExecutorError::InvalidFlow(format!("Invalid duration number: {}", num_str))
-    })?;
+    let num: u64 = num_str
+        .parse()
+        .map_err(|_| ExecutorError::InvalidFlow(format!("Invalid duration number: {}", num_str)))?;
 
     let duration = match unit {
         "s" => Duration::from_secs(num),
@@ -61,7 +61,7 @@ fn parse_duration(s: &str) -> ExecutorResult<Duration> {
             return Err(ExecutorError::InvalidFlow(format!(
                 "Invalid duration unit: {}",
                 unit
-            )))
+            )));
         }
     };
 

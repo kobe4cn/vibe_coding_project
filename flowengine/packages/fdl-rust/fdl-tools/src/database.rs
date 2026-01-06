@@ -26,7 +26,7 @@ pub enum DbOperation {
 }
 
 impl DbOperation {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s {
             "take" => Some(Self::Take),
             "list" => Some(Self::List),
@@ -83,8 +83,9 @@ impl ToolHandler for DatabaseHandler {
         let operation = parts[0];
         let table = parts[1];
 
-        let _op = DbOperation::from_str(operation)
-            .ok_or_else(|| ToolError::InvalidArgument(format!("Unknown operation: {}", operation)))?;
+        let _op = DbOperation::from_strs(operation).ok_or_else(|| {
+            ToolError::InvalidArgument(format!("Unknown operation: {}", operation))
+        })?;
 
         // Placeholder: In production, execute the actual database operation
         tracing::info!(
@@ -128,20 +129,20 @@ mod tests {
 
     #[test]
     fn test_db_operation_parsing() {
-        assert_eq!(DbOperation::from_str("take"), Some(DbOperation::Take));
-        assert_eq!(DbOperation::from_str("list"), Some(DbOperation::List));
-        assert_eq!(DbOperation::from_str("page"), Some(DbOperation::Page));
-        assert_eq!(DbOperation::from_str("stream"), Some(DbOperation::Stream));
-        assert_eq!(DbOperation::from_str("count"), Some(DbOperation::Count));
-        assert_eq!(DbOperation::from_str("create"), Some(DbOperation::Create));
-        assert_eq!(DbOperation::from_str("modify"), Some(DbOperation::Modify));
-        assert_eq!(DbOperation::from_str("delete"), Some(DbOperation::Delete));
-        assert_eq!(DbOperation::from_str("save"), Some(DbOperation::Save));
-        assert_eq!(DbOperation::from_str("bulk"), Some(DbOperation::Bulk));
-        assert_eq!(DbOperation::from_str("native"), Some(DbOperation::Native));
-        assert_eq!(DbOperation::from_str("init"), Some(DbOperation::Init));
-        assert_eq!(DbOperation::from_str("drop"), Some(DbOperation::Drop));
-        assert_eq!(DbOperation::from_str("unknown"), None);
+        assert_eq!(DbOperation::from_strs("take"), Some(DbOperation::Take));
+        assert_eq!(DbOperation::from_strs("list"), Some(DbOperation::List));
+        assert_eq!(DbOperation::from_strs("page"), Some(DbOperation::Page));
+        assert_eq!(DbOperation::from_strs("stream"), Some(DbOperation::Stream));
+        assert_eq!(DbOperation::from_strs("count"), Some(DbOperation::Count));
+        assert_eq!(DbOperation::from_strs("create"), Some(DbOperation::Create));
+        assert_eq!(DbOperation::from_strs("modify"), Some(DbOperation::Modify));
+        assert_eq!(DbOperation::from_strs("delete"), Some(DbOperation::Delete));
+        assert_eq!(DbOperation::from_strs("save"), Some(DbOperation::Save));
+        assert_eq!(DbOperation::from_strs("bulk"), Some(DbOperation::Bulk));
+        assert_eq!(DbOperation::from_strs("native"), Some(DbOperation::Native));
+        assert_eq!(DbOperation::from_strs("init"), Some(DbOperation::Init));
+        assert_eq!(DbOperation::from_strs("drop"), Some(DbOperation::Drop));
+        assert_eq!(DbOperation::from_strs("unknown"), None);
     }
 
     #[test]
@@ -163,7 +164,10 @@ mod tests {
         let output = result.unwrap();
         assert_eq!(output.value.get("success"), Some(&serde_json::json!(true)));
         assert_eq!(output.value.get("table"), Some(&serde_json::json!("users")));
-        assert_eq!(output.value.get("operation"), Some(&serde_json::json!("take")));
+        assert_eq!(
+            output.value.get("operation"),
+            Some(&serde_json::json!("take"))
+        );
     }
 
     #[tokio::test]
@@ -171,7 +175,9 @@ mod tests {
         let handler = DatabaseHandler::new("postgres://localhost:5432/test");
         let context = crate::ToolContext::default();
 
-        let result = handler.execute("invalid_path", serde_json::json!({}), &context).await;
+        let result = handler
+            .execute("invalid_path", serde_json::json!({}), &context)
+            .await;
         assert!(result.is_err());
     }
 
@@ -180,7 +186,9 @@ mod tests {
         let handler = DatabaseHandler::new("postgres://localhost:5432/test");
         let context = crate::ToolContext::default();
 
-        let result = handler.execute("users/unknown_op", serde_json::json!({}), &context).await;
+        let result = handler
+            .execute("users/unknown_op", serde_json::json!({}), &context)
+            .await;
         assert!(result.is_err());
     }
 }

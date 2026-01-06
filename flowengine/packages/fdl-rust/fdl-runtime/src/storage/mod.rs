@@ -9,7 +9,7 @@ pub mod traits;
 
 pub use memory::MemoryStorage;
 pub use postgres::PostgresStorage;
-pub use traits::{FlowStorage, StorageError, FlowRecord, VersionRecord};
+pub use traits::{FlowRecord, FlowStorage, StorageError, VersionRecord};
 
 use crate::db::Database;
 use crate::state::DatabaseConfig;

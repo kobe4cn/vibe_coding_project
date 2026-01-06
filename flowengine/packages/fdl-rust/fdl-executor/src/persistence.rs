@@ -110,8 +110,8 @@ impl ExecutionSnapshot {
             status,
             inputs: context.inputs().clone(),
             variables: context.variables().clone(),
-            completed_nodes: context.completed().iter().cloned().collect(),
-            failed_nodes: context.failed().iter().cloned().collect(),
+            completed_nodes: context.completed().to_vec(),
+            failed_nodes: context.failed().to_vec(),
             current_nodes: Vec::new(),
             history: Vec::new(),
             created_at: now,
@@ -276,10 +276,7 @@ impl PersistenceBackend for InMemoryPersistence {
             .values()
             .filter(|s| {
                 s.tenant_id == tenant_id
-                    && matches!(
-                        s.status,
-                        ExecutionStatus::Running | ExecutionStatus::Paused
-                    )
+                    && matches!(s.status, ExecutionStatus::Running | ExecutionStatus::Paused)
             })
             .cloned()
             .collect();
@@ -340,7 +337,8 @@ impl PersistenceManager {
     /// Check if snapshot should be saved based on config
     pub fn should_snapshot(&self, completed_count: u32) -> bool {
         self.config.persist_on_node_complete
-            || (completed_count > 0 && completed_count % self.config.snapshot_interval == 0)
+            || (completed_count > 0
+                && completed_count.is_multiple_of(self.config.snapshot_interval))
     }
 
     /// Get config
@@ -361,16 +359,12 @@ impl RecoveryService {
 
     /// Recover execution context from snapshot
     pub async fn recover(&self, execution_id: Uuid) -> ExecutorResult<ExecutionContext> {
-        let snapshot = self
-            .persistence
-            .load(execution_id)
-            .await?
-            .ok_or_else(|| {
-                ExecutorError::RecoveryError(format!(
-                    "Snapshot not found for execution {}",
-                    execution_id
-                ))
-            })?;
+        let snapshot = self.persistence.load(execution_id).await?.ok_or_else(|| {
+            ExecutorError::RecoveryError(format!(
+                "Snapshot not found for execution {}",
+                execution_id
+            ))
+        })?;
 
         // Rebuild context from snapshot
         let mut context = ExecutionContext::new();
@@ -392,7 +386,10 @@ impl RecoveryService {
     }
 
     /// List recoverable executions for a tenant
-    pub async fn list_recoverable(&self, tenant_id: &str) -> ExecutorResult<Vec<ExecutionSnapshot>> {
+    pub async fn list_recoverable(
+        &self,
+        tenant_id: &str,
+    ) -> ExecutorResult<Vec<ExecutionSnapshot>> {
         self.persistence.get_incomplete(tenant_id).await
     }
 }
@@ -499,10 +496,22 @@ mod tests {
         };
 
         persistence.save_snapshot(&snapshot).await.unwrap();
-        assert!(persistence.load_snapshot(execution_id).await.unwrap().is_some());
+        assert!(
+            persistence
+                .load_snapshot(execution_id)
+                .await
+                .unwrap()
+                .is_some()
+        );
 
         persistence.delete_snapshot(execution_id).await.unwrap();
-        assert!(persistence.load_snapshot(execution_id).await.unwrap().is_none());
+        assert!(
+            persistence
+                .load_snapshot(execution_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -624,10 +633,7 @@ mod tests {
         // Recover
         let context = recovery.recover(execution_id).await.unwrap();
         assert!(context.is_completed("node1"));
-        assert_eq!(
-            context.variables().get("node1"),
-            Some(&Value::Int(42))
-        );
+        assert_eq!(context.variables().get("node1"), Some(&Value::Int(42)));
     }
 
     #[test]

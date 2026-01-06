@@ -1,9 +1,9 @@
 //! Authentication routes
 
-use axum::{extract::State, routing::post, Json, Router};
+use crate::state::AppState;
+use axum::{Json, Router, extract::State, routing::post};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::state::AppState;
 
 /// Login request
 #[derive(Deserialize)]

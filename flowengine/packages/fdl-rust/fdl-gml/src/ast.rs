@@ -75,10 +75,7 @@ pub enum Expression {
     },
 
     /// Function call: `FUNC(args...)`
-    FunctionCall {
-        name: String,
-        args: Vec<Expression>,
-    },
+    FunctionCall { name: String, args: Vec<Expression> },
 
     /// Method call: `expr.method(args...)`
     MethodCall {

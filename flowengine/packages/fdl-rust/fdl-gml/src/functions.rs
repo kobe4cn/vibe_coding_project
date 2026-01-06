@@ -124,7 +124,9 @@ fn fn_avg(args: &[Value]) -> GmlResult<Value> {
         let avg = values.iter().sum::<f64>() / values.len() as f64;
         Ok(Value::Float(avg))
     } else {
-        Err(GmlError::InvalidArgument("AVG requires an array".to_string()))
+        Err(GmlError::InvalidArgument(
+            "AVG requires an array".to_string(),
+        ))
     }
 }
 
@@ -175,25 +177,34 @@ fn fn_max(args: &[Value]) -> GmlResult<Value> {
 }
 
 fn fn_round(args: &[Value]) -> GmlResult<Value> {
-    let num = args.first().and_then(|v| v.as_float()).ok_or(GmlError::InvalidArgument(
-        "ROUND requires a number".to_string(),
-    ))?;
+    let num = args
+        .first()
+        .and_then(|v| v.as_float())
+        .ok_or(GmlError::InvalidArgument(
+            "ROUND requires a number".to_string(),
+        ))?;
     let decimals = args.get(1).and_then(|v| v.as_int()).unwrap_or(0);
     let factor = 10_f64.powi(decimals as i32);
     Ok(Value::Float((num * factor).round() / factor))
 }
 
 fn fn_floor(args: &[Value]) -> GmlResult<Value> {
-    let num = args.first().and_then(|v| v.as_float()).ok_or(GmlError::InvalidArgument(
-        "FLOOR requires a number".to_string(),
-    ))?;
+    let num = args
+        .first()
+        .and_then(|v| v.as_float())
+        .ok_or(GmlError::InvalidArgument(
+            "FLOOR requires a number".to_string(),
+        ))?;
     Ok(Value::Float(num.floor()))
 }
 
 fn fn_ceil(args: &[Value]) -> GmlResult<Value> {
-    let num = args.first().and_then(|v| v.as_float()).ok_or(GmlError::InvalidArgument(
-        "CEIL requires a number".to_string(),
-    ))?;
+    let num = args
+        .first()
+        .and_then(|v| v.as_float())
+        .ok_or(GmlError::InvalidArgument(
+            "CEIL requires a number".to_string(),
+        ))?;
     Ok(Value::Float(num.ceil()))
 }
 
@@ -229,23 +240,32 @@ fn fn_concat(args: &[Value]) -> GmlResult<Value> {
 }
 
 fn fn_upper(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "UPPER requires a string".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "UPPER requires a string".to_string(),
+        ))?;
     Ok(Value::String(s.to_uppercase()))
 }
 
 fn fn_lower(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "LOWER requires a string".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "LOWER requires a string".to_string(),
+        ))?;
     Ok(Value::String(s.to_lowercase()))
 }
 
 fn fn_trim(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "TRIM requires a string".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "TRIM requires a string".to_string(),
+        ))?;
     Ok(Value::String(s.trim().to_string()))
 }
 
@@ -264,33 +284,49 @@ fn fn_length(args: &[Value]) -> GmlResult<Value> {
 }
 
 fn fn_substring(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "SUBSTRING requires a string".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "SUBSTRING requires a string".to_string(),
+        ))?;
     let start = args.get(1).and_then(|v| v.as_int()).unwrap_or(0) as usize;
     let len = args.get(2).and_then(|v| v.as_int());
 
     let chars: Vec<char> = s.chars().collect();
     let end = len.map(|l| start + l as usize).unwrap_or(chars.len());
-    let result: String = chars.get(start..end.min(chars.len())).unwrap_or(&[]).iter().collect();
+    let result: String = chars
+        .get(start..end.min(chars.len()))
+        .unwrap_or(&[])
+        .iter()
+        .collect();
     Ok(Value::String(result))
 }
 
 fn fn_replace(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "REPLACE requires a string".to_string(),
-    ))?;
-    let from = args.get(1).and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "REPLACE requires search pattern".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "REPLACE requires a string".to_string(),
+        ))?;
+    let from = args
+        .get(1)
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "REPLACE requires search pattern".to_string(),
+        ))?;
     let to = args.get(2).and_then(|v| v.as_str()).unwrap_or("");
     Ok(Value::String(s.replace(from, to)))
 }
 
 fn fn_split(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "SPLIT requires a string".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "SPLIT requires a string".to_string(),
+        ))?;
     let sep = args.get(1).and_then(|v| v.as_str()).unwrap_or(",");
     let parts: Vec<Value> = s.split(sep).map(|p| Value::String(p.to_string())).collect();
     Ok(Value::Array(parts))
@@ -318,9 +354,12 @@ fn fn_time(args: &[Value]) -> GmlResult<Value> {
 }
 
 fn fn_format_date(args: &[Value]) -> GmlResult<Value> {
-    let date_str = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "FORMAT_DATE requires a date".to_string(),
-    ))?;
+    let date_str = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "FORMAT_DATE requires a date".to_string(),
+        ))?;
     let format = args.get(1).and_then(|v| v.as_str()).unwrap_or("%Y-%m-%d");
 
     // Try to parse as RFC3339 first
@@ -352,9 +391,9 @@ fn apply_date_offset(dt: DateTime<Local>, offset: &str) -> GmlResult<DateTime<Lo
         (offset, "d")
     };
 
-    let num: i64 = num_str.parse().map_err(|_| {
-        GmlError::InvalidArgument(format!("Invalid offset number: {}", num_str))
-    })?;
+    let num: i64 = num_str
+        .parse()
+        .map_err(|_| GmlError::InvalidArgument(format!("Invalid offset number: {}", num_str)))?;
 
     let duration = match unit {
         "s" => Duration::seconds(num),
@@ -362,13 +401,13 @@ fn apply_date_offset(dt: DateTime<Local>, offset: &str) -> GmlResult<DateTime<Lo
         "h" => Duration::hours(num),
         "d" => Duration::days(num),
         "w" => Duration::weeks(num),
-        "M" => Duration::days(num * 30), // Approximate month
+        "M" => Duration::days(num * 30),  // Approximate month
         "y" => Duration::days(num * 365), // Approximate year
         _ => {
             return Err(GmlError::InvalidArgument(format!(
                 "Invalid offset unit: {}",
                 unit
-            )))
+            )));
         }
     };
 
@@ -412,9 +451,10 @@ fn fn_int(args: &[Value]) -> GmlResult<Value> {
     match val {
         Value::Int(i) => Ok(Value::Int(*i)),
         Value::Float(f) => Ok(Value::Int(*f as i64)),
-        Value::String(s) => s.parse::<i64>().map(Value::Int).map_err(|_| {
-            GmlError::InvalidArgument(format!("Cannot convert '{}' to int", s))
-        }),
+        Value::String(s) => s
+            .parse::<i64>()
+            .map(Value::Int)
+            .map_err(|_| GmlError::InvalidArgument(format!("Cannot convert '{}' to int", s))),
         Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
         _ => Err(GmlError::TypeError {
             expected: "convertible to int".to_string(),
@@ -430,9 +470,10 @@ fn fn_float(args: &[Value]) -> GmlResult<Value> {
     match val {
         Value::Int(i) => Ok(Value::Float(*i as f64)),
         Value::Float(f) => Ok(Value::Float(*f)),
-        Value::String(s) => s.parse::<f64>().map(Value::Float).map_err(|_| {
-            GmlError::InvalidArgument(format!("Cannot convert '{}' to float", s))
-        }),
+        Value::String(s) => s
+            .parse::<f64>()
+            .map(Value::Float)
+            .map_err(|_| GmlError::InvalidArgument(format!("Cannot convert '{}' to float", s))),
         _ => Err(GmlError::TypeError {
             expected: "convertible to float".to_string(),
             actual: val.type_name().to_string(),
@@ -491,9 +532,12 @@ fn fn_if(args: &[Value]) -> GmlResult<Value> {
 }
 
 fn fn_md5(args: &[Value]) -> GmlResult<Value> {
-    let s = args.first().and_then(|v| v.as_str()).ok_or(GmlError::InvalidArgument(
-        "MD5 requires a string".to_string(),
-    ))?;
+    let s = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "MD5 requires a string".to_string(),
+        ))?;
     // Simple MD5 hash placeholder - in production use a proper crypto library
     let hash = format!("{:x}", md5_hash(s.as_bytes()));
     Ok(Value::String(hash))
@@ -544,7 +588,11 @@ mod tests {
         let result = fn_coalesce(&[Value::Null, Value::String("default".to_string())]).unwrap();
         assert_eq!(result, Value::String("default".to_string()));
 
-        let result = fn_coalesce(&[Value::String("first".to_string()), Value::String("second".to_string())]).unwrap();
+        let result = fn_coalesce(&[
+            Value::String("first".to_string()),
+            Value::String("second".to_string()),
+        ])
+        .unwrap();
         assert_eq!(result, Value::String("first".to_string()));
     }
 }

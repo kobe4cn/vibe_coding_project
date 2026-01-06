@@ -2,7 +2,7 @@
 
 use crate::error::{AuthError, AuthResult};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
 /// JWT configuration
@@ -154,7 +154,9 @@ mod tests {
     fn test_refresh_token() {
         let service = JwtService::new(JwtConfig::default());
 
-        let token = service.generate_refresh_token("user-1", "tenant-1").unwrap();
+        let token = service
+            .generate_refresh_token("user-1", "tenant-1")
+            .unwrap();
 
         let claims = service.validate_token(&token).unwrap();
         assert_eq!(claims.sub, "user-1");

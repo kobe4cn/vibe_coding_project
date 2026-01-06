@@ -90,9 +90,10 @@ pub async fn execute_agent_node(
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
     // Get agent URI (e.g., "agent://claude-3/chat")
-    let agent_uri = node.agent.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidNode(format!("Node {} missing agent URI", node_id))
-    })?;
+    let agent_uri = node
+        .agent
+        .as_ref()
+        .ok_or_else(|| ExecutorError::InvalidNode(format!("Node {} missing agent URI", node_id)))?;
 
     // Parse agent configuration from URI
     let config = parse_agent_uri(agent_uri)?;
@@ -142,12 +143,18 @@ pub async fn execute_agent_node(
         (
             "usage",
             Value::object([
-                ("prompt_tokens", Value::Int(response.usage.prompt_tokens as i64)),
+                (
+                    "prompt_tokens",
+                    Value::Int(response.usage.prompt_tokens as i64),
+                ),
                 (
                     "completion_tokens",
                     Value::Int(response.usage.completion_tokens as i64),
                 ),
-                ("total_tokens", Value::Int(response.usage.total_tokens as i64)),
+                (
+                    "total_tokens",
+                    Value::Int(response.usage.total_tokens as i64),
+                ),
             ]),
         ),
         (
@@ -200,7 +207,11 @@ fn parse_agent_uri(uri: &str) -> ExecutorResult<AgentConfig> {
         (path, None)
     };
 
-    let model = model_path.split('/').next().unwrap_or("default").to_string();
+    let model = model_path
+        .split('/')
+        .next()
+        .unwrap_or("default")
+        .to_string();
 
     let mut config = AgentConfig {
         model,
@@ -311,7 +322,8 @@ mod tests {
         let config = parse_agent_uri("agent://claude-3/chat").unwrap();
         assert_eq!(config.model, "claude-3");
 
-        let config = parse_agent_uri("agent://gpt-4/complete?max_tokens=1000&temperature=0.5").unwrap();
+        let config =
+            parse_agent_uri("agent://gpt-4/complete?max_tokens=1000&temperature=0.5").unwrap();
         assert_eq!(config.model, "gpt-4");
         assert_eq!(config.max_tokens, Some(1000));
         assert_eq!(config.temperature, Some(0.5));
@@ -372,6 +384,9 @@ mod tests {
     #[test]
     fn test_truncate_string() {
         assert_eq!(truncate_string("short", 10), "short");
-        assert_eq!(truncate_string("this is a longer string", 10), "this is a ...");
+        assert_eq!(
+            truncate_string("this is a longer string", 10),
+            "this is a ..."
+        );
     }
 }

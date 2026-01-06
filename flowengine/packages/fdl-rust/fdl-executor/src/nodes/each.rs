@@ -33,7 +33,7 @@ pub async fn execute_each_node(
             return Err(ExecutorError::NodeExecutionError {
                 node: node_id.to_string(),
                 message: format!("Each source '{}' is not an array", source_name),
-            })
+            });
         }
     };
 

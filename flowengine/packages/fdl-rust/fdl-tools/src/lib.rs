@@ -62,7 +62,10 @@ pub struct ToolOutput {
 pub fn parse_tool_uri(uri: &str) -> ToolResult<ToolUri> {
     let parts: Vec<&str> = uri.splitn(2, "://").collect();
     if parts.len() != 2 {
-        return Err(ToolError::InvalidUri(format!("Invalid URI format: {}", uri)));
+        return Err(ToolError::InvalidUri(format!(
+            "Invalid URI format: {}",
+            uri
+        )));
     }
 
     let tool_type = parts[0].to_string();
@@ -169,7 +172,8 @@ mod tests {
             timeout_ms: 60000,
             metadata: HashMap::new(),
         };
-        ctx.metadata.insert("X-Custom".to_string(), "value".to_string());
+        ctx.metadata
+            .insert("X-Custom".to_string(), "value".to_string());
 
         assert_eq!(ctx.tenant_id, "tenant-1");
         assert_eq!(ctx.bu_code, "BU001");
