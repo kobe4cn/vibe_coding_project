@@ -143,12 +143,24 @@ pub struct FrontendOutputDef {
 }
 
 /// Frontend 流程参数（inputs/outputs）
+/// 支持两种输出字段命名：`out`（YAML 格式）和 `outputs`（前端 JSON 格式）
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct FrontendArgs {
     #[serde(rename = "in", default)]
     pub inputs: Option<HashMap<String, String>>,
+    /// YAML 格式使用 `out`
     #[serde(default)]
     pub out: Option<Vec<FrontendOutputDef>>,
+    /// 前端 JSON 格式使用 `outputs`
+    #[serde(default)]
+    pub outputs: Option<Vec<FrontendOutputDef>>,
+}
+
+impl FrontendArgs {
+    /// 获取输出定义，优先使用 `out`，如果不存在则使用 `outputs`
+    pub fn get_outputs(&self) -> Option<&Vec<FrontendOutputDef>> {
+        self.out.as_ref().or(self.outputs.as_ref())
+    }
 }
 
 /// Frontend flow model (React Flow format)
@@ -381,8 +393,9 @@ fn extract_flow_args(
     };
 
     // 转换输出定义：FrontendOutputDef[] -> OutputDef::Structured
+    // 使用 get_outputs() 同时支持 out 和 outputs 两种命名
     let out = frontend_args
-        .and_then(|args| args.out.as_ref())
+        .and_then(|args| args.get_outputs())
         .map(|out_defs| {
             let structured: HashMap<String, String> = out_defs
                 .iter()
@@ -508,22 +521,22 @@ fn parse_default_value(default: &str, param_type: &str) -> serde_json::Value {
     }
 }
 
-/// 根据流程定义的 out 字段过滤输出结果
+/// 根据流程定义的 out/outputs 字段过滤输出结果
 ///
-/// 如果流程定义了 args.out，则只返回指定的字段。
+/// 如果流程定义了 args.out 或 args.outputs，则只返回指定的字段。
 ///
 /// 查找策略（按优先级）：
 /// 1. 优先从终止节点（merge, output, end, result 等）提取
 /// 2. 如果没找到，再从其他节点中查找
 ///
-/// 如果没有定义 out，返回原始输出。
+/// 如果没有定义输出字段，返回原始输出。
 pub fn filter_output_by_definition(
     frontend: &FrontendFlow,
     raw_outputs: &serde_json::Value,
 ) -> serde_json::Value {
-    // 获取输出定义
+    // 获取输出定义（支持 out 和 outputs 两种命名）
     let out_defs = match &frontend.args {
-        Some(args) => match &args.out {
+        Some(args) => match args.get_outputs() {
             Some(out) => out,
             None => return raw_outputs.clone(),
         },
@@ -640,7 +653,7 @@ fn find_terminal_node(
 /// 获取流程的输出定义字段名列表
 pub fn get_output_field_names(frontend: &FrontendFlow) -> Option<Vec<String>> {
     frontend.args.as_ref().and_then(|args| {
-        args.out.as_ref().map(|out| {
+        args.get_outputs().map(|out| {
             out.iter().map(|def| def.name.clone()).collect()
         })
     })

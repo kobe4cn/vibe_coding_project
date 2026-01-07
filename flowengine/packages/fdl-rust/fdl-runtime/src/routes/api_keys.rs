@@ -99,7 +99,8 @@ fn generate_api_key(flow_id: &str) -> (String, String, String) {
     };
 
     let full_key = format!("fk_{}_{}", flow_prefix, random_part);
-    let key_prefix = format!("fk_{}...", flow_prefix);
+    // key_prefix 只保存前 8 个字符，用于数据库存储和前端显示识别
+    let key_prefix = full_key.chars().take(8).collect::<String>();
 
     // SHA-256 哈希
     let mut hasher = Sha256::new();

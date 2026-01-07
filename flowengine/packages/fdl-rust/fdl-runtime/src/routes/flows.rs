@@ -26,6 +26,10 @@ pub struct FlowListItem {
     pub version_count: usize,
     pub created_at: String,
     pub updated_at: String,
+    // Publish status
+    pub published: bool,
+    pub published_at: Option<String>,
+    pub published_version_id: Option<String>,
 }
 
 /// Create flow request
@@ -59,6 +63,8 @@ pub struct ListQuery {
     pub limit: usize,
     #[serde(default)]
     pub offset: usize,
+    /// 过滤已发布/未发布的流程，不传则返回所有
+    pub published: Option<bool>,
 }
 
 fn default_limit() -> usize {
@@ -123,7 +129,7 @@ async fn list_flows(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let (flows, total) = state
+    let (flows, _total) = state
         .list_flows(&query.tenant_id, query.limit, query.offset)
         .await
         .map_err(|e| {
@@ -131,8 +137,16 @@ async fn list_flows(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    // 根据 published 参数过滤
+    let filtered_flows: Vec<_> = if let Some(published_filter) = query.published {
+        flows.into_iter().filter(|f| f.published == published_filter).collect()
+    } else {
+        flows
+    };
+
+    let total = filtered_flows.len();
     let mut items = Vec::new();
-    for f in flows {
+    for f in filtered_flows {
         let flow_id = f.id.to_string();
         let version_count = state.version_count(&query.tenant_id, &flow_id).await;
         items.push(FlowListItem {
@@ -143,6 +157,9 @@ async fn list_flows(
             version_count,
             created_at: f.created_at.to_rfc3339(),
             updated_at: f.updated_at.to_rfc3339(),
+            published: f.published,
+            published_at: f.published_at.map(|t| t.to_rfc3339()),
+            published_version_id: f.published_version_id.map(|id| id.to_string()),
         });
     }
 

@@ -370,7 +370,7 @@ async fn execute_flow(
     inputs: serde_json::Value,
     wait: bool,
 ) -> Result<Json<ExecuteResponse>, (StatusCode, Json<serde_json::Value>)> {
-    use crate::converter::convert_frontend_to_executor;
+    use crate::converter::{convert_frontend_to_executor, filter_output_by_definition};
 
     // 转换流程
     let executor_flow = convert_frontend_to_executor(&frontend_flow);
@@ -432,10 +432,13 @@ async fn execute_flow(
     match result {
         Ok(value) => {
             state.update_execution(&execution_id, ExecStatus::Completed, 1.0, None);
+            // 将执行上下文转换为 JSON，然后根据流程输出定义过滤
+            let raw_outputs = gml_value_to_json(&value);
+            let filtered_outputs = filter_output_by_definition(&frontend_flow, &raw_outputs);
             Ok(Json(ExecuteResponse {
                 execution_id,
                 status: "completed".to_string(),
-                outputs: Some(gml_value_to_json(&value)),
+                outputs: Some(filtered_outputs),
                 error: None,
                 duration_ms: Some(duration_ms),
             }))
