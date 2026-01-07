@@ -210,7 +210,8 @@ export function FlowCanvas() {
   }, [])
 
   return (
-    <div ref={reactFlowWrapper} className="flex-1 h-full" onDrop={handleDrop} onDragOver={handleDragOver}>
+    <div ref={reactFlowWrapper} className="relative w-full h-full flex-1" onDrop={handleDrop} onDragOver={handleDragOver}>
+      <div className="absolute inset-0">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -258,6 +259,7 @@ export function FlowCanvas() {
           <Toolbar />
         </Panel>
       </ReactFlow>
+      </div>
     </div>
   )
 }
