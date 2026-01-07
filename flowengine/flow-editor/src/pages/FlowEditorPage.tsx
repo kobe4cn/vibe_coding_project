@@ -191,14 +191,16 @@ export function FlowEditorPage() {
     : flowName
 
   return (
-    <ReactFlowProvider>
-      <EditorLayout
-        flowId={flowId!}
-        flowName={displayName}
-        onBack={handleBack}
-        isReadOnly={isViewingVersion}
-        versionId={versionId}
-      />
-    </ReactFlowProvider>
+    <div className="h-screen w-screen overflow-hidden">
+      <ReactFlowProvider>
+        <EditorLayout
+          flowId={flowId!}
+          flowName={displayName}
+          onBack={handleBack}
+          isReadOnly={isViewingVersion}
+          versionId={versionId}
+        />
+      </ReactFlowProvider>
+    </div>
   )
 }
