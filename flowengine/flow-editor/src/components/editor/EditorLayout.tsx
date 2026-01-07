@@ -252,7 +252,7 @@ export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, ver
       <Header flowId={flowId} flowName={flowName} onBack={onBack} />
 
       {/* Main Content */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 h-full">
         {/* Left Panel - Node Palette */}
         {showNodePalette && viewMode !== 'yaml' && (
           <>
@@ -274,20 +274,24 @@ export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, ver
         )}
 
         {/* Center - Canvas Area */}
-        <main className="flex-1 flex flex-col gap-4 min-w-0">
+        <main className="flex-1 flex flex-col gap-4 min-w-0 min-h-0 h-full">
           {/* Canvas */}
           <div
-            className="flex-1 flex gap-4 min-h-0 rounded-2xl overflow-hidden"
+            className="flex-1 flex gap-4 h-full min-h-0 rounded-2xl overflow-hidden"
             style={{
               background: 'var(--surface-container-lowest)',
               boxShadow: 'var(--elevation-1)',
             }}
           >
-            {viewMode === 'visual' && <FlowCanvas />}
+            {viewMode === 'visual' && (
+              <div className="flex-1 h-full min-w-0">
+                <FlowCanvas />
+              </div>
+            )}
             {viewMode === 'yaml' && <YamlEditor />}
             {viewMode === 'split' && (
               <>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 h-full min-w-0">
                   <FlowCanvas />
                 </div>
                 <ResizeHandle
