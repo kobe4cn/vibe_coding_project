@@ -3,7 +3,17 @@
  * 流程发布和 API Key 管理对话框
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+
+// 获取后端 API 基础 URL
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    // VITE_API_URL 可能是 http://localhost:3001/api 或 http://localhost:3001
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`
+  }
+  return 'http://localhost:3001/api'
+}
 
 // Icons
 const Icons = {
@@ -91,6 +101,7 @@ export function PublishDialog({
   flowName,
   tenantId = 'default',
 }: PublishDialogProps) {
+  const apiBaseUrl = useMemo(() => getApiBaseUrl(), [])
   const [isPublished, setIsPublished] = useState(false)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [publishedVersionId, setPublishedVersionId] = useState<string | null>(null)
@@ -117,7 +128,7 @@ export function PublishDialog({
 
     try {
       const response = await fetch(
-        `/api/flows/${flowId}/publish-status?tenant_id=${tenantId}`
+        `${apiBaseUrl}/flows/${flowId}/publish-status?tenant_id=${tenantId}`
       )
       if (response.ok) {
         const data = await response.json()
@@ -128,7 +139,7 @@ export function PublishDialog({
     } catch (err) {
       console.error('Failed to fetch publish status:', err)
     }
-  }, [flowId, tenantId])
+  }, [flowId, tenantId, apiBaseUrl])
 
   // Fetch API keys
   const fetchApiKeys = useCallback(async () => {
@@ -137,7 +148,7 @@ export function PublishDialog({
     setLoadingKeys(true)
     try {
       const response = await fetch(
-        `/api/flows/${flowId}/api-keys?tenant_id=${tenantId}`
+        `${apiBaseUrl}/flows/${flowId}/api-keys?tenant_id=${tenantId}`
       )
       if (response.ok) {
         const data = await response.json()
@@ -148,7 +159,7 @@ export function PublishDialog({
     } finally {
       setLoadingKeys(false)
     }
-  }, [flowId, tenantId, isPublished])
+  }, [flowId, tenantId, isPublished, apiBaseUrl])
 
   useEffect(() => {
     if (isOpen) {
@@ -170,7 +181,7 @@ export function PublishDialog({
     try {
       // First get the latest version
       const versionsRes = await fetch(
-        `/api/flows/${flowId}/versions?tenant_id=${tenantId}`
+        `${apiBaseUrl}/flows/${flowId}/versions?tenant_id=${tenantId}`
       )
       if (!versionsRes.ok) {
         throw new Error('无法获取版本列表')
@@ -186,7 +197,7 @@ export function PublishDialog({
       // Use the latest version
       const latestVersion = versions[0]
 
-      const response = await fetch(`/api/flows/${flowId}/publish`, {
+      const response = await fetch(`${apiBaseUrl}/flows/${flowId}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,7 +228,7 @@ export function PublishDialog({
     setError(null)
 
     try {
-      const response = await fetch(`/api/flows/${flowId}/unpublish`, {
+      const response = await fetch(`${apiBaseUrl}/flows/${flowId}/unpublish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenant_id: tenantId }),
@@ -247,7 +258,7 @@ export function PublishDialog({
     setError(null)
 
     try {
-      const response = await fetch(`/api/flows/${flowId}/api-keys`, {
+      const response = await fetch(`${apiBaseUrl}/flows/${flowId}/api-keys`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -296,7 +307,7 @@ export function PublishDialog({
 
     try {
       const response = await fetch(
-        `/api/flows/${flowId}/api-keys/${keyId}?tenant_id=${tenantId}`,
+        `${apiBaseUrl}/flows/${flowId}/api-keys/${keyId}?tenant_id=${tenantId}`,
         { method: 'DELETE' }
       )
 
@@ -330,10 +341,11 @@ export function PublishDialog({
     }
   }
 
-  // Get API endpoint URL
+  // Get API endpoint URL (external endpoint for API callers)
   const getApiEndpoint = () => {
-    const baseUrl = window.location.origin
-    return `${baseUrl}/api/v1/flows/${flowId}/execute`
+    // 使用后端 API 基础 URL 而非前端 origin
+    const backendUrl = apiBaseUrl.replace(/\/api$/, '')
+    return `${backendUrl}/api/v1/flows/${flowId}/execute`
   }
 
   if (!isOpen) return null
