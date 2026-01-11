@@ -15,10 +15,13 @@ import type { editor } from 'monaco-editor'
 import { useEditorStore } from '@/stores/editorStore'
 import { useFlowStore } from '@/stores/flowStore'
 import { flowToYaml, yamlToFlow } from '@/lib/flowYamlConverter'
-import { createBackendProvider } from '@/lib/storage/backend-provider'
-
-// 自动保存延迟时间（毫秒）
-const AUTO_SAVE_DELAY = 1500
+import {
+  validateGMLInYaml,
+  getGMLCompletions,
+  getGMLHover,
+  getGMLRegions,
+  type YAMLGMLDiagnostic,
+} from '@/lib/gmlLanguageService'
 
 // FDL 关键字定义，用于自动补全
 const FDL_KEYWORDS = {
@@ -34,27 +37,23 @@ const FDL_KEYWORDS = {
   protocols: ['api://', 'db://', 'mcp://', 'flow://', 'agent://'],
 }
 
-// GML 关键字
-const GML_KEYWORDS = [
-  'true', 'false', 'null', 'if', 'else', 'for', 'in', 'map', 'filter',
-  'reduce', 'find', 'some', 'every', 'keys', 'values', 'entries',
-  'len', 'str', 'int', 'float', 'bool', 'now', 'date', 'json', 'yaml'
-]
+// GML 关键字和函数现在通过 gmlLanguageService 动态提供
 
 export function YamlEditor() {
   const { yamlContent, yamlError, setYamlContent, setYamlError, isSyncing, setIsSyncing, resolvedTheme } = useEditorStore()
-  const { flow, setFlow, flowId, isDirty, setIsDirty } = useFlowStore()
+  const { flow, setFlow } = useFlowStore()
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const syncTimeoutRef = useRef<number | null>(null)
-  const autoSaveTimeoutRef = useRef<number | null>(null)
   const isUserEditingRef = useRef(false)
   const lastFlowHashRef = useRef<string>('')
-  const [isSaving, setIsSaving] = useState(false)
-  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null)
+  // GML 区域装饰 ID 存储
+  const gmlDecorationsRef = useRef<string[]>([])
   // 标记自定义主题是否已定义，避免初始渲染时使用未定义的主题
   const [themesReady, setThemesReady] = useState(false)
+  // GML 诊断信息存储
+  const [gmlDiagnostics, setGmlDiagnostics] = useState<YAMLGMLDiagnostic[]>([])
 
   // 生成 flow 的简单哈希，用于检测变化
   const getFlowHash = useCallback((f: typeof flow) => {
@@ -85,29 +84,37 @@ export function YamlEditor() {
     }
   }, [resolvedTheme])
 
-  // 自动保存功能（afterDelay 模式）
-  const triggerAutoSave = useCallback(async () => {
-    // 只有在有 flowId、有未保存的更改、没有错误、不在保存中时才触发
-    if (!flowId || !isDirty || yamlError || isSaving) return
+  // 更新 GML 区域装饰（语法高亮背景）
+  // 需要在 handleEditorChange 之前定义
+  const updateGMLDecorations = useCallback((content: string) => {
+    if (!editorRef.current) return
 
-    setIsSaving(true)
-    try {
-      const backendUrl = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:3001'
-      const provider = createBackendProvider({ baseUrl: backendUrl })
-      await provider.saveVersion(flowId, {
-        flow,
-        isAutoSave: true,
-      })
-      setIsDirty(false)
-      setLastSaveTime(new Date())
-    } catch (error) {
-      console.error('Auto save failed:', error)
-    } finally {
-      setIsSaving(false)
-    }
-  }, [flowId, isDirty, yamlError, isSaving, flow, setIsDirty])
+    const regions = getGMLRegions(content)
+
+    // 创建装饰数组
+    const decorations: editor.IModelDeltaDecoration[] = regions.map(region => ({
+      range: {
+        startLineNumber: region.startLine,
+        startColumn: region.startColumn,
+        endLineNumber: region.endLine,
+        endColumn: region.endColumn,
+      },
+      options: {
+        isWholeLine: false,
+        inlineClassName: 'gml-expression-highlight',
+        glyphMarginClassName: 'gml-glyph-margin',
+        hoverMessage: { value: `**GML 表达式** (${region.fieldName})` },
+      },
+    }))
+
+    gmlDecorationsRef.current = editorRef.current.deltaDecorations(
+      gmlDecorationsRef.current,
+      decorations
+    )
+  }, [])
 
   // 处理 YAML 内容变化
+  // 注意：自动保存由 useAutoSave hook 统一处理
   const handleEditorChange = useCallback(
     (value: string | undefined) => {
       if (!value) return
@@ -121,64 +128,98 @@ export function YamlEditor() {
         window.clearTimeout(syncTimeoutRef.current)
       }
 
-      // 清除之前的自动保存定时器
-      if (autoSaveTimeoutRef.current) {
-        window.clearTimeout(autoSaveTimeoutRef.current)
-      }
-
       // 延迟解析，避免频繁解析
       syncTimeoutRef.current = window.setTimeout(() => {
         const { flow: newFlow, error } = yamlToFlow(value)
         if (error) {
           setYamlError(error)
-          updateErrorMarkers(error, value)
+          setGmlDiagnostics([])
+          updateErrorMarkers(error, [])
         } else {
-          setYamlError(null)
-          clearErrorMarkers()
+          // YAML 解析成功后，进行 GML 语法验证
+          const diagnostics = validateGMLInYaml(value)
+          setGmlDiagnostics(diagnostics)
+
+          // 更新 GML 区域装饰（语法高亮）
+          updateGMLDecorations(value)
+
+          if (diagnostics.length > 0) {
+            // 有 GML 错误时显示第一个错误，但不阻止 flow 同步
+            setYamlError(diagnostics[0].friendlyMessage)
+            updateErrorMarkers(null, diagnostics)
+          } else {
+            setYamlError(null)
+            clearErrorMarkers()
+          }
+
           lastFlowHashRef.current = getFlowHash(newFlow)
           setFlow(newFlow)
           isUserEditingRef.current = false
-
-          // 设置自动保存定时器（afterDelay 模式）
-          autoSaveTimeoutRef.current = window.setTimeout(() => {
-            triggerAutoSave()
-          }, AUTO_SAVE_DELAY)
         }
         setIsSyncing(false)
       }, 500)
     },
-    [setYamlContent, setIsSyncing, setFlow, setYamlError, getFlowHash, triggerAutoSave]
+    [setYamlContent, setIsSyncing, setFlow, setYamlError, getFlowHash, updateGMLDecorations]
   )
 
-  // 更新错误标记
-  const updateErrorMarkers = useCallback((error: string, content: string) => {
+  // 更新错误标记 - 支持 YAML 错误和 GML 诊断
+  const updateErrorMarkers = useCallback((
+    yamlError: string | null,
+    gmlDiags: YAMLGMLDiagnostic[]
+  ) => {
     if (!monacoRef.current || !editorRef.current) return
 
     const model = editorRef.current.getModel()
     if (!model) return
 
-    // 尝试从错误信息中提取行号
-    const lineMatch = error.match(/line\s*(\d+)/i) || error.match(/at\s*(\d+)/i)
-    let lineNumber = lineMatch ? parseInt(lineMatch[1], 10) : 1
-
-    // 尝试从错误信息中提取列号
-    const colMatch = error.match(/column\s*(\d+)/i) || error.match(/col\s*(\d+)/i)
-    const column = colMatch ? parseInt(colMatch[1], 10) : 1
-
-    // 确保行号有效
+    const markers: Parameters<typeof monacoRef.current.editor.setModelMarkers>[2] = []
     const maxLines = model.getLineCount()
-    lineNumber = Math.min(Math.max(1, lineNumber), maxLines)
 
-    monacoRef.current.editor.setModelMarkers(model, 'fdl-validator', [
-      {
+    // 处理 YAML 错误
+    if (yamlError) {
+      const lineMatch = yamlError.match(/line\s*(\d+)/i) || yamlError.match(/at\s*(\d+)/i)
+      let lineNumber = lineMatch ? parseInt(lineMatch[1], 10) : 1
+      const colMatch = yamlError.match(/column\s*(\d+)/i) || yamlError.match(/col\s*(\d+)/i)
+      const column = colMatch ? parseInt(colMatch[1], 10) : 1
+      lineNumber = Math.min(Math.max(1, lineNumber), maxLines)
+
+      markers.push({
         severity: monacoRef.current.MarkerSeverity.Error,
-        message: error,
+        message: yamlError,
         startLineNumber: lineNumber,
         startColumn: column,
         endLineNumber: lineNumber,
         endColumn: model.getLineMaxColumn(lineNumber),
-      },
-    ])
+      })
+    }
+
+    // 处理 GML 诊断信息
+    for (const diag of gmlDiags) {
+      const startLine = Math.min(Math.max(1, diag.yamlStartLine), maxLines)
+      const endLine = Math.min(Math.max(1, diag.yamlEndLine), maxLines)
+
+      // 根据严重程度映射 Monaco 的 MarkerSeverity
+      let severity = monacoRef.current.MarkerSeverity.Error
+      if (diag.severity === 'warning') {
+        severity = monacoRef.current.MarkerSeverity.Warning
+      } else if (diag.severity === 'info') {
+        severity = monacoRef.current.MarkerSeverity.Info
+      }
+
+      markers.push({
+        severity,
+        message: diag.friendlyMessage,
+        startLineNumber: startLine,
+        startColumn: diag.yamlStartColumn,
+        endLineNumber: endLine,
+        endColumn: diag.yamlEndColumn,
+        // 附加 Quick Fix 建议信息
+        code: diag.code,
+        source: 'GML',
+      })
+    }
+
+    monacoRef.current.editor.setModelMarkers(model, 'fdl-validator', markers)
   }, [])
 
   // 清除错误标记
@@ -198,7 +239,7 @@ export function YamlEditor() {
 
     // 注册 FDL/GML 自动补全
     monaco.languages.registerCompletionItemProvider('yaml', {
-      provideCompletionItems: (model, position) => {
+      provideCompletionItems: (model: editor.ITextModel, position: { lineNumber: number; column: number }) => {
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
@@ -248,19 +289,155 @@ export function YamlEditor() {
           })))
         }
 
-        // GML 关键字
-        if (lineContent.includes('with:') || lineContent.includes('args:') ||
-            lineContent.includes('when:') || lineContent.includes('sets:')) {
-          suggestions.push(...GML_KEYWORDS.map(kw => ({
-            label: kw,
-            kind: monaco.languages.CompletionItemKind.Function,
-            insertText: kw,
-            range,
-            detail: 'GML Function',
-          })))
+        // GML 智能补全 - 使用语言服务
+        const isGMLContext = lineContent.includes('with:') ||
+                            lineContent.includes('args:') ||
+                            lineContent.includes('when:') ||
+                            lineContent.includes('sets:') ||
+                            lineContent.includes('each:') ||
+                            lineContent.includes('vars:') ||
+                            lineContent.includes('only:')
+
+        if (isGMLContext) {
+          // 获取触发字符
+          const textBeforeCursor = lineContent.substring(0, position.column - 1)
+          const triggerChar = textBeforeCursor.slice(-1)
+
+          // 使用语言服务获取 GML 补全
+          const gmlCompletions = getGMLCompletions(
+            model.getValue(),
+            position.lineNumber,
+            position.column,
+            triggerChar === '.' ? '.' : undefined
+          )
+
+          suggestions.push(...gmlCompletions.map(item => {
+            let kind = monaco.languages.CompletionItemKind.Function
+            if (item.kind === 'method') kind = monaco.languages.CompletionItemKind.Method
+            if (item.kind === 'variable') kind = monaco.languages.CompletionItemKind.Variable
+            if (item.kind === 'keyword') kind = monaco.languages.CompletionItemKind.Keyword
+            if (item.kind === 'property') kind = monaco.languages.CompletionItemKind.Property
+
+            return {
+              label: item.label,
+              kind,
+              insertText: item.insertText,
+              range,
+              detail: item.detail ?? '',
+              documentation: item.documentation,
+              sortText: String(item.sortOrder ?? 0).padStart(5, '0'),
+            }
+          }))
         }
 
         return { suggestions }
+      },
+    })
+
+    // 注册 GML 悬浮提示
+    monaco.languages.registerHoverProvider('yaml', {
+      provideHover: (model: editor.ITextModel, position: { lineNumber: number; column: number }) => {
+        const word = model.getWordAtPosition(position)
+        if (!word) return null
+
+        const hoverInfo = getGMLHover(
+          model.getValue(),
+          position.lineNumber,
+          position.column,
+          word.word
+        )
+
+        if (!hoverInfo) return null
+
+        return {
+          range: {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endColumn: word.endColumn,
+          },
+          contents: [
+            { value: hoverInfo.contents }
+          ],
+        }
+      },
+    })
+
+    // 注册 GML Quick Fix（代码操作）
+    monaco.languages.registerCodeActionProvider('yaml', {
+      provideCodeActions: (
+        model: editor.ITextModel,
+        _range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number },
+        context: { markers: { source?: string; code?: string | number; startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }[] }
+      ) => {
+        const actions: { title: string; kind: string; edit: { edits: { resource: unknown; textEdit: { range: unknown; text: string } }[] } }[] = []
+
+        // 获取当前位置的诊断信息
+        const markers = context.markers
+
+        for (const marker of markers) {
+          // 只处理 GML 相关的诊断
+          if (marker.source !== 'GML') continue
+
+          // 根据错误代码提供特定的 Quick Fix
+          const code = marker.code as string
+
+          // GML001: 双引号改单引号
+          if (code === 'GML001') {
+            const lineContent = model.getLineContent(marker.startLineNumber)
+            // 查找双引号并替换为单引号
+            const fixedLine = lineContent.replace(/"/g, "'")
+            if (fixedLine !== lineContent) {
+              actions.push({
+                title: '将双引号替换为单引号',
+                kind: 'quickfix',
+                edit: {
+                  edits: [{
+                    resource: model.uri,
+                    textEdit: {
+                      range: {
+                        startLineNumber: marker.startLineNumber,
+                        startColumn: 1,
+                        endLineNumber: marker.startLineNumber,
+                        endColumn: lineContent.length + 1,
+                      },
+                      text: fixedLine,
+                    },
+                  }],
+                },
+              })
+            }
+          }
+
+          // GML002: 冒号改等号
+          if (code === 'GML002') {
+            const lineContent = model.getLineContent(marker.startLineNumber)
+            // 在 GML 上下文中将对象字面量的冒号改为等号
+            const fixedLine = lineContent.replace(/(\w+)\s*:\s*(?=[^/])/g, '$1 = ')
+            if (fixedLine !== lineContent) {
+              actions.push({
+                title: '将 : 替换为 =',
+                kind: 'quickfix',
+                edit: {
+                  edits: [{
+                    resource: model.uri,
+                    textEdit: {
+                      range: {
+                        startLineNumber: marker.startLineNumber,
+                        startColumn: 1,
+                        endLineNumber: marker.startLineNumber,
+                        endColumn: lineContent.length + 1,
+                      },
+                      text: fixedLine,
+                    },
+                  }],
+                },
+              })
+            }
+          }
+        }
+
+        return { actions, dispose: () => {} }
       },
     })
 
@@ -367,6 +544,22 @@ export function YamlEditor() {
 
   return (
     <div className="h-full w-full flex flex-col" style={{ background: 'var(--surface-container)' }}>
+      {/* GML 高亮样式 */}
+      <style>{`
+        .gml-expression-highlight {
+          background-color: rgba(100, 149, 237, 0.15);
+          border-radius: 2px;
+        }
+        .monaco-editor.vs-dark .gml-expression-highlight {
+          background-color: rgba(100, 149, 237, 0.2);
+        }
+        .gml-glyph-margin {
+          background-color: #6495ed;
+          width: 3px !important;
+          margin-left: 2px;
+          border-radius: 1px;
+        }
+      `}</style>
       {/* Header */}
       <div
         className="px-5 py-3 flex items-center justify-between"
@@ -403,24 +596,6 @@ export function YamlEditor() {
             格式化
           </button>
 
-          {/* 保存状态 */}
-          {isSaving && (
-            <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--primary)' }}>
-              <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-              保存中...
-            </span>
-          )}
-
-          {/* 最后保存时间 */}
-          {!isSaving && lastSaveTime && (
-            <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--on-surface-variant)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-              </svg>
-              已保存 {lastSaveTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-
           {/* 同步状态 */}
           {isSyncing && (
             <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--primary)' }}>
@@ -434,12 +609,27 @@ export function YamlEditor() {
             <span
               className="flex items-center gap-2 text-xs max-w-md truncate"
               style={{ color: 'var(--error)' }}
-              title={yamlError}
+              title={gmlDiagnostics.length > 0
+                ? gmlDiagnostics.map(d => d.friendlyMessage).join('\n')
+                : yamlError}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
               </svg>
-              {yamlError}
+              {gmlDiagnostics.length > 1 ? (
+                <span>
+                  {yamlError}
+                  <span
+                    className="ml-1 px-1.5 py-0.5 rounded-full text-[10px]"
+                    style={{
+                      background: 'var(--error-container)',
+                      color: 'var(--on-error-container)',
+                    }}
+                  >
+                    +{gmlDiagnostics.length - 1} 个错误
+                  </span>
+                </span>
+              ) : yamlError}
             </span>
           )}
         </div>

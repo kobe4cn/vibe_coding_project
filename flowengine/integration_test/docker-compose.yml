@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # 1. MinIO - 对象存储（模拟 OSS/S3）
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: flowengine-minio
+    ports:
+      - "9000:9000"      # API 端口
+      - "9001:9001"      # Console 端口
+    environment:
+      MINIO_ROOT_USER: flowengine
+      MINIO_ROOT_PASSWORD: flowengine123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO 初始化（创建 bucket）
+  minio-init:
+    image: minio/mc:latest
+    container_name: flowengine-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 flowengine flowengine123;
+      mc mb myminio/customer-assets --ignore-existing;
+      mc mb myminio/customer-reports --ignore-existing;
+      mc anonymous set download myminio/customer-assets;
+      echo 'MinIO buckets created successfully';
+      "
+
+  # ============================================
+  # 2. RabbitMQ - 消息队列
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: flowengine-rabbitmq
+    ports:
+    - "5672:5672"
+    - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: flowengine
+      RABBITMQ_DEFAULT_PASS: flowengine123
+      RABBITMQ_ERLANG_COOKIE: "flowengine-cookie-change-me-very-long-random"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/mnesia
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ 初始化（创建 exchange 和 queue）
+  rabbitmq-init:
+    image: curlimages/curl:8.5.0
+    container_name: flowengine-rabbitmq-init
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      set -e;
+      echo "Waiting for RabbitMQ management API...";
+      until curl -s -u flowengine:flowengine123 http://rabbitmq:15672/api/overview >/dev/null; do
+        sleep 2;
+      done;
+
+      # 创建 exchange
+      curl -s -u flowengine:flowengine123 -H "content-type: application/json" \
+        -X PUT http://rabbitmq:15672/api/exchanges/%2F/customer.events \
+        -d '{"type":"topic","durable":true}';
+
+      # 创建 queue
+      curl -s -u flowengine:flowengine123 -H "content-type: application/json" \
+        -X PUT http://rabbitmq:15672/api/queues/%2F/notification-service.customer-view \
+        -d '{"durable":true}';
+
+      # 绑定
+      curl -s -u flowengine:flowengine123 -H "content-type: application/json" \
+        -X POST http://rabbitmq:15672/api/bindings/%2F/e/customer.events/q/notification-service.customer-view \
+        -d '{"routing_key":"view.updated"}';
+
+      echo "RabbitMQ exchanges and queues created successfully";
+   # Web UI 端口
+
+volumes:
+  minio_data:
+  rabbitmq_data:

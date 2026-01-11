@@ -10,6 +10,7 @@ license.workspace = true
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 sqlx = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
@@ -19,6 +20,25 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 regex = { workspace = true }
 async-trait = "0.1"
+
+# S3 compatible object storage (MinIO, AWS S3, 阿里云 OSS 等)
+rust-s3 = { workspace = true }
+
+# Message Queue - RabbitMQ
+lapin = { workspace = true }
+
+# Email - SMTP
+lettre = { workspace = true }
+
+# Utilities
+base64 = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+
+# SMS signing
+sha1 = { workspace = true }
+hex = { workspace = true }
+urlencoding = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

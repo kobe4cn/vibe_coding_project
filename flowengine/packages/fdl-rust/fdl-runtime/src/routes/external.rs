@@ -15,7 +15,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     routing::post,
 };
-use fdl_auth::{hash_api_key, extract_api_key};
+use fdl_auth::{extract_api_key, hash_api_key};
 use fdl_executor::Executor;
 use fdl_gml::Value;
 use fdl_tools::{ManagedToolRegistry, ToolContext};
@@ -140,18 +140,15 @@ async fn external_execute(
     let tenant_id = api_key_record.tenant_id.to_string();
 
     // 获取流程信息
-    let flow = state
-        .get_flow(&tenant_id, &flow_id)
-        .await
-        .map_err(|_| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({
-                    "error": "Flow not found",
-                    "code": "flow_not_found"
-                })),
-            )
-        })?;
+    let flow = state.get_flow(&tenant_id, &flow_id).await.map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Flow not found",
+                "code": "flow_not_found"
+            })),
+        )
+    })?;
 
     // 检查流程是否已发布
     if !flow.published {
@@ -189,8 +186,8 @@ async fn external_execute(
         })?;
 
     // 解析流程数据
-    let frontend_flow: FrontendFlow = serde_json::from_value(version.data.clone())
-        .map_err(|e| {
+    let frontend_flow: FrontendFlow =
+        serde_json::from_value(version.data.clone()).map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -384,11 +381,13 @@ async fn execute_flow(
     };
 
     // 创建执行器
-    let managed_registry = Arc::new(ManagedToolRegistry::new(state.config_store_arc()));
-    let executor = Arc::new(
-        Executor::with_managed_registry(managed_registry)
-            .with_tool_context(tool_context)
-    );
+    // 同时使用 ConfigStore 和 ToolServiceStore 支持所有工具类型
+    let managed_registry = Arc::new(ManagedToolRegistry::with_service_store(
+        state.config_store_arc(),
+        state.tool_service_store_arc(),
+    ));
+    let executor =
+        Arc::new(Executor::with_managed_registry(managed_registry).with_tool_context(tool_context));
 
     state.register_executor(&execution_id, executor.clone());
     state.update_execution(&execution_id, ExecStatus::Running, 0.0, None);

@@ -159,6 +159,46 @@ pub struct FlowNode {
     #[serde(default)]
     pub mcp: Option<String>,
 
+    // Guard node fields
+    /// Guard types to check (pii, jailbreak, moderation, etc.)
+    #[serde(default)]
+    pub guard: Option<String>,
+
+    // Approval node fields
+    /// Approval request configuration
+    #[serde(default)]
+    pub approval: Option<String>,
+
+    // Handoff node fields
+    /// Target agent for handoff
+    #[serde(default)]
+    pub handoff: Option<String>,
+
+    // OSS node fields
+    /// Object storage URI (e.g., "oss://bucket/path")
+    #[serde(default)]
+    pub oss: Option<String>,
+
+    // MQ node fields
+    /// Message queue URI (e.g., "mq://topic/queue")
+    #[serde(default)]
+    pub mq: Option<String>,
+
+    // Mail node fields
+    /// Mail sending configuration
+    #[serde(default)]
+    pub mail: Option<String>,
+
+    // SMS node fields
+    /// SMS sending configuration
+    #[serde(default)]
+    pub sms: Option<String>,
+
+    // Service node fields
+    /// Microservice call URI (e.g., "svc://service/method")
+    #[serde(default)]
+    pub service: Option<String>,
+
     // Start node fields
     /// Input parameters for start node
     #[serde(default)]
@@ -173,31 +213,74 @@ impl FlowNode {
     /// 根据节点字段确定节点类型
     ///
     /// 节点类型通过检查特定字段的存在来确定，优先级顺序：
-    /// 0. node_type_str == "start" -> Start（开始节点）
+    /// 0. node_type_str 显式指定 -> 对应类型
     /// 1. exec -> Exec（工具调用）
     /// 2. agent -> Agent（AI 代理）
     /// 3. mcp -> Mcp（MCP 协议）
-    /// 4. when + then -> Condition（条件分支）
-    /// 5. case -> Switch（多分支）
-    /// 6. wait -> Delay（延迟）
-    /// 7. each -> Each（迭代）
-    /// 8. vars + when + node -> Loop（循环）
-    /// 9. with_expr -> Mapping（数据映射）
-    /// 10. 其他 -> Unknown（未知类型）
+    /// 4. guard -> Guard（安全检查）
+    /// 5. approval -> Approval（人工审批）
+    /// 6. handoff -> Handoff（Agent 移交）
+    /// 7. oss -> Oss（对象存储）
+    /// 8. mq -> Mq（消息队列）
+    /// 9. mail -> Mail（邮件发送）
+    /// 10. sms -> Sms（短信发送）
+    /// 11. service -> Service（微服务调用）
+    /// 12. when + then -> Condition（条件分支）
+    /// 13. case -> Switch（多分支）
+    /// 14. wait -> Delay（延迟）
+    /// 15. each -> Each（迭代）
+    /// 16. vars + when + node -> Loop（循环）
+    /// 17. with_expr -> Mapping（数据映射）
+    /// 18. 其他 -> Unknown（未知类型）
     pub fn node_type(&self) -> NodeType {
-        // Check for explicit node_type_str first (from frontend)
+        // 优先检查显式指定的节点类型（来自前端）
         if let Some(ref type_str) = self.node_type_str {
-            if type_str == "start" {
-                return NodeType::Start;
+            match type_str.as_str() {
+                "start" => return NodeType::Start,
+                "exec" => return NodeType::Exec,
+                "mapping" => return NodeType::Mapping,
+                "condition" => return NodeType::Condition,
+                "switch" => return NodeType::Switch,
+                "delay" => return NodeType::Delay,
+                "each" => return NodeType::Each,
+                "loop" => return NodeType::Loop,
+                "agent" => return NodeType::Agent,
+                "mcp" => return NodeType::Mcp,
+                "guard" => return NodeType::Guard,
+                "approval" => return NodeType::Approval,
+                "handoff" => return NodeType::Handoff,
+                "oss" => return NodeType::Oss,
+                "mq" => return NodeType::Mq,
+                "mail" => return NodeType::Mail,
+                "sms" => return NodeType::Sms,
+                "service" => return NodeType::Service,
+                _ => {}
             }
         }
 
+        // 通过字段检测节点类型
         if self.exec.is_some() {
             NodeType::Exec
         } else if self.agent.is_some() {
             NodeType::Agent
         } else if self.mcp.is_some() {
             NodeType::Mcp
+        } else if self.guard.is_some() {
+            NodeType::Guard
+        } else if self.approval.is_some() {
+            NodeType::Approval
+        } else if self.handoff.is_some() {
+            NodeType::Handoff
+        } else if self.oss.is_some() {
+            NodeType::Oss
+        } else if self.mq.is_some() {
+            NodeType::Mq
+        } else if self.mail.is_some() {
+            NodeType::Mail
+        } else if self.sms.is_some() {
+            NodeType::Sms
+        } else if self.service.is_some() {
+            NodeType::Service
         } else if self.when.is_some() && self.then.is_some() {
             NodeType::Condition
         } else if self.case.is_some() {
@@ -253,6 +336,22 @@ pub enum NodeType {
     Agent,
     /// MCP (Model Context Protocol) node
     Mcp,
+    /// Guard node - security checks
+    Guard,
+    /// Approval node - human-in-the-loop
+    Approval,
+    /// Handoff node - agent handoff
+    Handoff,
+    /// OSS node - object storage operations
+    Oss,
+    /// MQ node - message queue operations
+    Mq,
+    /// Mail node - email sending
+    Mail,
+    /// SMS node - SMS sending
+    Sms,
+    /// Service node - microservice call
+    Service,
     /// Unknown node type
     Unknown,
 }

@@ -213,10 +213,33 @@ export interface GMLArrowFunction extends GMLASTNode {
   body: GMLExpression
 }
 
+// UDF 处理函数类型
+export type UdfHandler = (...args: unknown[]) => unknown
+
+// UDF 参数定义
+export interface UdfParam {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object' | 'any'
+  required: boolean
+  default_value?: unknown
+}
+
+// UDF 定义
+export interface UdfDefinition {
+  name: string
+  display_name: string
+  udf_type: 'expression' | 'javascript'
+  code: string
+  input_params: UdfParam[]
+  return_type: string
+}
+
 // Evaluation context
 export interface GMLContext {
   variables: Record<string, unknown>
   parent?: GMLContext
+  // 自定义函数映射，支持 UDF 动态加载
+  customFunctions?: Map<string, UdfHandler>
 }
 
 // Parse result

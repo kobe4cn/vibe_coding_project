@@ -217,10 +217,12 @@ class GMLParser {
   private tokens: GMLToken[]
   private pos: number = 0
   private errors: GMLParseError[] = []
+  private input: string = ''
 
-  constructor(tokens: GMLToken[]) {
+  constructor(tokens: GMLToken[], input?: string) {
     // Filter out whitespace and comments
     this.tokens = tokens.filter(t => t.type !== 'whitespace' && t.type !== 'comment')
+    this.input = input || ''
   }
 
   private peek(offset = 0): GMLToken {
@@ -244,10 +246,60 @@ class GMLParser {
     return token
   }
 
+  /**
+   * 获取错误上下文，显示问题代码周围的内容
+   */
+  private getErrorContext(token: GMLToken): string {
+    if (!this.input) return ''
+
+    // 获取包含错误的行
+    const lines = this.input.split('\n')
+    const lineIndex = token.line - 1
+    if (lineIndex < 0 || lineIndex >= lines.length) return ''
+
+    const line = lines[lineIndex]
+    const pointer = ' '.repeat(Math.max(0, token.column - 1)) + '^'
+
+    return `\n  | ${line}\n  | ${pointer}`
+  }
+
+  /**
+   * 生成更友好的错误消息
+   */
   private error(message: string) {
     const token = this.current()
+    const prev = this.pos > 0 ? this.tokens[this.pos - 1] : null
+
+    // 为特定错误场景提供更好的消息
+    let enhancedMessage = message
+
+    // 检测对象字面量中使用冒号而非等号的情况
+    if (token.value === ':' && prev && prev.type === 'identifier') {
+      enhancedMessage = `GML 对象语法错误：字段赋值请使用 '=' 而非 ':'。` +
+        `\n  错误: ${prev.value}: ...` +
+        `\n  正确: ${prev.value} = ...`
+    }
+    // 检测双引号使用
+    else if (token.type === 'string' && token.value.startsWith('"')) {
+      enhancedMessage = `GML 字符串请使用单引号 ' 而非双引号 "。` +
+        `\n  错误: ${token.value}` +
+        `\n  正确: ${token.value.replace(/"/g, "'")}`
+    }
+    // 检测意外的标点符号
+    else if (token.type === 'punctuation' || token.type === 'operator') {
+      enhancedMessage = `意外的符号 '${token.value}'。${this.getErrorContext(token)}`
+    }
+    // 检测未知标识符
+    else if (token.type === 'unknown') {
+      enhancedMessage = `非法字符 '${token.value}'。${this.getErrorContext(token)}`
+    }
+    // 默认情况，添加上下文
+    else {
+      enhancedMessage = `${message}${this.getErrorContext(token)}`
+    }
+
     this.errors.push({
-      message,
+      message: enhancedMessage,
       line: token.line,
       column: token.column,
       start: token.start,
@@ -324,6 +376,34 @@ class GMLParser {
         this.advance() // consume identifier
         this.advance() // consume =
         const right = this.parseExpression()
+        return {
+          type: 'AssignmentStatement',
+          left: { type: 'Identifier', name, start, end: start + name.length },
+          right,
+          start,
+          end: right.end,
+        } as GMLAssignmentStatement
+      }
+
+      // 检测用户错误地使用冒号 (:) 而非等号 (=) 进行赋值
+      // 提供友好的错误提示
+      if (nextToken.value === ':') {
+        this.advance() // consume identifier
+        this.advance() // consume :
+        const right = this.parseExpression()
+
+        // 生成友好的错误提示
+        this.errors.push({
+          message: `GML 语法错误：请使用 '=' 进行赋值，而非 ':'。` +
+            `\n  错误: ${name}: ...` +
+            `\n  正确: ${name} = ...`,
+          line: nextToken.line,
+          column: nextToken.column,
+          start: nextToken.start,
+          end: nextToken.end,
+        })
+
+        // 仍然尝试解析后续内容，以便继续检测其他错误
         return {
           type: 'AssignmentStatement',
           left: { type: 'Identifier', name, start, end: start + name.length },
@@ -663,7 +743,17 @@ class GMLParser {
       } as GMLIdentifier
     }
 
-    this.error(`Unexpected token: ${token.value}`)
+    // 为不同情况生成更友好的错误消息
+    let errorMsg = `意外的内容 '${token.value}'`
+    if (token.type === 'eof') {
+      errorMsg = '表达式不完整，可能缺少闭合的括号或引号'
+    } else if (token.value === ':') {
+      errorMsg = `GML 对象语法错误：字段赋值请使用 '=' 而非 ':'`
+    } else if (token.type === 'string' && token.value.startsWith('"')) {
+      errorMsg = `GML 字符串请使用单引号 ' 而非双引号 "`
+    }
+
+    this.error(errorMsg)
     this.advance()
     return {
       type: 'Identifier',
@@ -938,6 +1028,6 @@ class GMLParser {
  */
 export function parseGML(input: string): GMLParseResult {
   const tokens = tokenizeGML(input)
-  const parser = new GMLParser(tokens)
+  const parser = new GMLParser(tokens, input)
   return parser.parse()
 }

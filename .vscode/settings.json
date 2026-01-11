@@ -1,5 +1,11 @@
 {
     "rust-analyzer.linkedProjects": [
-      "project_alpha/backend/Cargo.toml"
+      "project_alpha/backend/Cargo.toml",
+      "flowengine/packages/fdl-rust/fdl-runtime/Cargo.toml",
+      "flowengine/integration_test/mock-services/risk-service/Cargo.toml",
+      "flowengine/integration_test/mock-services/crm-service/Cargo.toml",
+      "flowengine/integration_test/mock-services/notification-service/Cargo.toml",
+      "flowengine/integration_test/mock-services/mail-service/Cargo.toml",
+
     ]
   }

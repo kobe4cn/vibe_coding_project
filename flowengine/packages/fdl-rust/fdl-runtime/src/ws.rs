@@ -22,7 +22,7 @@ use tokio::sync::{RwLock, mpsc};
 use tracing::{info, warn};
 
 /// WebSocket 连接状态
-/// 
+///
 /// 维护每个连接的状态信息，包括订阅的执行 ID 列表。
 pub struct WsConnection {
     /// 连接 ID（用于日志和调试）
@@ -91,11 +91,11 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>
 }
 
 /// 处理 WebSocket 连接
-/// 
+///
 /// 使用分离的发送和接收通道实现双向通信：
 /// - 接收任务：处理客户端消息并生成响应
 /// - 发送任务：将响应发送给客户端
-/// 
+///
 /// 这种设计允许服务器主动推送事件（如执行更新）。
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let conn_id = uuid::Uuid::new_v4().to_string();

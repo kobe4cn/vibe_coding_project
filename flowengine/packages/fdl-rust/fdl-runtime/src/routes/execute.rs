@@ -24,7 +24,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::converter::{ExecutionResult, FrontendFlow, convert_frontend_to_executor, validate_inputs, filter_output_by_definition};
+use crate::converter::{
+    ExecutionResult, FrontendFlow, convert_frontend_to_executor, filter_output_by_definition,
+    validate_inputs,
+};
 use crate::state::{AppState, ExecutionStatus as ExecStatus};
 
 /// 执行流程请求
@@ -358,11 +361,13 @@ async fn execute_flow_internal(
 
     // 创建执行器实例，使用 ManagedToolRegistry 支持动态工具配置
     // ManagedToolRegistry 通过 ConfigStore 解析 api:// 和 db:// URI
-    let managed_registry = Arc::new(ManagedToolRegistry::new(state.config_store_arc()));
-    let executor = Arc::new(
-        Executor::with_managed_registry(managed_registry)
-            .with_tool_context(tool_context)
-    );
+    // 同时通过 ToolServiceStore 获取 oss://, mq://, mail://, sms://, svc:// 等服务配置
+    let managed_registry = Arc::new(ManagedToolRegistry::with_service_store(
+        state.config_store_arc(),
+        state.tool_service_store_arc(),
+    ));
+    let executor =
+        Arc::new(Executor::with_managed_registry(managed_registry).with_tool_context(tool_context));
     state.register_executor(&execution_id, executor.clone());
 
     // 更新执行状态为运行中

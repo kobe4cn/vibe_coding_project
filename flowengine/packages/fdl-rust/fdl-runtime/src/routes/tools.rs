@@ -4,17 +4,47 @@
 //! - `/api/tools/services` - API 服务管理
 //! - `/api/tools/datasources` - 数据源管理
 //! - `/api/tools/udfs` - UDF 管理
+//! - `/api/tools/oss` - OSS 对象存储管理
+//! - `/api/tools/mq` - 消息队列管理
+//! - `/api/tools/mail` - 邮件服务管理
+//! - `/api/tools/sms` - 短信服务管理
+//! - `/api/tools/svc` - 微服务管理
 //!
 //! 所有操作都支持多租户隔离。
 
 use crate::state::AppState;
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{delete, get, post, put},
-    Json, Router,
 };
-use fdl_tools::{ApiServiceConfig, AuthType, DatabaseType, DatasourceConfig, UdfConfig, UdfType};
+use fdl_tools::{
+    ApiServiceConfig,
+    AuthType,
+    DatabaseType,
+    DatasourceConfig,
+    LoadBalancer,
+    MailConfig,
+    MailProvider,
+    MessageSerialization,
+    MqBroker,
+    MqConfig,
+    OssConfig,
+    OssCredentials,
+    OssProvider,
+    ServiceDiscovery,
+    ServiceProtocol,
+    SmsConfig,
+    SmsProvider,
+    SvcConfig,
+    ToolService,
+    ToolServiceConfig,
+    // ToolSpec 模型
+    ToolType,
+    UdfConfig,
+    UdfType,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -231,6 +261,40 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/udfs/{name}", delete(delete_udf))
         // 内置 UDF 列表
         .route("/udfs/builtin", get(list_builtin_udfs))
+        // OSS 对象存储管理
+        .route("/oss", get(list_oss_services))
+        .route("/oss", post(create_oss_service))
+        .route("/oss/{name}", get(get_oss_service))
+        .route("/oss/{name}", put(update_oss_service))
+        .route("/oss/{name}", delete(delete_oss_service))
+        .route("/oss/{name}/test", post(test_oss_connection))
+        // MQ 消息队列管理
+        .route("/mq", get(list_mq_services))
+        .route("/mq", post(create_mq_service))
+        .route("/mq/{name}", get(get_mq_service))
+        .route("/mq/{name}", put(update_mq_service))
+        .route("/mq/{name}", delete(delete_mq_service))
+        .route("/mq/{name}/test", post(test_mq_connection))
+        // Mail 邮件服务管理
+        .route("/mail", get(list_mail_services))
+        .route("/mail", post(create_mail_service))
+        .route("/mail/{name}", get(get_mail_service))
+        .route("/mail/{name}", put(update_mail_service))
+        .route("/mail/{name}", delete(delete_mail_service))
+        .route("/mail/{name}/test", post(test_mail_send))
+        // SMS 短信服务管理
+        .route("/sms", get(list_sms_services))
+        .route("/sms", post(create_sms_service))
+        .route("/sms/{name}", get(get_sms_service))
+        .route("/sms/{name}", put(update_sms_service))
+        .route("/sms/{name}", delete(delete_sms_service))
+        // Svc 微服务管理
+        .route("/svc", get(list_svc_services))
+        .route("/svc", post(create_svc_service))
+        .route("/svc/{name}", get(get_svc_service))
+        .route("/svc/{name}", put(update_svc_service))
+        .route("/svc/{name}", delete(delete_svc_service))
+        .route("/svc/{name}/health", get(check_svc_health))
 }
 
 // ==================== API 服务处理器 ====================
@@ -922,4 +986,1454 @@ fn mask_connection_string(conn_str: &str) -> String {
 
     // 无法解析或不包含凭证，返回原字符串
     conn_str.to_string()
+}
+
+// ==================== OSS 对象存储处理器 ====================
+
+/// OSS 服务列表项
+#[derive(Serialize)]
+pub struct OssServiceListItem {
+    pub name: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub provider: String,
+    pub bucket: String,
+    pub region: Option<String>,
+    pub endpoint: Option<String>,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub path_style: bool,
+    pub enabled: bool,
+}
+
+/// 创建 OSS 服务请求
+#[derive(Deserialize)]
+pub struct CreateOssServiceRequest {
+    pub name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub provider: String,
+    pub bucket: String,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    #[serde(default)]
+    pub path_style: bool,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
+async fn list_oss_services(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let services = state
+        .tool_service_store()
+        .list_services_by_type(&query.tenant_id, ToolType::Oss)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list OSS services: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let items: Vec<OssServiceListItem> = services
+        .into_iter()
+        .filter_map(|s| {
+            if let ToolServiceConfig::Oss(config) = s.config {
+                Some(OssServiceListItem {
+                    name: s.code,
+                    display_name: s.name,
+                    description: s.description,
+                    provider: format!("{:?}", config.provider).to_lowercase(),
+                    bucket: config.bucket,
+                    region: config.region,
+                    endpoint: config.endpoint,
+                    access_key_id: "******".to_string(),
+                    secret_access_key: "******".to_string(),
+                    path_style: config.path_style,
+                    enabled: s.enabled,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "configs": items,
+        "total": items.len()
+    })))
+}
+
+async fn create_oss_service(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateOssServiceRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
+    let provider = parse_oss_provider(&req.provider);
+
+    let config = ToolServiceConfig::Oss(OssConfig {
+        provider,
+        bucket: req.bucket.clone(),
+        region: req.region,
+        endpoint: req.endpoint,
+        credentials: OssCredentials {
+            access_key_id: req.access_key_id,
+            secret_access_key: req.secret_access_key,
+            session_token: None,
+        },
+        path_style: req.path_style,
+    });
+
+    let service = ToolService::new(
+        ToolType::Oss,
+        &req.name,
+        &req.display_name,
+        config,
+        &req.tenant_id,
+    );
+
+    let saved = state
+        .tool_service_store()
+        .save_service(&req.tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create OSS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "name": saved.code,
+            "display_name": saved.name,
+            "enabled": saved.enabled
+        })),
+    ))
+}
+
+async fn get_oss_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Oss, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get OSS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let ToolServiceConfig::Oss(config) = service.config {
+        Ok(Json(serde_json::json!({
+            "name": service.code,
+            "display_name": service.name,
+            "description": service.description,
+            "provider": format!("{:?}", config.provider).to_lowercase(),
+            "bucket": config.bucket,
+            "region": config.region,
+            "endpoint": config.endpoint,
+            "access_key_id": "***",
+            "secret_access_key": "***",
+            "path_style": config.path_style,
+            "enabled": service.enabled
+        })))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+async fn update_oss_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let tenant_id = req
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    let mut service = state
+        .tool_service_store()
+        .get_service_by_code(tenant_id, ToolType::Oss, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get OSS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // 更新基础字段
+    if let Some(display_name) = req.get("display_name").and_then(|v| v.as_str()) {
+        service.name = display_name.to_string();
+    }
+    if let Some(description) = req.get("description").and_then(|v| v.as_str()) {
+        service.description = Some(description.to_string());
+    }
+    if let Some(enabled) = req.get("enabled").and_then(|v| v.as_bool()) {
+        service.enabled = enabled;
+    }
+
+    // 更新 OSS 配置
+    if let ToolServiceConfig::Oss(ref mut config) = service.config {
+        if let Some(provider) = req.get("provider").and_then(|v| v.as_str()) {
+            config.provider = parse_oss_provider(provider);
+        }
+        if let Some(bucket) = req.get("bucket").and_then(|v| v.as_str()) {
+            config.bucket = bucket.to_string();
+        }
+        if let Some(region) = req.get("region").and_then(|v| v.as_str()) {
+            config.region = if region.is_empty() {
+                None
+            } else {
+                Some(region.to_string())
+            };
+        }
+        if let Some(endpoint) = req.get("endpoint").and_then(|v| v.as_str()) {
+            config.endpoint = if endpoint.is_empty() {
+                None
+            } else {
+                Some(endpoint.to_string())
+            };
+        }
+        if let Some(path_style) = req.get("path_style").and_then(|v| v.as_bool()) {
+            config.path_style = path_style;
+        }
+        // 密钥字段：只有非掩码值才更新
+        if let Some(access_key_id) = req.get("access_key_id").and_then(|v| v.as_str()) {
+            if !access_key_id.is_empty() && !access_key_id.contains('*') {
+                config.credentials.access_key_id = access_key_id.to_string();
+            }
+        }
+        if let Some(secret_access_key) = req.get("secret_access_key").and_then(|v| v.as_str()) {
+            if !secret_access_key.is_empty() && !secret_access_key.contains('*') {
+                config.credentials.secret_access_key = secret_access_key.to_string();
+            }
+        }
+    }
+
+    let saved = state
+        .tool_service_store()
+        .save_service(tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update OSS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "name": saved.code,
+        "display_name": saved.name,
+        "enabled": saved.enabled,
+        "updated": true
+    })))
+}
+
+async fn delete_oss_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // 先获取服务 ID
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Oss, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get OSS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    state
+        .tool_service_store()
+        .delete_service(&query.tenant_id, &service.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete OSS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "deleted_name": name
+    })))
+}
+
+async fn test_oss_connection(
+    State(_state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(_query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // TODO: 实现实际的连接测试
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "name": name,
+        "message": "Connection test not implemented yet"
+    })))
+}
+
+fn parse_oss_provider(s: &str) -> OssProvider {
+    match s.to_lowercase().as_str() {
+        "s3" | "aws" => OssProvider::S3,
+        "alioss" | "aliyun" => OssProvider::AliOss,
+        "minio" => OssProvider::MinIO,
+        "azure" => OssProvider::Azure,
+        "gcs" | "google" => OssProvider::Gcs,
+        _ => OssProvider::S3,
+    }
+}
+
+// ==================== MQ 消息队列处理器 ====================
+
+/// MQ 服务列表项
+#[derive(Serialize)]
+pub struct MqServiceListItem {
+    pub name: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub broker: String,
+    pub connection_string: String,
+    pub default_queue: Option<String>,
+    pub default_exchange: Option<String>,
+    pub default_routing_key: Option<String>,
+    pub serialization: String,
+    pub enabled: bool,
+}
+
+/// 创建 MQ 服务请求
+#[derive(Deserialize)]
+pub struct CreateMqServiceRequest {
+    pub name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub broker: String,
+    pub connection_string: String,
+    #[serde(default)]
+    pub default_queue: Option<String>,
+    #[serde(default)]
+    pub default_exchange: Option<String>,
+    #[serde(default)]
+    pub default_routing_key: Option<String>,
+    #[serde(default = "default_serialization")]
+    pub serialization: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
+fn default_serialization() -> String {
+    "json".to_string()
+}
+
+async fn list_mq_services(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let services = state
+        .tool_service_store()
+        .list_services_by_type(&query.tenant_id, ToolType::Mq)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list MQ services: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let items: Vec<MqServiceListItem> = services
+        .into_iter()
+        .filter_map(|s| {
+            if let ToolServiceConfig::Mq(config) = s.config {
+                Some(MqServiceListItem {
+                    name: s.code,
+                    display_name: s.name,
+                    description: s.description,
+                    broker: format!("{:?}", config.broker).to_lowercase(),
+                    connection_string: "******".to_string(),
+                    default_queue: config.default_queue,
+                    default_exchange: config.default_exchange,
+                    default_routing_key: config.default_routing_key,
+                    serialization: format!("{:?}", config.serialization).to_lowercase(),
+                    enabled: s.enabled,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "configs": items,
+        "total": items.len()
+    })))
+}
+
+async fn create_mq_service(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateMqServiceRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
+    let broker = parse_mq_broker(&req.broker);
+    let serialization = parse_mq_serialization(&req.serialization);
+
+    let config = ToolServiceConfig::Mq(MqConfig {
+        broker,
+        connection_string: req.connection_string,
+        default_queue: req.default_queue,
+        default_exchange: req.default_exchange,
+        default_routing_key: req.default_routing_key,
+        serialization,
+    });
+
+    let service = ToolService::new(
+        ToolType::Mq,
+        &req.name,
+        &req.display_name,
+        config,
+        &req.tenant_id,
+    );
+
+    let saved = state
+        .tool_service_store()
+        .save_service(&req.tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create MQ service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "name": saved.code,
+            "display_name": saved.name,
+            "enabled": saved.enabled
+        })),
+    ))
+}
+
+async fn get_mq_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Mq, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get MQ service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let ToolServiceConfig::Mq(config) = service.config {
+        Ok(Json(serde_json::json!({
+            "name": service.code,
+            "display_name": service.name,
+            "description": service.description,
+            "broker": format!("{:?}", config.broker).to_lowercase(),
+            "connection_string": mask_connection_string(&config.connection_string),
+            "default_queue": config.default_queue,
+            "default_exchange": config.default_exchange,
+            "default_routing_key": config.default_routing_key,
+            "serialization": format!("{:?}", config.serialization).to_lowercase(),
+            "enabled": service.enabled
+        })))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+async fn update_mq_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let tenant_id = req
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    let mut service = state
+        .tool_service_store()
+        .get_service_by_code(tenant_id, ToolType::Mq, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get MQ service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(display_name) = req.get("display_name").and_then(|v| v.as_str()) {
+        service.name = display_name.to_string();
+    }
+    if let Some(enabled) = req.get("enabled").and_then(|v| v.as_bool()) {
+        service.enabled = enabled;
+    }
+
+    // 更新 MQ 配置字段
+    if let ToolServiceConfig::Mq(ref mut config) = service.config {
+        if let Some(broker) = req.get("broker").and_then(|v| v.as_str()) {
+            config.broker = parse_mq_broker(broker);
+        }
+        // 只有当连接字符串不包含掩码时才更新
+        if let Some(connection_string) = req.get("connection_string").and_then(|v| v.as_str()) {
+            if !connection_string.contains('*') {
+                config.connection_string = connection_string.to_string();
+            }
+        }
+        if let Some(default_queue) = req.get("default_queue").and_then(|v| v.as_str()) {
+            config.default_queue = Some(default_queue.to_string());
+        }
+        if let Some(default_exchange) = req.get("default_exchange").and_then(|v| v.as_str()) {
+            config.default_exchange = Some(default_exchange.to_string());
+        }
+        if let Some(default_routing_key) = req.get("default_routing_key").and_then(|v| v.as_str()) {
+            config.default_routing_key = Some(default_routing_key.to_string());
+        }
+        if let Some(serialization) = req.get("serialization").and_then(|v| v.as_str()) {
+            config.serialization = parse_mq_serialization(serialization);
+        }
+    }
+
+    let saved = state
+        .tool_service_store()
+        .save_service(tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update MQ service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "name": saved.code,
+        "display_name": saved.name,
+        "enabled": saved.enabled,
+        "updated": true
+    })))
+}
+
+async fn delete_mq_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Mq, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get MQ service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    state
+        .tool_service_store()
+        .delete_service(&query.tenant_id, &service.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete MQ service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "deleted_name": name
+    })))
+}
+
+async fn test_mq_connection(
+    State(_state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(_query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "name": name,
+        "message": "Connection test not implemented yet"
+    })))
+}
+
+fn parse_mq_broker(s: &str) -> MqBroker {
+    match s.to_lowercase().as_str() {
+        "rabbitmq" | "rabbit" => MqBroker::RabbitMq,
+        "kafka" => MqBroker::Kafka,
+        "rocketmq" | "rocket" => MqBroker::RocketMq,
+        "redis" => MqBroker::Redis,
+        _ => MqBroker::RabbitMq,
+    }
+}
+
+fn parse_mq_serialization(s: &str) -> MessageSerialization {
+    match s.to_lowercase().as_str() {
+        "json" => MessageSerialization::Json,
+        "protobuf" | "proto" => MessageSerialization::Protobuf,
+        "avro" => MessageSerialization::Avro,
+        _ => MessageSerialization::Json,
+    }
+}
+
+// ==================== Mail 邮件服务处理器 ====================
+
+/// Mail 服务列表项
+#[derive(Serialize)]
+pub struct MailServiceListItem {
+    pub name: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub provider: String,
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<u16>,
+    pub api_key: String,
+    pub from_address: String,
+    pub from_name: Option<String>,
+    pub enabled: bool,
+}
+
+/// 创建 Mail 服务请求
+#[derive(Deserialize)]
+pub struct CreateMailServiceRequest {
+    pub name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub provider: String,
+    #[serde(default)]
+    pub smtp_host: Option<String>,
+    #[serde(default)]
+    pub smtp_port: Option<u16>,
+    #[serde(default)]
+    pub use_tls: Option<bool>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    pub from_address: String,
+    #[serde(default)]
+    pub from_name: Option<String>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
+async fn list_mail_services(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let services = state
+        .tool_service_store()
+        .list_services_by_type(&query.tenant_id, ToolType::Mail)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list Mail services: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let items: Vec<MailServiceListItem> = services
+        .into_iter()
+        .filter_map(|s| {
+            if let ToolServiceConfig::Mail(config) = s.config {
+                Some(MailServiceListItem {
+                    name: s.code,
+                    display_name: s.name,
+                    description: s.description,
+                    provider: format!("{:?}", config.provider).to_lowercase(),
+                    smtp_host: config.smtp_host,
+                    smtp_port: config.smtp_port,
+                    api_key: "******".to_string(),
+                    from_address: config.from_address,
+                    from_name: config.from_name,
+                    enabled: s.enabled,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "configs": items,
+        "total": items.len()
+    })))
+}
+
+async fn create_mail_service(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateMailServiceRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
+    let provider = parse_mail_provider(&req.provider);
+
+    let config = ToolServiceConfig::Mail(MailConfig {
+        provider,
+        smtp_host: req.smtp_host,
+        smtp_port: req.smtp_port,
+        api_key: req.api_key,
+        from_address: req.from_address.clone(),
+        from_name: req.from_name,
+    });
+
+    let service = ToolService::new(
+        ToolType::Mail,
+        &req.name,
+        &req.display_name,
+        config,
+        &req.tenant_id,
+    );
+
+    let saved = state
+        .tool_service_store()
+        .save_service(&req.tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create Mail service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "name": saved.code,
+            "display_name": saved.name,
+            "enabled": saved.enabled
+        })),
+    ))
+}
+
+async fn get_mail_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Mail, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get Mail service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let ToolServiceConfig::Mail(config) = service.config {
+        Ok(Json(serde_json::json!({
+            "name": service.code,
+            "display_name": service.name,
+            "description": service.description,
+            "provider": format!("{:?}", config.provider).to_lowercase(),
+            "smtp_host": config.smtp_host,
+            "smtp_port": config.smtp_port,
+            "api_key": config.api_key.as_ref().map(|_| "***"),
+            "from_address": config.from_address,
+            "from_name": config.from_name,
+            "enabled": service.enabled
+        })))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+async fn update_mail_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let tenant_id = req
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    let mut service = state
+        .tool_service_store()
+        .get_service_by_code(tenant_id, ToolType::Mail, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get Mail service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(display_name) = req.get("display_name").and_then(|v| v.as_str()) {
+        service.name = display_name.to_string();
+    }
+    if let Some(enabled) = req.get("enabled").and_then(|v| v.as_bool()) {
+        service.enabled = enabled;
+    }
+
+    let saved = state
+        .tool_service_store()
+        .save_service(tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update Mail service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "name": saved.code,
+        "display_name": saved.name,
+        "enabled": saved.enabled,
+        "updated": true
+    })))
+}
+
+async fn delete_mail_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Mail, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get Mail service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    state
+        .tool_service_store()
+        .delete_service(&query.tenant_id, &service.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete Mail service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "deleted_name": name
+    })))
+}
+
+async fn test_mail_send(
+    State(_state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(_query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "name": name,
+        "message": "Test email not implemented yet"
+    })))
+}
+
+fn parse_mail_provider(s: &str) -> MailProvider {
+    match s.to_lowercase().as_str() {
+        "smtp" => MailProvider::Smtp,
+        "sendgrid" => MailProvider::SendGrid,
+        "mailgun" => MailProvider::Mailgun,
+        "ses" | "aws" => MailProvider::Ses,
+        "aliyun" | "alimail" => MailProvider::Aliyun,
+        _ => MailProvider::Smtp,
+    }
+}
+
+// ==================== SMS 短信服务处理器 ====================
+
+/// SMS 服务列表项
+#[derive(Serialize)]
+pub struct SmsServiceListItem {
+    pub name: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub provider: String,
+    pub api_key: String,
+    pub api_secret: String,
+    pub sign_name: Option<String>,
+    pub region: Option<String>,
+    pub enabled: bool,
+}
+
+/// 创建 SMS 服务请求
+#[derive(Deserialize)]
+pub struct CreateSmsServiceRequest {
+    pub name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub provider: String,
+    pub api_key: String,
+    #[serde(default)]
+    pub api_secret: Option<String>,
+    #[serde(default)]
+    pub sign_name: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
+async fn list_sms_services(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let services = state
+        .tool_service_store()
+        .list_services_by_type(&query.tenant_id, ToolType::Sms)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list SMS services: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let items: Vec<SmsServiceListItem> = services
+        .into_iter()
+        .filter_map(|s| {
+            if let ToolServiceConfig::Sms(config) = s.config {
+                Some(SmsServiceListItem {
+                    name: s.code,
+                    display_name: s.name,
+                    description: s.description,
+                    provider: format!("{:?}", config.provider).to_lowercase(),
+                    api_key: "******".to_string(),
+                    api_secret: "******".to_string(),
+                    sign_name: config.sign_name,
+                    region: config.region,
+                    enabled: s.enabled,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "configs": items,
+        "total": items.len()
+    })))
+}
+
+async fn create_sms_service(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateSmsServiceRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
+    let provider = parse_sms_provider(&req.provider);
+
+    let config = ToolServiceConfig::Sms(SmsConfig {
+        provider,
+        api_key: req.api_key,
+        api_secret: req.api_secret,
+        sign_name: req.sign_name,
+        region: req.region,
+    });
+
+    let service = ToolService::new(
+        ToolType::Sms,
+        &req.name,
+        &req.display_name,
+        config,
+        &req.tenant_id,
+    );
+
+    let saved = state
+        .tool_service_store()
+        .save_service(&req.tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create SMS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "name": saved.code,
+            "display_name": saved.name,
+            "enabled": saved.enabled
+        })),
+    ))
+}
+
+async fn get_sms_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Sms, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get SMS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let ToolServiceConfig::Sms(config) = service.config {
+        Ok(Json(serde_json::json!({
+            "name": service.code,
+            "display_name": service.name,
+            "description": service.description,
+            "provider": format!("{:?}", config.provider).to_lowercase(),
+            "api_key": "***",
+            "api_secret": config.api_secret.as_ref().map(|_| "***"),
+            "sign_name": config.sign_name,
+            "region": config.region,
+            "enabled": service.enabled
+        })))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+async fn update_sms_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let tenant_id = req
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    let mut service = state
+        .tool_service_store()
+        .get_service_by_code(tenant_id, ToolType::Sms, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get SMS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(display_name) = req.get("display_name").and_then(|v| v.as_str()) {
+        service.name = display_name.to_string();
+    }
+    if let Some(enabled) = req.get("enabled").and_then(|v| v.as_bool()) {
+        service.enabled = enabled;
+    }
+
+    let saved = state
+        .tool_service_store()
+        .save_service(tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update SMS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "name": saved.code,
+        "display_name": saved.name,
+        "enabled": saved.enabled,
+        "updated": true
+    })))
+}
+
+async fn delete_sms_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Sms, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get SMS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    state
+        .tool_service_store()
+        .delete_service(&query.tenant_id, &service.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete SMS service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "deleted_name": name
+    })))
+}
+
+fn parse_sms_provider(s: &str) -> SmsProvider {
+    match s.to_lowercase().as_str() {
+        "aliyun" | "ali" => SmsProvider::Aliyun,
+        "tencent" | "qcloud" => SmsProvider::Tencent,
+        "twilio" => SmsProvider::Twilio,
+        _ => SmsProvider::Aliyun,
+    }
+}
+
+// ==================== Svc 微服务处理器 ====================
+
+/// Svc 服务列表项
+#[derive(Serialize)]
+pub struct SvcServiceListItem {
+    pub name: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub discovery_type: String,
+    pub endpoints: Option<Vec<String>>,
+    pub consul_address: Option<String>,
+    pub k8s_service_name: Option<String>,
+    pub k8s_namespace: Option<String>,
+    pub protocol: String,
+    pub load_balancer: String,
+    pub timeout_ms: u64,
+    pub enabled: bool,
+}
+
+/// 创建 Svc 服务请求
+#[derive(Deserialize)]
+pub struct CreateSvcServiceRequest {
+    pub name: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    pub discovery_type: String,
+    #[serde(default)]
+    pub endpoints: Option<Vec<String>>,
+    #[serde(default)]
+    pub consul_address: Option<String>,
+    #[serde(default)]
+    pub k8s_service_name: Option<String>,
+    #[serde(default)]
+    pub k8s_namespace: Option<String>,
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
+    #[serde(default = "default_load_balancer")]
+    pub load_balancer: String,
+    #[serde(default = "default_timeout")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_tenant")]
+    pub tenant_id: String,
+}
+
+fn default_protocol() -> String {
+    "http".to_string()
+}
+
+fn default_load_balancer() -> String {
+    "round_robin".to_string()
+}
+
+async fn list_svc_services(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let services = state
+        .tool_service_store()
+        .list_services_by_type(&query.tenant_id, ToolType::Svc)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list Svc services: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let items: Vec<SvcServiceListItem> = services
+        .into_iter()
+        .filter_map(|s| {
+            if let ToolServiceConfig::Svc(config) = s.config {
+                let (discovery_type, endpoints, consul_address, k8s_service_name, k8s_namespace) =
+                    match &config.discovery {
+                        ServiceDiscovery::Static { endpoints } => {
+                            ("static", Some(endpoints.clone()), None, None, None)
+                        }
+                        ServiceDiscovery::Consul {
+                            address,
+                            service_name,
+                        } => (
+                            "consul",
+                            None,
+                            Some(address.clone()),
+                            Some(service_name.clone()),
+                            None,
+                        ),
+                        ServiceDiscovery::K8sDns {
+                            service_name,
+                            namespace,
+                        } => (
+                            "k8s_dns",
+                            None,
+                            None,
+                            Some(service_name.clone()),
+                            Some(namespace.clone()),
+                        ),
+                    };
+                Some(SvcServiceListItem {
+                    name: s.code,
+                    display_name: s.name,
+                    description: s.description,
+                    discovery_type: discovery_type.to_string(),
+                    endpoints,
+                    consul_address,
+                    k8s_service_name,
+                    k8s_namespace,
+                    protocol: format!("{:?}", config.protocol).to_lowercase(),
+                    load_balancer: format!("{:?}", config.load_balancer).to_lowercase(),
+                    timeout_ms: config.timeout_ms,
+                    enabled: s.enabled,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "configs": items,
+        "total": items.len()
+    })))
+}
+
+async fn create_svc_service(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateSvcServiceRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
+    let discovery = parse_service_discovery(
+        &req.discovery_type,
+        req.endpoints,
+        req.consul_address,
+        req.k8s_service_name,
+        req.k8s_namespace,
+    );
+    let protocol = parse_service_protocol(&req.protocol);
+    let load_balancer = parse_load_balancer(&req.load_balancer);
+
+    let config = ToolServiceConfig::Svc(SvcConfig {
+        discovery,
+        protocol,
+        timeout_ms: req.timeout_ms,
+        load_balancer,
+    });
+
+    let service = ToolService::new(
+        ToolType::Svc,
+        &req.name,
+        &req.display_name,
+        config,
+        &req.tenant_id,
+    );
+
+    let saved = state
+        .tool_service_store()
+        .save_service(&req.tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create Svc service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "name": saved.code,
+            "display_name": saved.name,
+            "enabled": saved.enabled
+        })),
+    ))
+}
+
+async fn get_svc_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Svc, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get Svc service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let ToolServiceConfig::Svc(config) = service.config {
+        let (discovery_type, endpoints, consul_address, k8s_service_name, k8s_namespace) =
+            match &config.discovery {
+                ServiceDiscovery::Static { endpoints } => {
+                    ("static", Some(endpoints.clone()), None, None, None)
+                }
+                ServiceDiscovery::Consul {
+                    address,
+                    service_name,
+                } => (
+                    "consul",
+                    None,
+                    Some(address.clone()),
+                    Some(service_name.clone()),
+                    None,
+                ),
+                ServiceDiscovery::K8sDns {
+                    service_name,
+                    namespace,
+                } => (
+                    "k8s_dns",
+                    None,
+                    None,
+                    Some(service_name.clone()),
+                    Some(namespace.clone()),
+                ),
+            };
+
+        Ok(Json(serde_json::json!({
+            "name": service.code,
+            "display_name": service.name,
+            "description": service.description,
+            "discovery_type": discovery_type,
+            "endpoints": endpoints,
+            "consul_address": consul_address,
+            "k8s_service_name": k8s_service_name,
+            "k8s_namespace": k8s_namespace,
+            "protocol": format!("{:?}", config.protocol).to_lowercase(),
+            "load_balancer": format!("{:?}", config.load_balancer).to_lowercase(),
+            "timeout_ms": config.timeout_ms,
+            "enabled": service.enabled
+        })))
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
+async fn update_svc_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let tenant_id = req
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+
+    let mut service = state
+        .tool_service_store()
+        .get_service_by_code(tenant_id, ToolType::Svc, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get Svc service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if let Some(display_name) = req.get("display_name").and_then(|v| v.as_str()) {
+        service.name = display_name.to_string();
+    }
+    if let Some(enabled) = req.get("enabled").and_then(|v| v.as_bool()) {
+        service.enabled = enabled;
+    }
+
+    let saved = state
+        .tool_service_store()
+        .save_service(tenant_id, service)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update Svc service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "name": saved.code,
+        "display_name": saved.name,
+        "enabled": saved.enabled,
+        "updated": true
+    })))
+}
+
+async fn delete_svc_service(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let service = state
+        .tool_service_store()
+        .get_service_by_code(&query.tenant_id, ToolType::Svc, &name)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get Svc service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    state
+        .tool_service_store()
+        .delete_service(&query.tenant_id, &service.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete Svc service: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "deleted_name": name
+    })))
+}
+
+async fn check_svc_health(
+    State(_state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(_query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    Ok(Json(serde_json::json!({
+        "name": name,
+        "healthy": true,
+        "message": "Health check not implemented yet"
+    })))
+}
+
+fn parse_service_discovery(
+    discovery_type: &str,
+    endpoints: Option<Vec<String>>,
+    consul_address: Option<String>,
+    k8s_service_name: Option<String>,
+    k8s_namespace: Option<String>,
+) -> ServiceDiscovery {
+    match discovery_type.to_lowercase().as_str() {
+        "static" => ServiceDiscovery::Static {
+            endpoints: endpoints.unwrap_or_default(),
+        },
+        "consul" => ServiceDiscovery::Consul {
+            address: consul_address.unwrap_or_else(|| "localhost:8500".to_string()),
+            service_name: k8s_service_name.unwrap_or_default(),
+        },
+        "k8s_dns" | "k8s" | "kubernetes" => ServiceDiscovery::K8sDns {
+            service_name: k8s_service_name.unwrap_or_default(),
+            namespace: k8s_namespace.unwrap_or_else(|| "default".to_string()),
+        },
+        _ => ServiceDiscovery::Static {
+            endpoints: endpoints.unwrap_or_default(),
+        },
+    }
+}
+
+fn parse_service_protocol(s: &str) -> ServiceProtocol {
+    match s.to_lowercase().as_str() {
+        "http" => ServiceProtocol::Http,
+        "grpc" => ServiceProtocol::Grpc,
+        _ => ServiceProtocol::Http,
+    }
+}
+
+fn parse_load_balancer(s: &str) -> LoadBalancer {
+    match s.to_lowercase().as_str() {
+        "round_robin" | "roundrobin" => LoadBalancer::RoundRobin,
+        "random" => LoadBalancer::Random,
+        "least_connections" | "leastconnections" => LoadBalancer::LeastConnections,
+        "weighted" => LoadBalancer::Weighted,
+        _ => LoadBalancer::RoundRobin,
+    }
 }

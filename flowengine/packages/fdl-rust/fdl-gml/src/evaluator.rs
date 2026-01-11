@@ -110,8 +110,10 @@ impl Evaluator {
             }
 
             Expression::This(path) => {
-                let this_context = Value::Object(scope.clone());
-                self.resolve_path(&this_context, path)
+                // $ 引用当前节点的输入上下文（context），而不是脚本内部的累积结果（scope）
+                // 这样 toJson($) 可以获取到 merge 节点的完整输出
+                // 如果需要引用当前脚本的内部变量，使用普通变量名即可
+                self.resolve_path(context, path)
             }
 
             Expression::Index { target, index } => {
@@ -256,11 +258,8 @@ impl Evaluator {
                 if target_val.is_null() {
                     return Ok(Value::Null);
                 }
-                let evaluated_args: Vec<Value> = args
-                    .iter()
-                    .map(|a| self.eval_expr(a, context, scope))
-                    .collect::<GmlResult<Vec<_>>>()?;
-                self.eval_method(&target_val, method, &evaluated_args, context, scope)
+                // 对于需要 Lambda 的数组方法，传递原始表达式而非求值结果
+                self.eval_method_with_exprs(&target_val, method, args, context, scope)
             }
 
             Expression::Lambda { .. } => {
@@ -448,18 +447,36 @@ impl Evaluator {
         }
     }
 
-    fn eval_method(
+    /// 带表达式参数的方法调用
+    ///
+    /// 某些数组方法（如 map、filter）需要接收 Lambda 表达式，
+    /// 而不是已求值的值。这个方法允许我们传递原始的表达式参数。
+    fn eval_method_with_exprs(
         &self,
         target: &Value,
         method: &str,
-        args: &[Value],
+        args: &[Expression],
         context: &Value,
         scope: &HashMap<String, Value>,
     ) -> GmlResult<Value> {
         match target {
-            Value::Array(arr) => self.eval_array_method(arr, method, args, context, scope),
-            Value::Object(obj) => self.eval_object_method(obj, method, args),
-            Value::String(s) => self.eval_string_method(s, method, args),
+            Value::Array(arr) => self.eval_array_method_with_exprs(arr, method, args, context, scope),
+            Value::Object(obj) => {
+                // 对象方法不需要 Lambda，先求值参数
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .collect::<GmlResult<Vec<_>>>()?;
+                self.eval_object_method(obj, method, &evaluated_args)
+            }
+            Value::String(s) => {
+                // 字符串方法不需要 Lambda，先求值参数
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .collect::<GmlResult<Vec<_>>>()?;
+                self.eval_string_method(s, method, &evaluated_args)
+            }
             _ => Err(GmlError::EvaluationError(format!(
                 "Cannot call method '{}' on {}",
                 method,
@@ -468,23 +485,217 @@ impl Evaluator {
         }
     }
 
-    fn eval_array_method(
+    /// 评估 Lambda 表达式
+    ///
+    /// 创建一个新的作用域，将 Lambda 参数绑定到给定值，然后求值 Lambda 体
+    fn eval_lambda(
+        &self,
+        lambda: &Expression,
+        arg_values: &[Value],
+        context: &Value,
+        scope: &HashMap<String, Value>,
+    ) -> GmlResult<Value> {
+        if let Expression::Lambda { params, body } = lambda {
+            let mut new_scope = scope.clone();
+            for (param, value) in params.iter().zip(arg_values.iter()) {
+                new_scope.insert(param.clone(), value.clone());
+            }
+            self.eval_expr(body, context, &new_scope)
+        } else {
+            Err(GmlError::EvaluationError(
+                "Expected lambda expression".to_string(),
+            ))
+        }
+    }
+
+    /// 带表达式参数的数组方法求值
+    ///
+    /// 支持 Lambda 表达式的数组方法（map、filter 等）
+    fn eval_array_method_with_exprs(
         &self,
         arr: &[Value],
         method: &str,
-        args: &[Value],
-        _context: &Value,
-        _scope: &HashMap<String, Value>,
+        args: &[Expression],
+        context: &Value,
+        scope: &HashMap<String, Value>,
     ) -> GmlResult<Value> {
         match method {
+            // ==================== 需要 Lambda 的方法 ====================
+
+            "map" => {
+                // map(item => expr) - 对每个元素应用转换
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "map requires a lambda expression".to_string(),
+                ))?;
+                let result: Vec<Value> = arr
+                    .iter()
+                    .map(|item| self.eval_lambda(lambda, &[item.clone()], context, scope))
+                    .collect::<GmlResult<Vec<_>>>()?;
+                Ok(Value::Array(result))
+            }
+
+            "filter" => {
+                // filter(item => condition) - 过滤满足条件的元素
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "filter requires a lambda expression".to_string(),
+                ))?;
+                let mut result = Vec::new();
+                for item in arr {
+                    let condition = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                    if condition.is_truthy() {
+                        result.push(item.clone());
+                    }
+                }
+                Ok(Value::Array(result))
+            }
+
+            "some" => {
+                // some(item => condition) - 任一元素满足条件则返回 true
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "some requires a lambda expression".to_string(),
+                ))?;
+                for item in arr {
+                    let condition = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                    if condition.is_truthy() {
+                        return Ok(Value::Bool(true));
+                    }
+                }
+                Ok(Value::Bool(false))
+            }
+
+            "every" => {
+                // every(item => condition) - 所有元素满足条件则返回 true
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "every requires a lambda expression".to_string(),
+                ))?;
+                for item in arr {
+                    let condition = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                    if !condition.is_truthy() {
+                        return Ok(Value::Bool(false));
+                    }
+                }
+                Ok(Value::Bool(true))
+            }
+
+            "find" => {
+                // find(item => condition) - 返回第一个满足条件的元素
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "find requires a lambda expression".to_string(),
+                ))?;
+                for item in arr {
+                    let condition = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                    if condition.is_truthy() {
+                        return Ok(item.clone());
+                    }
+                }
+                Ok(Value::Null)
+            }
+
+            "findIndex" => {
+                // findIndex(item => condition) - 返回第一个满足条件的元素索引
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "findIndex requires a lambda expression".to_string(),
+                ))?;
+                for (i, item) in arr.iter().enumerate() {
+                    let condition = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                    if condition.is_truthy() {
+                        return Ok(Value::Int(i as i64));
+                    }
+                }
+                Ok(Value::Int(-1))
+            }
+
+            "sort" => {
+                // sort() - 按值排序（可选 Lambda 指定比较键）
+                let mut result = arr.to_vec();
+                if let Some(lambda) = args.first() {
+                    // 使用 Lambda 计算排序键
+                    let mut keyed: Vec<(Value, Value)> = result
+                        .into_iter()
+                        .map(|item| {
+                            let key = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                            Ok((item, key))
+                        })
+                        .collect::<GmlResult<Vec<_>>>()?;
+                    keyed.sort_by(|a, b| self.compare_values(&a.1, &b.1));
+                    result = keyed.into_iter().map(|(item, _)| item).collect();
+                } else {
+                    // 直接按值排序
+                    result.sort_by(|a, b| self.compare_values(a, b));
+                }
+                Ok(Value::Array(result))
+            }
+
+            "group" => {
+                // group(item => key) - 按键分组
+                let lambda = args.first().ok_or(GmlError::InvalidArgument(
+                    "group requires a lambda expression".to_string(),
+                ))?;
+                let mut groups: HashMap<String, Vec<Value>> = HashMap::new();
+                for item in arr {
+                    let key = self.eval_lambda(lambda, &[item.clone()], context, scope)?;
+                    let key_str = self.value_to_string(&key);
+                    groups.entry(key_str).or_default().push(item.clone());
+                }
+                // 返回对象，每个键对应一个数组
+                let result: HashMap<String, Value> = groups
+                    .into_iter()
+                    .map(|(k, v)| (k, Value::Array(v)))
+                    .collect();
+                Ok(Value::Object(result))
+            }
+
+            "proj" | "pluck" => {
+                // proj('field1,field2') 或 proj(item => { field1: item.a, field2: item.b })
+                // 从每个对象中提取指定字段
+                if let Some(first_arg) = args.first() {
+                    let first_val = self.eval_expr(first_arg, context, scope)?;
+                    if let Some(fields_str) = first_val.as_str() {
+                        // 字符串参数：提取指定字段
+                        let field_list: Vec<&str> = fields_str.split(',').map(|s| s.trim()).collect();
+                        let result: Vec<Value> = arr
+                            .iter()
+                            .map(|item| {
+                                if let Value::Object(obj) = item {
+                                    let projected: HashMap<String, Value> = field_list
+                                        .iter()
+                                        .filter_map(|&f| obj.get(f).map(|v| (f.to_string(), v.clone())))
+                                        .collect();
+                                    Value::Object(projected)
+                                } else {
+                                    Value::Null
+                                }
+                            })
+                            .collect();
+                        Ok(Value::Array(result))
+                    } else {
+                        // Lambda 参数：对每个元素应用转换
+                        let result: Vec<Value> = arr
+                            .iter()
+                            .map(|item| self.eval_lambda(first_arg, &[item.clone()], context, scope))
+                            .collect::<GmlResult<Vec<_>>>()?;
+                        Ok(Value::Array(result))
+                    }
+                } else {
+                    Err(GmlError::InvalidArgument(
+                        "proj requires a field list or lambda".to_string(),
+                    ))
+                }
+            }
+
+            // ==================== 不需要 Lambda 的方法（先求值参数） ====================
+
             "length" => Ok(Value::Int(arr.len() as i64)),
 
             "sum" => {
-                let field = args.first().and_then(|v| v.as_str());
+                let field = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_str().map(|s| s.to_string()));
                 let sum: f64 = arr
                     .iter()
                     .map(|item| {
-                        if let Some(f) = field {
+                        if let Some(ref f) = field {
                             item.get(f).and_then(|v| v.as_float()).unwrap_or(0.0)
                         } else {
                             item.as_float().unwrap_or(0.0)
@@ -498,11 +709,14 @@ impl Evaluator {
                 if arr.is_empty() {
                     return Ok(Value::Null);
                 }
-                let field = args.first().and_then(|v| v.as_str());
+                let field = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_str().map(|s| s.to_string()));
                 let sum: f64 = arr
                     .iter()
                     .map(|item| {
-                        if let Some(f) = field {
+                        if let Some(ref f) = field {
                             item.get(f).and_then(|v| v.as_float()).unwrap_or(0.0)
                         } else {
                             item.as_float().unwrap_or(0.0)
@@ -516,11 +730,14 @@ impl Evaluator {
                 if arr.is_empty() {
                     return Ok(Value::Null);
                 }
-                let field = args.first().and_then(|v| v.as_str());
+                let field = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_str().map(|s| s.to_string()));
                 let values: Vec<f64> = arr
                     .iter()
                     .filter_map(|item| {
-                        if let Some(f) = field {
+                        if let Some(ref f) = field {
                             item.get(f).and_then(|v| v.as_float())
                         } else {
                             item.as_float()
@@ -554,50 +771,157 @@ impl Evaluator {
             }
 
             "join" => {
-                let sep = args.first().and_then(|v| v.as_str()).unwrap_or(",");
+                let sep = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .unwrap_or_else(|| ",".to_string());
                 let strings: Vec<String> = arr.iter().map(|v| self.value_to_string(v)).collect();
-                Ok(Value::String(strings.join(sep)))
+                Ok(Value::String(strings.join(&sep)))
             }
 
             "flat" => {
-                let mut result = Vec::new();
-                for item in arr {
-                    if let Value::Array(inner) = item {
-                        result.extend(inner.clone());
-                    } else {
-                        result.push(item.clone());
-                    }
-                }
-                Ok(Value::Array(result))
+                let depth = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .unwrap_or(1);
+                Ok(Value::Array(self.flatten_array(arr, depth as usize)))
             }
 
             "includes" => {
-                let search = args.first().ok_or(GmlError::InvalidArgument(
-                    "includes requires an argument".to_string(),
-                ))?;
+                let search = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .ok_or(GmlError::InvalidArgument(
+                        "includes requires an argument".to_string(),
+                    ))?;
                 Ok(Value::Bool(
-                    arr.iter().any(|item| self.values_equal(item, search)),
+                    arr.iter().any(|item| self.values_equal(item, &search)),
                 ))
             }
 
             "push" | "add" => {
                 let mut result = arr.to_vec();
-                result.extend(args.iter().cloned());
+                for arg in args {
+                    let val = self.eval_expr(arg, context, scope)?;
+                    result.push(val);
+                }
                 Ok(Value::Array(result))
             }
 
             "concat" | "addAll" => {
                 let mut result = arr.to_vec();
-                if let Some(Value::Array(other)) = args.first() {
-                    result.extend(other.clone());
+                if let Some(arg) = args.first() {
+                    let val = self.eval_expr(arg, context, scope)?;
+                    if let Value::Array(other) = val {
+                        result.extend(other);
+                    }
                 }
                 Ok(Value::Array(result))
+            }
+
+            "slice" => {
+                // slice(start, end?) - 获取切片
+                let start = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .unwrap_or(0) as usize;
+                let end = args.get(1)
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .map(|e| e as usize)
+                    .unwrap_or(arr.len());
+                let start = start.min(arr.len());
+                let end = end.min(arr.len());
+                Ok(Value::Array(arr[start..end].to_vec()))
+            }
+
+            "chunk" => {
+                // chunk(size) - 分块
+                let size = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .unwrap_or(1) as usize;
+                let size = size.max(1);
+                let chunks: Vec<Value> = arr
+                    .chunks(size)
+                    .map(|chunk| Value::Array(chunk.to_vec()))
+                    .collect();
+                Ok(Value::Array(chunks))
+            }
+
+            "take" => {
+                // take(n) - 获取前 n 个元素
+                let n = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .unwrap_or(1) as usize;
+                Ok(Value::Array(arr.iter().take(n).cloned().collect()))
+            }
+
+            "skip" | "drop" => {
+                // skip(n) - 跳过前 n 个元素
+                let n = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .unwrap_or(0) as usize;
+                Ok(Value::Array(arr.iter().skip(n).cloned().collect()))
+            }
+
+            "at" => {
+                // at(index) - 获取指定位置的元素，支持负索引
+                let idx = args.first()
+                    .map(|a| self.eval_expr(a, context, scope))
+                    .transpose()?
+                    .and_then(|v| v.as_int())
+                    .unwrap_or(0);
+                let actual_idx = if idx < 0 {
+                    (arr.len() as i64 + idx) as usize
+                } else {
+                    idx as usize
+                };
+                Ok(arr.get(actual_idx).cloned().unwrap_or(Value::Null))
             }
 
             _ => Err(GmlError::EvaluationError(format!(
                 "Unknown array method: {}",
                 method
             ))),
+        }
+    }
+
+    /// 递归扁平化数组
+    fn flatten_array(&self, arr: &[Value], depth: usize) -> Vec<Value> {
+        if depth == 0 {
+            return arr.to_vec();
+        }
+        let mut result = Vec::new();
+        for item in arr {
+            if let Value::Array(inner) = item {
+                result.extend(self.flatten_array(inner, depth - 1));
+            } else {
+                result.push(item.clone());
+            }
+        }
+        result
+    }
+
+    /// 值比较（用于排序）
+    fn compare_values(&self, a: &Value, b: &Value) -> std::cmp::Ordering {
+        match (a, b) {
+            (Value::Int(x), Value::Int(y)) => x.cmp(y),
+            (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Int(x), Value::Float(y)) => (*x as f64).partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::Float(x), Value::Int(y)) => x.partial_cmp(&(*y as f64)).unwrap_or(std::cmp::Ordering::Equal),
+            (Value::String(x), Value::String(y)) => x.cmp(y),
+            (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
+            _ => std::cmp::Ordering::Equal,
         }
     }
 
@@ -845,5 +1169,132 @@ mod tests {
             &context
         ).unwrap();
         assert_eq!(result, Value::string("C"));
+    }
+
+    #[test]
+    fn test_array_map() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3)]),
+        )]);
+        let result = evaluator.evaluate("nums.map(x => x * 2)", &context).unwrap();
+        assert_eq!(
+            result,
+            Value::array(vec![Value::Int(2), Value::Int(4), Value::Int(6)])
+        );
+    }
+
+    #[test]
+    fn test_array_filter() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4)]),
+        )]);
+        let result = evaluator.evaluate("nums.filter(x => x > 2)", &context).unwrap();
+        assert_eq!(
+            result,
+            Value::array(vec![Value::Int(3), Value::Int(4)])
+        );
+    }
+
+    #[test]
+    fn test_array_some_every() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3)]),
+        )]);
+
+        let result = evaluator.evaluate("nums.some(x => x > 2)", &context).unwrap();
+        assert_eq!(result, Value::Bool(true));
+
+        let result = evaluator.evaluate("nums.every(x => x > 0)", &context).unwrap();
+        assert_eq!(result, Value::Bool(true));
+
+        let result = evaluator.evaluate("nums.every(x => x > 2)", &context).unwrap();
+        assert_eq!(result, Value::Bool(false));
+    }
+
+    #[test]
+    fn test_array_find() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "users",
+            Value::array(vec![
+                Value::object([("name", Value::string("Alice")), ("age", Value::int(25))]),
+                Value::object([("name", Value::string("Bob")), ("age", Value::int(30))]),
+            ]),
+        )]);
+        let result = evaluator.evaluate("users.find(u => u.age > 28)", &context).unwrap();
+        assert_eq!(result.get("name"), Some(&Value::string("Bob")));
+    }
+
+    #[test]
+    fn test_array_sort() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(3), Value::int(1), Value::int(2)]),
+        )]);
+        let result = evaluator.evaluate("nums.sort()", &context).unwrap();
+        assert_eq!(
+            result,
+            Value::array(vec![Value::Int(1), Value::Int(2), Value::Int(3)])
+        );
+    }
+
+    #[test]
+    fn test_array_slice() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4), Value::int(5)]),
+        )]);
+        let result = evaluator.evaluate("nums.slice(1, 4)", &context).unwrap();
+        assert_eq!(
+            result,
+            Value::array(vec![Value::Int(2), Value::Int(3), Value::Int(4)])
+        );
+    }
+
+    #[test]
+    fn test_array_chunk() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4), Value::int(5)]),
+        )]);
+        let result = evaluator.evaluate("nums.chunk(2)", &context).unwrap();
+        if let Value::Array(chunks) = result {
+            assert_eq!(chunks.len(), 3);
+            assert_eq!(chunks[0], Value::array(vec![Value::Int(1), Value::Int(2)]));
+            assert_eq!(chunks[1], Value::array(vec![Value::Int(3), Value::Int(4)]));
+            assert_eq!(chunks[2], Value::array(vec![Value::Int(5)]));
+        } else {
+            panic!("Expected array");
+        }
+    }
+
+    #[test]
+    fn test_array_take_skip() {
+        let evaluator = Evaluator::new();
+        let context = Value::object([(
+            "nums",
+            Value::array(vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4), Value::int(5)]),
+        )]);
+
+        let result = evaluator.evaluate("nums.take(3)", &context).unwrap();
+        assert_eq!(
+            result,
+            Value::array(vec![Value::Int(1), Value::Int(2), Value::Int(3)])
+        );
+
+        let result = evaluator.evaluate("nums.skip(2)", &context).unwrap();
+        assert_eq!(
+            result,
+            Value::array(vec![Value::Int(3), Value::Int(4), Value::Int(5)])
+        );
     }
 }

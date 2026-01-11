@@ -3,7 +3,7 @@
 //! 提供流程和版本的 CRUD 操作：
 //! - 流程：创建、查询、更新、删除、列表
 //! - 版本：创建、查询、删除、列表
-//! 
+//!
 //! 所有操作都支持多租户隔离。
 
 use crate::state::AppState;
@@ -139,7 +139,10 @@ async fn list_flows(
 
     // 根据 published 参数过滤
     let filtered_flows: Vec<_> = if let Some(published_filter) = query.published {
-        flows.into_iter().filter(|f| f.published == published_filter).collect()
+        flows
+            .into_iter()
+            .filter(|f| f.published == published_filter)
+            .collect()
     } else {
         flows
     };

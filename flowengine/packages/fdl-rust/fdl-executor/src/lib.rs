@@ -32,17 +32,25 @@ use fdl_gml::Value;
 use fdl_tools::{ManagedToolRegistry, ToolContext, ToolRegistry};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 /// 系统变量列表（在输出时过滤）
 const SYSTEM_VARS: &[&str] = &["buCode", "tenantId"];
 
 /// Flow executor
+///
+/// 负责执行 FDL 流程，支持：
+/// - 工具注册表（简单/托管）
+/// - 状态持久化（可选）
+/// - 执行恢复
 pub struct Executor {
     context: Arc<RwLock<ExecutionContext>>,
     scheduler: Scheduler,
     tool_registry: Option<Arc<ToolRegistry>>,
     managed_registry: Option<Arc<ManagedToolRegistry>>,
     tool_context: ToolContext,
+    /// 可选的持久化管理器
+    persistence: Option<Arc<PersistenceManager>>,
 }
 
 impl Executor {
@@ -54,6 +62,7 @@ impl Executor {
             tool_registry: None,
             managed_registry: None,
             tool_context: ToolContext::default(),
+            persistence: None,
         }
     }
 
@@ -65,6 +74,7 @@ impl Executor {
             tool_registry: Some(Arc::new(registry)),
             managed_registry: None,
             tool_context: ToolContext::default(),
+            persistence: None,
         }
     }
 
@@ -76,6 +86,7 @@ impl Executor {
             tool_registry: None,
             managed_registry: Some(registry),
             tool_context: ToolContext::default(),
+            persistence: None,
         }
     }
 
@@ -85,12 +96,34 @@ impl Executor {
         self
     }
 
+    /// Set persistence manager for state persistence and recovery
+    pub fn with_persistence(mut self, persistence: Arc<PersistenceManager>) -> Self {
+        self.persistence = Some(persistence);
+        self
+    }
+
     /// Execute a flow
     pub async fn execute(&self, flow: &Flow, inputs: Value) -> ExecutorResult<Value> {
+        self.execute_with_id(flow, inputs, Uuid::new_v4()).await
+    }
+
+    /// Execute a flow with a specific execution ID
+    ///
+    /// 支持指定执行 ID，用于幂等性控制和执行追踪
+    pub async fn execute_with_id(
+        &self,
+        flow: &Flow,
+        inputs: Value,
+        execution_id: Uuid,
+    ) -> ExecutorResult<Value> {
         // Initialize context with inputs and tool registry
         {
             let mut ctx = self.context.write().await;
-            ctx.set_inputs(inputs);
+            ctx.execution_id = execution_id.to_string();
+            ctx.flow_id = Some(flow.meta.name.clone());
+            ctx.tenant_id = self.tool_context.tenant_id.clone();
+            ctx.bu_code = self.tool_context.bu_code.clone();
+            ctx.set_inputs(inputs.clone());
             if let Some(registry) = &self.tool_registry {
                 ctx.set_tool_registry(registry.clone());
             }
@@ -100,11 +133,121 @@ impl Executor {
             ctx.set_tool_context(self.tool_context.clone());
         }
 
+        // Save initial snapshot if persistence is enabled
+        if let Some(persistence) = &self.persistence {
+            let ctx = self.context.read().await;
+            let snapshot = ExecutionSnapshot::from_context(
+                execution_id,
+                &self.tool_context.tenant_id,
+                &flow.meta.name,
+                &ctx,
+                ExecutionStatus::Running,
+            );
+            persistence.save(&snapshot).await?;
+        }
+
         // Build execution graph and run
-        let result = self.scheduler.execute(flow, self.context.clone()).await?;
+        let result = self.scheduler.execute(flow, self.context.clone()).await;
+
+        // Save final snapshot
+        if let Some(persistence) = &self.persistence {
+            let ctx = self.context.read().await;
+            let status = if result.is_ok() {
+                ExecutionStatus::Completed
+            } else {
+                ExecutionStatus::Failed
+            };
+            let mut snapshot = ExecutionSnapshot::from_context(
+                execution_id,
+                &self.tool_context.tenant_id,
+                &flow.meta.name,
+                &ctx,
+                status,
+            );
+            if let Err(ref e) = result {
+                snapshot.metadata.insert("error".to_string(), e.to_string());
+            }
+            persistence.save(&snapshot).await?;
+        }
 
         // Filter output based on args.out and remove system variables
-        Ok(self.filter_output(&flow.args, result))
+        Ok(self.filter_output(&flow.args, result?))
+    }
+
+    /// Resume execution from a snapshot
+    ///
+    /// 从快照恢复执行上下文，并从中断点继续执行
+    pub async fn resume_from_snapshot(
+        &self,
+        flow: &Flow,
+        snapshot: &ExecutionSnapshot,
+    ) -> ExecutorResult<Value> {
+        // Restore context from snapshot
+        {
+            let mut ctx = self.context.write().await;
+            ctx.execution_id = snapshot.execution_id.to_string();
+            ctx.flow_id = Some(snapshot.flow_id.clone());
+            ctx.tenant_id = snapshot.tenant_id.clone();
+            ctx.bu_code = self
+                .tool_context
+                .bu_code
+                .clone();
+            ctx.set_inputs(snapshot.inputs.clone());
+
+            // Restore variables
+            for (k, v) in &snapshot.variables {
+                ctx.set_variable(k, v.clone());
+            }
+
+            // Restore node states
+            for node_id in &snapshot.completed_nodes {
+                ctx.mark_completed(node_id);
+            }
+            for node_id in &snapshot.failed_nodes {
+                ctx.mark_failed(node_id);
+            }
+
+            if let Some(registry) = &self.tool_registry {
+                ctx.set_tool_registry(registry.clone());
+            }
+            if let Some(registry) = &self.managed_registry {
+                ctx.set_managed_registry(registry.clone());
+            }
+            ctx.set_tool_context(self.tool_context.clone());
+        }
+
+        // Update snapshot status to running
+        if let Some(persistence) = &self.persistence {
+            let mut updated_snapshot = snapshot.clone();
+            updated_snapshot.set_status(ExecutionStatus::Running);
+            persistence.save(&updated_snapshot).await?;
+        }
+
+        // Continue execution
+        let result = self.scheduler.execute(flow, self.context.clone()).await;
+
+        // Save final snapshot
+        if let Some(persistence) = &self.persistence {
+            let ctx = self.context.read().await;
+            let status = if result.is_ok() {
+                ExecutionStatus::Completed
+            } else {
+                ExecutionStatus::Failed
+            };
+            let mut final_snapshot = ExecutionSnapshot::from_context(
+                snapshot.execution_id,
+                &snapshot.tenant_id,
+                &snapshot.flow_id,
+                &ctx,
+                status,
+            );
+            if let Err(ref e) = result {
+                final_snapshot.metadata.insert("error".to_string(), e.to_string());
+            }
+            persistence.save(&final_snapshot).await?;
+        }
+
+        Ok(self.filter_output(&flow.args, result?))
     }
 
     /// 过滤输出：只移除系统变量 (buCode, tenantId)

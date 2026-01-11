@@ -19,7 +19,7 @@ use crate::state::DatabaseConfig;
 use std::sync::Arc;
 
 /// 存储后端类型
-/// 
+///
 /// 枚举类型，支持内存和数据库两种存储方式。
 /// 运行时根据配置选择，失败时回退到内存存储。
 pub enum Storage {

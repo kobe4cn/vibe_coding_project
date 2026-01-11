@@ -48,7 +48,7 @@ async fn login(
     match state.jwt_service.generate_access_token(
         &req.username,
         &tenant_id,
-        "BU001", // 默认业务单元，应从用户信息中获取
+        "BU001",                    // 默认业务单元，应从用户信息中获取
         vec!["editor".to_string()], // 默认角色，应从用户信息中获取
     ) {
         Ok(access_token) => {

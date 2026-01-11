@@ -148,6 +148,51 @@ const NODE_ICONS: Record<FlowNodeType, React.ReactNode> = {
       <path d="m12 5 7 7-7 7"/>
     </svg>
   ),
+  // 对象存储 - Cloud/Storage icon
+  oss: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+      <path d="M12 12v9"/>
+      <path d="m8 17 4 4 4-4"/>
+    </svg>
+  ),
+  // 消息队列 - Queue/List icon
+  mq: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <rect x="14" y="14" width="7" height="7" rx="1"/>
+      <path d="M10 6h4"/>
+      <path d="M6 10v4"/>
+      <path d="M10 17.5h4"/>
+    </svg>
+  ),
+  // 邮件发送 - Mail icon
+  mail: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="16" x="2" y="4" rx="2"/>
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </svg>
+  ),
+  // 短信发送 - Message icon
+  sms: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <path d="M8 10h.01"/>
+      <path d="M12 10h.01"/>
+      <path d="M16 10h.01"/>
+    </svg>
+  ),
+  // 微服务调用 - Server/Network icon
+  service: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/>
+      <line x1="6" y1="18" x2="6.01" y2="18"/>
+    </svg>
+  ),
 }
 
 interface NodeItemProps {
@@ -276,7 +321,7 @@ function NodeCategory({ category, expanded, onToggle }: NodeCategoryProps) {
 export function NodePalette() {
   const [search, setSearch] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['entry', 'basic', 'control', 'loop', 'agent'])
+    new Set(['entry', 'basic', 'control', 'loop', 'agent', 'integration'])
   )
 
   const toggleCategory = useCallback((category: string) => {

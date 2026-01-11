@@ -9,6 +9,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { useStorage } from '@/lib/storage'
 import { useFlowStore } from '@/stores/flowStore'
 import { EditorLayout } from '@/components/editor/EditorLayout'
+import { migrateFlowModel } from '@/lib/flowYamlConverter'
 import type { FlowModel } from '@/types/flow'
 
 // Icons
@@ -87,7 +88,9 @@ export function FlowEditorPage() {
             return
           }
 
-          setFlow(version.flow)
+          // 迁移旧流程以修正节点类型
+          const migratedFlow = migrateFlowModel(version.flow)
+          setFlow(migratedFlow)
           setReadOnly(true, versionId)
           setIsViewingVersion(true)
           setViewingVersionName(version.name)
@@ -96,7 +99,9 @@ export function FlowEditorPage() {
           // Get latest version
           const latestVersion = await storage.getLatestVersion(flowId)
           if (latestVersion) {
-            storeLoadFlow(flowId, latestVersion.flow, flowEntry.name)
+            // 迁移旧流程以修正节点类型
+            const migratedFlow = migrateFlowModel(latestVersion.flow)
+            storeLoadFlow(flowId, migratedFlow, flowEntry.name)
           } else {
             // New flow with no versions yet
             storeLoadFlow(flowId, createEmptyFlow(flowEntry.name), flowEntry.name)

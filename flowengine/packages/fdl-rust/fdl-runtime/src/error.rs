@@ -12,7 +12,7 @@ use serde_json::json;
 use thiserror::Error;
 
 /// 运行时错误类型
-/// 
+///
 /// 涵盖所有可能的运行时错误，每个错误对应特定的 HTTP 状态码。
 #[derive(Debug, Error)]
 pub enum RuntimeError {
@@ -46,7 +46,7 @@ pub enum RuntimeError {
 
 impl RuntimeError {
     /// 获取对应的 HTTP 状态码
-    /// 
+    ///
     /// 根据错误类型返回合适的 HTTP 状态码，遵循 REST API 最佳实践。
     pub fn status_code(&self) -> StatusCode {
         match self {

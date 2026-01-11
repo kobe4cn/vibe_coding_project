@@ -301,6 +301,120 @@ exec: <tool-type>://<tool-code>?[options]
 > **CQL 表达式说明**：CQL 是一种统一查询语言，语法接近自然条件表达式，支持 `=`, `!=`, `>`, `<`, `IN`, `LIKE`
 > 等操作符，并自动转义为对应数据库的安全查询语句。
 
+---
+
+#### 2b. `oss` 类型操作说明
+
+`oss` 类型用于操作对象存储服务（如 AWS S3、阿里云 OSS、MinIO 等）。
+
+**URI 格式**：
+
+```
+oss://<service-id>/<operation>/<path/to/key>
+```
+
+或通过 `args` 指定操作类型：
+
+```
+oss://<service-id>/<path/to/key>
+args: operation = 'upload', data = ...
+```
+
+**支持的操作类型**：
+
+| 操作 | 别名 | 说明 |
+|------|------|------|
+| `upload` | `put`, `write`, `store` | 上传文件到指定路径 |
+| `download` | `get`, `read`, `fetch` | 下载指定路径的文件 |
+| `delete` | `remove`, `rm`, `del` | 删除指定路径的文件 |
+| `list` | `ls`, `dir` | 列出指定前缀下的文件 |
+| `presign` | `sign`, `url` | 生成预签名 URL |
+| `copy` | `cp`, `duplicate` | 复制文件到新路径 |
+| `head` | `info`, `meta`, `stat` | 获取文件元信息 |
+
+**示例**：
+
+```yaml
+# 方式1: operation 在 URI 路径中
+saveReport:
+    name: 保存报表
+    exec: oss://minio/upload/reports/2024/report.json
+    args: |
+        data = toJson(reportData)
+        contentType = 'application/json'
+
+# 方式2: operation 在 args 中（推荐用于动态路径）
+saveReport:
+    name: 保存报表
+    exec: oss://minio/reports/${date}/report.json
+    args: |
+        operation = 'upload'
+        data = toJson(reportData)
+        contentType = 'application/json'
+```
+
+---
+
+#### 2c. `mq` 类型操作说明
+
+`mq` 类型用于操作消息队列服务（如 RabbitMQ、Kafka、RocketMQ 等）。
+
+**URI 格式**：
+
+```
+mq://<service-id>/<operation>/<topic>[/<queue>]
+```
+
+或通过 `args` 指定操作类型（适用于 RabbitMQ 的 exchange/routing-key 模式）：
+
+```
+mq://<service-id>/<exchange>/<routing-key>
+args: operation = 'publish', message = ...
+```
+
+**支持的操作类型**：
+
+| 操作 | 别名 | 说明 |
+|------|------|------|
+| `send` | `publish`, `push`, `produce` | 发送消息到队列/主题 |
+| `receive` | `pull`, `consume`, `get` | 从队列接收消息 |
+| `subscribe` | `sub`, `listen` | 订阅主题 |
+| `unsubscribe` | `unsub` | 取消订阅 |
+| `ack` | `acknowledge` | 确认消息已处理 |
+| `nack` | `reject` | 拒绝消息（可选重新入队） |
+| `info` | `stats`, `status` | 获取队列状态信息 |
+
+**示例**：
+
+```yaml
+# 方式1: operation 在 URI 路径中
+notifyMQ:
+    name: 发布事件
+    exec: mq://rabbitmq/publish/customer.events
+    args: |
+        message = toJson({
+            event = 'view.updated'
+            customerId = customer.id
+            timestamp = NOW()
+        })
+
+# 方式2: operation 在 args 中（RabbitMQ exchange/routing-key 模式）
+notifyMQ:
+    name: 发布事件
+    exec: mq://rabbitmq/customer.events/view.updated
+    args: |
+        operation = 'publish'
+        message = toJson({
+            customerId = customer.id
+            timestamp = NOW()
+        })
+```
+
+> **注意**：当使用 `args` 中的 `operation` 参数时，URI 路径部分会被解析为 `<exchange>/<routing-key>` 格式，
+> 这在 RabbitMQ 等支持 exchange 路由的消息中间件中特别有用。
+
+---
+
 #### 3. `exec` 执行结果说明
 
 - 工具调用 `exec` 执行完成后，其返回值会立即绑定为一个上下文变量，变量名等于当前节点的 `id`。

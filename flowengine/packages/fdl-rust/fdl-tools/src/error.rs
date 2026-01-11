@@ -31,6 +31,12 @@ pub enum ToolError {
 
     #[error("HTTP error: {status} - {message}")]
     HttpError { status: u16, message: String },
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
+
+    #[error("Network error: {0}")]
+    NetworkError(String),
 }
 
 /// Tool result type

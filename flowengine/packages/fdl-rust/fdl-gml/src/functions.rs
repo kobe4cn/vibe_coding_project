@@ -7,12 +7,13 @@ use crate::error::{GmlError, GmlResult};
 use crate::value::Value;
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// 函数实现类型：接受参数数组，返回结果或错误
 type FunctionImpl = fn(&[Value]) -> GmlResult<Value>;
 
 /// 内置函数注册表
-/// 
+///
 /// 在初始化时注册所有内置函数，提供统一的函数调用接口。
 pub struct Functions {
     registry: HashMap<String, FunctionImpl>,
@@ -29,47 +30,105 @@ impl Functions {
     pub fn new() -> Self {
         let mut registry: HashMap<String, FunctionImpl> = HashMap::new();
 
-        // Math functions
+        // Math functions (大写 + 小写别名)
         registry.insert("SUM".to_string(), fn_sum);
+        registry.insert("sum".to_string(), fn_sum);
         registry.insert("AVG".to_string(), fn_avg);
+        registry.insert("avg".to_string(), fn_avg);
         registry.insert("MIN".to_string(), fn_min);
+        registry.insert("min".to_string(), fn_min);
         registry.insert("MAX".to_string(), fn_max);
+        registry.insert("max".to_string(), fn_max);
         registry.insert("ROUND".to_string(), fn_round);
+        registry.insert("round".to_string(), fn_round);
         registry.insert("FLOOR".to_string(), fn_floor);
+        registry.insert("floor".to_string(), fn_floor);
         registry.insert("CEIL".to_string(), fn_ceil);
+        registry.insert("ceil".to_string(), fn_ceil);
         registry.insert("ABS".to_string(), fn_abs);
+        registry.insert("abs".to_string(), fn_abs);
 
-        // String functions
+        // String functions (大写 + 小写别名)
         registry.insert("CONCAT".to_string(), fn_concat);
+        registry.insert("concat".to_string(), fn_concat);
         registry.insert("UPPER".to_string(), fn_upper);
+        registry.insert("upper".to_string(), fn_upper);
         registry.insert("LOWER".to_string(), fn_lower);
+        registry.insert("lower".to_string(), fn_lower);
         registry.insert("TRIM".to_string(), fn_trim);
+        registry.insert("trim".to_string(), fn_trim);
         registry.insert("LENGTH".to_string(), fn_length);
+        registry.insert("length".to_string(), fn_length);
+        registry.insert("len".to_string(), fn_length);
         registry.insert("SUBSTRING".to_string(), fn_substring);
+        registry.insert("substring".to_string(), fn_substring);
+        registry.insert("substr".to_string(), fn_substring);
         registry.insert("REPLACE".to_string(), fn_replace);
+        registry.insert("replace".to_string(), fn_replace);
         registry.insert("SPLIT".to_string(), fn_split);
+        registry.insert("split".to_string(), fn_split);
 
-        // Date functions
+        // Date functions (大写 + 小写别名)
         registry.insert("DATE".to_string(), fn_date);
+        registry.insert("date".to_string(), fn_date);
         registry.insert("NOW".to_string(), fn_now);
+        registry.insert("now".to_string(), fn_now);
         registry.insert("TIME".to_string(), fn_time);
+        registry.insert("time".to_string(), fn_time);
         registry.insert("FORMAT_DATE".to_string(), fn_format_date);
+        registry.insert("formatDate".to_string(), fn_format_date);
+        registry.insert("format_date".to_string(), fn_format_date);
 
-        // Array functions
+        // Array functions (大写 + 小写别名)
         registry.insert("COUNT".to_string(), fn_count);
+        registry.insert("count".to_string(), fn_count);
         registry.insert("FIRST".to_string(), fn_first);
+        registry.insert("first".to_string(), fn_first);
         registry.insert("LAST".to_string(), fn_last);
+        registry.insert("last".to_string(), fn_last);
 
-        // Type conversion
+        // Type conversion (大写 + 小写 + camelCase 别名)
         registry.insert("INT".to_string(), fn_int);
+        registry.insert("int".to_string(), fn_int);
+        registry.insert("toInt".to_string(), fn_int);
         registry.insert("FLOAT".to_string(), fn_float);
+        registry.insert("float".to_string(), fn_float);
+        registry.insert("toFloat".to_string(), fn_float);
         registry.insert("STRING".to_string(), fn_string);
+        registry.insert("string".to_string(), fn_string);
+        registry.insert("toString".to_string(), fn_string);
+        registry.insert("str".to_string(), fn_string);
         registry.insert("BOOL".to_string(), fn_bool);
+        registry.insert("bool".to_string(), fn_bool);
+        registry.insert("toBool".to_string(), fn_bool);
+        registry.insert("toNumber".to_string(), fn_float); // toNumber 映射到 float
 
-        // Utility functions
+        // Utility functions (大写 + 小写别名)
         registry.insert("COALESCE".to_string(), fn_coalesce);
+        registry.insert("coalesce".to_string(), fn_coalesce);
         registry.insert("IF".to_string(), fn_if);
         registry.insert("MD5".to_string(), fn_md5);
+        registry.insert("md5".to_string(), fn_md5);
+
+        // JSON functions
+        registry.insert("toJson".to_string(), fn_to_json);
+        registry.insert("TO_JSON".to_string(), fn_to_json);
+        registry.insert("JSON".to_string(), fn_to_json);
+        registry.insert("json".to_string(), fn_to_json);
+        registry.insert("parseJson".to_string(), fn_parse_json);
+        registry.insert("PARSE_JSON".to_string(), fn_parse_json);
+        registry.insert("parse_json".to_string(), fn_parse_json);
+        registry.insert("fromJson".to_string(), fn_parse_json);
+
+        // UUID functions
+        registry.insert("uuid".to_string(), fn_uuid);
+        registry.insert("UUID".to_string(), fn_uuid);
+        registry.insert("uuid4".to_string(), fn_uuid);
+        registry.insert("UUID4".to_string(), fn_uuid);
+
+        // Timestamp function (返回毫秒时间戳)
+        registry.insert("timestamp".to_string(), fn_timestamp);
+        registry.insert("TIMESTAMP".to_string(), fn_timestamp);
 
         Self { registry }
     }
@@ -360,6 +419,12 @@ fn fn_now(_args: &[Value]) -> GmlResult<Value> {
     Ok(Value::String(Utc::now().to_rfc3339()))
 }
 
+/// 返回当前时间戳（毫秒）
+/// 用法：timestamp() -> 1704067200000
+fn fn_timestamp(_args: &[Value]) -> GmlResult<Value> {
+    Ok(Value::Int(Utc::now().timestamp_millis()))
+}
+
 fn fn_time(args: &[Value]) -> GmlResult<Value> {
     fn_date(args)
 }
@@ -560,7 +625,7 @@ fn fn_md5(args: &[Value]) -> GmlResult<Value> {
 }
 
 // 简化的 MD5 哈希实现（仅用于演示）
-// 
+//
 // 警告：这不是真正的 MD5 算法，仅用于演示目的。
 // 生产环境必须使用标准的 MD5 实现（如 md5 crate）。
 fn md5_hash(data: &[u8]) -> u128 {
@@ -570,6 +635,73 @@ fn md5_hash(data: &[u8]) -> u128 {
         hash = hash.wrapping_add((byte as u128).wrapping_mul((i as u128).wrapping_add(1)));
     }
     hash
+}
+
+// JSON functions
+
+/// 将值序列化为 JSON 字符串
+///
+/// 用法：toJson(value) 或 TO_JSON(value) 或 JSON(value)
+/// 返回：JSON 格式的字符串
+fn fn_to_json(args: &[Value]) -> GmlResult<Value> {
+    let val = args.first().ok_or(GmlError::InvalidArgument(
+        "toJson requires an argument".to_string(),
+    ))?;
+    let json_str = serde_json::to_string(val)
+        .map_err(|e| GmlError::InvalidArgument(format!("Failed to serialize to JSON: {}", e)))?;
+    Ok(Value::String(json_str))
+}
+
+/// 将 JSON 字符串解析为值
+///
+/// 用法：parseJson(jsonString) 或 PARSE_JSON(jsonString)
+/// 返回：解析后的值（对象、数组、字符串、数字等）
+fn fn_parse_json(args: &[Value]) -> GmlResult<Value> {
+    let json_str = args
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(GmlError::InvalidArgument(
+            "parseJson requires a string argument".to_string(),
+        ))?;
+    let parsed: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| GmlError::InvalidArgument(format!("Failed to parse JSON: {}", e)))?;
+    Ok(json_value_to_gml(parsed))
+}
+
+/// 将 serde_json::Value 转换为 GML Value
+fn json_value_to_gml(v: serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Null,
+        serde_json::Value::Bool(b) => Value::Bool(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Int(i)
+            } else if let Some(f) = n.as_f64() {
+                Value::Float(f)
+            } else {
+                Value::Null
+            }
+        }
+        serde_json::Value::String(s) => Value::String(s),
+        serde_json::Value::Array(arr) => {
+            Value::Array(arr.into_iter().map(json_value_to_gml).collect())
+        }
+        serde_json::Value::Object(obj) => Value::Object(
+            obj.into_iter()
+                .map(|(k, v)| (k, json_value_to_gml(v)))
+                .collect(),
+        ),
+    }
+}
+
+// UUID functions
+
+/// 生成 UUID v4（随机 UUID）
+///
+/// 用法：uuid() 或 UUID() 或 uuid4() 或 UUID4()
+/// 返回：UUID 字符串，如 "550e8400-e29b-41d4-a716-446655440000"
+fn fn_uuid(_args: &[Value]) -> GmlResult<Value> {
+    Ok(Value::String(Uuid::new_v4().to_string()))
 }
 
 #[cfg(test)]

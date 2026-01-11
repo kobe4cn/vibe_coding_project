@@ -12,7 +12,7 @@ use serde_json::Value;
 pub const JSONRPC_VERSION: &str = "2.0";
 
 /// JSON-RPC 请求
-/// 
+///
 /// 符合 JSON-RPC 2.0 规范的请求结构。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
@@ -65,7 +65,7 @@ pub struct JsonRpcError {
 }
 
 /// 标准 JSON-RPC 错误代码
-/// 
+///
 /// 遵循 JSON-RPC 2.0 规范：
 /// - -32700 到 -32603：标准错误代码
 /// - -32000 到 -32099：自定义错误代码（保留范围）
@@ -100,7 +100,7 @@ impl JsonRpcRequest {
     }
 
     /// 验证请求
-    /// 
+    ///
     /// 检查 JSON-RPC 版本和方法名的有效性。
     /// 方法名不能为空，且不能以 "rpc." 开头（保留前缀）。
     pub fn validate(&self) -> Result<(), JsonRpcError> {

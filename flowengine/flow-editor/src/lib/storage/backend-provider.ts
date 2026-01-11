@@ -114,8 +114,8 @@ export class BackendProvider implements StorageProvider {
       thumbnail: api.thumbnail || undefined,
       latestVersion: api.version_count,
       versionCount: api.version_count,
-      createdAt: new Date(api.created_at).getTime(),
-      updatedAt: new Date(api.updated_at).getTime(),
+      createdAt: this.parseTimestamp(api.created_at),
+      updatedAt: this.parseTimestamp(api.updated_at),
     }
   }
 
@@ -128,8 +128,25 @@ export class BackendProvider implements StorageProvider {
       flowId: api.flow_id,
       version: api.version_number,
       name: api.label || `Version ${api.version_number}`,
-      createdAt: new Date(api.created_at).getTime(),
+      createdAt: this.parseTimestamp(api.created_at),
     }
+  }
+
+  /**
+   * Parse RFC3339/ISO8601 timestamp to milliseconds
+   *
+   * 后端返回的是 UTC 时间戳（格式如 2024-01-01T08:00:00+00:00）。
+   * JavaScript Date 会正确解析并转换为本地时区的 Date 对象，
+   * getTime() 返回的是从 epoch 开始的 UTC 毫秒数。
+   */
+  private parseTimestamp(timestamp: string): number {
+    const date = new Date(timestamp)
+    // 如果解析失败，返回当前时间
+    if (isNaN(date.getTime())) {
+      console.warn(`[BackendProvider] Failed to parse timestamp: ${timestamp}`)
+      return Date.now()
+    }
+    return date.getTime()
   }
 
   /**
@@ -279,7 +296,7 @@ export class BackendProvider implements StorageProvider {
         version: response.version_number,
         name: response.label || `Version ${response.version_number}`,
         flow: response.data as FlowVersion['flow'],
-        createdAt: new Date(response.created_at).getTime(),
+        createdAt: this.parseTimestamp(response.created_at),
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes('404')) {
@@ -323,7 +340,7 @@ export class BackendProvider implements StorageProvider {
       version: response.version_number,
       name: response.label || `Version ${response.version_number}`,
       flow: input.flow,
-      createdAt: new Date(response.created_at).getTime(),
+      createdAt: this.parseTimestamp(response.created_at),
       isAutoSave: input.isAutoSave,
     }
   }

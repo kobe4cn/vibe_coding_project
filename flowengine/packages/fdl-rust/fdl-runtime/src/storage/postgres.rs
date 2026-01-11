@@ -2,7 +2,7 @@
 //!
 //! 使用 SQLx 实现 PostgreSQL 数据库存储。
 //! 所有查询都包含 tenant_id 条件，确保多租户数据隔离。
-//! 
+//!
 //! 特点：
 //! - 持久化：数据存储在数据库中
 //! - 事务支持：通过数据库事务保证一致性
@@ -15,7 +15,8 @@ use uuid::Uuid;
 
 use super::traits::{
     ApiKeyRecord, CreateApiKeyRequest, CreateFlowRequest, CreateVersionRequest, ExecutionRecord,
-    FlowRecord, FlowStorage, ListOptions, ListResult, StorageError, UpdateFlowRequest, VersionRecord,
+    FlowRecord, FlowStorage, ListOptions, ListResult, StorageError, UpdateFlowRequest,
+    VersionRecord,
 };
 use crate::db::Database;
 
@@ -36,7 +37,7 @@ fn flow_from_row(row: &sqlx::postgres::PgRow) -> FlowRecord {
 }
 
 /// PostgreSQL 存储实现
-/// 
+///
 /// 封装数据库连接，实现 FlowStorage trait。
 pub struct PostgresStorage {
     db: Arc<Database>,
@@ -566,10 +567,7 @@ impl FlowStorage for PostgresStorage {
     }
 
     // API Key operations
-    async fn create_api_key(
-        &self,
-        req: CreateApiKeyRequest,
-    ) -> Result<ApiKeyRecord, StorageError> {
+    async fn create_api_key(&self, req: CreateApiKeyRequest) -> Result<ApiKeyRecord, StorageError> {
         let row = sqlx::query(
             r#"
             INSERT INTO flow_api_keys (tenant_id, flow_id, name, description, key_hash, key_prefix, rate_limit, expires_at)
@@ -713,18 +711,12 @@ impl FlowStorage for PostgresStorage {
             .collect())
     }
 
-    async fn delete_api_key(
-        &self,
-        tenant_id: Uuid,
-        key_id: Uuid,
-    ) -> Result<(), StorageError> {
-        let result = sqlx::query(
-            "DELETE FROM flow_api_keys WHERE id = $1 AND tenant_id = $2",
-        )
-        .bind(key_id)
-        .bind(tenant_id)
-        .execute(self.db.pool())
-        .await?;
+    async fn delete_api_key(&self, tenant_id: Uuid, key_id: Uuid) -> Result<(), StorageError> {
+        let result = sqlx::query("DELETE FROM flow_api_keys WHERE id = $1 AND tenant_id = $2")
+            .bind(key_id)
+            .bind(tenant_id)
+            .execute(self.db.pool())
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(StorageError::NotFound(format!(

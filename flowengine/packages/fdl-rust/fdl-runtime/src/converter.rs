@@ -9,7 +9,9 @@
 //! - 解析全局变量
 //! - 处理 Start 节点的参数定义
 
-use fdl_executor::types::{CaseBranch, Flow, FlowArgs, FlowMeta, FlowNode, InputParamDef, ParamDef};
+use fdl_executor::types::{
+    CaseBranch, Flow, FlowArgs, FlowMeta, FlowNode, InputParamDef, ParamDef,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -36,10 +38,12 @@ pub struct FrontendParameterDef {
 }
 
 /// Frontend node data
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendNodeData {
+    #[serde(default)]
     pub node_type: String,
+    #[serde(default)]
     pub label: String,
     #[serde(default)]
     pub description: Option<String>,
@@ -87,6 +91,23 @@ pub struct FrontendNodeData {
     pub server: Option<String>,
     #[serde(default)]
     pub tool: Option<String>,
+    // Extended node types - 扩展节点类型
+    #[serde(default)]
+    pub guard: Option<String>,
+    #[serde(default)]
+    pub approval: Option<String>,
+    #[serde(default)]
+    pub handoff: Option<String>,
+    #[serde(default)]
+    pub oss: Option<String>,
+    #[serde(default)]
+    pub mq: Option<String>,
+    #[serde(default)]
+    pub mail: Option<String>,
+    #[serde(default)]
+    pub sms: Option<String>,
+    #[serde(default)]
+    pub service: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -178,8 +199,66 @@ pub struct FrontendFlow {
     pub args: Option<FrontendArgs>,
 }
 
+/// 从 exec URI 前缀检测工具类型，返回填充的专用字段
+///
+/// 如果前端已显式设置了专用字段（如 oss:），则优先使用
+/// 否则从 exec 字段的 URI 前缀推断
+fn detect_tool_type_from_exec(data: &FrontendNodeData) -> (
+    Option<String>,  // oss
+    Option<String>,  // mq
+    Option<String>,  // mail
+    Option<String>,  // sms
+    Option<String>,  // service
+) {
+    // 如果已显式设置专用字段，优先使用
+    if data.oss.is_some() {
+        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
+                data.sms.clone(), data.service.clone());
+    }
+    if data.mq.is_some() {
+        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
+                data.sms.clone(), data.service.clone());
+    }
+    if data.mail.is_some() {
+        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
+                data.sms.clone(), data.service.clone());
+    }
+    if data.sms.is_some() {
+        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
+                data.sms.clone(), data.service.clone());
+    }
+    if data.service.is_some() {
+        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
+                data.sms.clone(), data.service.clone());
+    }
+
+    // 如果没有显式设置，从 exec 字段检测
+    if let Some(ref exec_uri) = data.exec {
+        let lower = exec_uri.to_lowercase();
+        if lower.starts_with("oss://") {
+            return (Some(exec_uri.clone()), None, None, None, None);
+        }
+        if lower.starts_with("mq://") {
+            return (None, Some(exec_uri.clone()), None, None, None);
+        }
+        if lower.starts_with("mail://") {
+            return (None, None, Some(exec_uri.clone()), None, None);
+        }
+        if lower.starts_with("sms://") {
+            return (None, None, None, Some(exec_uri.clone()), None);
+        }
+        if lower.starts_with("svc://") {
+            return (None, None, None, None, Some(exec_uri.clone()));
+        }
+    }
+
+    // 没有检测到特殊工具类型，保持原样
+    (data.oss.clone(), data.mq.clone(), data.mail.clone(),
+     data.sms.clone(), data.service.clone())
+}
+
 /// 将前端流程转换为执行器流程
-/// 
+///
 /// 转换过程：
 /// 1. 解析边（edges）并分类为 next/then/else/fail 四种类型
 /// 2. 将前端节点数据转换为后端 FlowNode
@@ -242,6 +321,12 @@ pub fn convert_frontend_to_executor(frontend: &FrontendFlow) -> Flow {
                 .collect()
         });
 
+        // 检测 exec URI 前缀并填充对应的专用字段
+        // 支持两种写法：
+        // 1. 专用字段：oss: "oss://...", mq: "mq://...", service: "svc://..."
+        // 2. 统一 exec 字段：exec: "oss://..." (自动识别并填充)
+        let (oss, mq, mail, sms, service) = detect_tool_type_from_exec(data);
+
         let flow_node = FlowNode {
             name: Some(data.label.clone()),
             description: data.description.clone(),
@@ -286,6 +371,15 @@ pub fn convert_frontend_to_executor(frontend: &FrontendFlow) -> Flow {
             // Start 节点专用字段
             parameters,
             node_type_str: Some(data.node_type.clone()),
+            // 扩展节点类型字段
+            guard: data.guard.clone(),
+            approval: data.approval.clone(),
+            handoff: data.handoff.clone(),
+            oss,
+            mq,
+            mail,
+            sms,
+            service,
         };
 
         nodes.insert(node_id.clone(), flow_node);
@@ -449,10 +543,7 @@ pub fn validate_inputs(
     inputs: &serde_json::Value,
 ) -> Result<serde_json::Value, Vec<ValidationError>> {
     // 查找 Start 节点
-    let start_node = frontend
-        .nodes
-        .iter()
-        .find(|n| n.data.node_type == "start");
+    let start_node = frontend.nodes.iter().find(|n| n.data.node_type == "start");
 
     // 如果没有 Start 节点，直接返回原始输入（无需验证）
     let start_node = match start_node {
@@ -482,8 +573,8 @@ pub fn validate_inputs(
     let inputs_obj = validated_inputs.as_object_mut().unwrap();
 
     for param in parameters {
-        let has_value = inputs_obj.contains_key(&param.name)
-            && !inputs_obj.get(&param.name).unwrap().is_null();
+        let has_value =
+            inputs_obj.contains_key(&param.name) && !inputs_obj.get(&param.name).unwrap().is_null();
 
         if !has_value {
             // 参数未提供
@@ -617,11 +708,8 @@ fn find_terminal_node(
     const TERMINAL_KEYWORDS: &[&str] = &["merge", "output", "end", "result", "final"];
 
     // 收集所有有 next 边的源节点
-    let sources_with_next: std::collections::HashSet<&String> = frontend
-        .edges
-        .iter()
-        .map(|e| &e.source)
-        .collect();
+    let sources_with_next: std::collections::HashSet<&String> =
+        frontend.edges.iter().map(|e| &e.source).collect();
 
     // 优先查找名称匹配的终止节点
     for keyword in TERMINAL_KEYWORDS {
@@ -653,9 +741,8 @@ fn find_terminal_node(
 /// 获取流程的输出定义字段名列表
 pub fn get_output_field_names(frontend: &FrontendFlow) -> Option<Vec<String>> {
     frontend.args.as_ref().and_then(|args| {
-        args.get_outputs().map(|out| {
-            out.iter().map(|def| def.name.clone()).collect()
-        })
+        args.get_outputs()
+            .map(|out| out.iter().map(|def| def.name.clone()).collect())
     })
 }
 
@@ -742,23 +829,7 @@ mod tests {
                     node_type: "mapping".to_string(),
                     label: "Step 1".to_string(),
                     with_expr: Some("result = 1 + 1".to_string()),
-                    description: None,
-                    only: None,
-                    parameters: None,
-                    exec: None,
-                    sets: None,
-                    args: None,
-                    when: None,
-                    cases: None,
-                    wait: None,
-                    each: None,
-                    vars: None,
-                    agent: None,
-                    model: None,
-                    instructions: None,
-                    mcp: None,
-                    server: None,
-                    tool: None,
+                    ..Default::default()
                 },
             }],
             edges: vec![],
@@ -790,23 +861,7 @@ mod tests {
                         node_type: "mapping".to_string(),
                         label: "A".to_string(),
                         with_expr: Some("x = 1".to_string()),
-                        description: None,
-                        only: None,
-                        parameters: None,
-                        exec: None,
-                        sets: None,
-                        args: None,
-                        when: None,
-                        cases: None,
-                        wait: None,
-                        each: None,
-                        vars: None,
-                        agent: None,
-                        model: None,
-                        instructions: None,
-                        mcp: None,
-                        server: None,
-                        tool: None,
+                        ..Default::default()
                     },
                 },
                 FrontendNode {
@@ -817,23 +872,7 @@ mod tests {
                         node_type: "mapping".to_string(),
                         label: "B".to_string(),
                         with_expr: Some("y = a.x + 1".to_string()),
-                        description: None,
-                        only: None,
-                        parameters: None,
-                        exec: None,
-                        sets: None,
-                        args: None,
-                        when: None,
-                        cases: None,
-                        wait: None,
-                        each: None,
-                        vars: None,
-                        agent: None,
-                        model: None,
-                        instructions: None,
-                        mcp: None,
-                        server: None,
-                        tool: None,
+                        ..Default::default()
                     },
                 },
             ],

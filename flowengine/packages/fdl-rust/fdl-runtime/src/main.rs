@@ -51,7 +51,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "fdl_server=info,fdl_runtime=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "fdl_server=info,fdl_runtime=debug,fdl_executor=debug,fdl_tools=debug,tower_http=debug".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();

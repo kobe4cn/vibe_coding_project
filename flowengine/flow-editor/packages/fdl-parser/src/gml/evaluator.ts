@@ -10,16 +10,39 @@ import type {
   GMLContext,
   GMLCaseExpression,
   GMLArrowFunction,
+  UdfDefinition,
+  UdfHandler,
 } from './types'
+import { parseGML } from './parser'
 
 /**
  * Create a new evaluation context
  */
 export function createContext(
   variables: Record<string, unknown> = {},
-  parent?: GMLContext
+  parent?: GMLContext,
+  customFunctions?: Map<string, UdfHandler>
 ): GMLContext {
-  return { variables, parent }
+  // 继承父上下文的自定义函数，同时允许覆盖
+  let mergedFunctions: Map<string, UdfHandler> | undefined
+
+  if (parent?.customFunctions || customFunctions) {
+    mergedFunctions = new Map<string, UdfHandler>()
+    // 先复制父上下文的函数
+    if (parent?.customFunctions) {
+      parent.customFunctions.forEach((handler, name) => {
+        mergedFunctions!.set(name, handler)
+      })
+    }
+    // 再覆盖/添加新的函数
+    if (customFunctions) {
+      customFunctions.forEach((handler, name) => {
+        mergedFunctions!.set(name, handler)
+      })
+    }
+  }
+
+  return { variables, parent, customFunctions: mergedFunctions }
 }
 
 /**
@@ -317,6 +340,10 @@ function evaluateExpression(expr: GMLExpression, context: GMLContext): unknown {
       if (expr.name in builtins) {
         return builtins[expr.name]
       }
+      // Check custom functions (UDFs) - 支持用户自定义函数动态查找
+      if (context.customFunctions?.has(expr.name)) {
+        return context.customFunctions.get(expr.name)
+      }
       return lookupVariable(expr.name, context)
 
     case 'NumberLiteral':
@@ -553,4 +580,137 @@ export function evaluateGML(
   }
 
   return { result, context }
+}
+
+/**
+ * 编译 UDF 定义为可执行函数
+ *
+ * 支持两种类型：
+ * - expression: GML 表达式，使用 GML 解析器和评估器执行
+ * - javascript: JavaScript 代码，使用 Function 构造器编译
+ */
+export function compileUdf(udf: UdfDefinition): UdfHandler {
+  if (udf.udf_type === 'expression') {
+    // GML 表达式类型：解析并评估
+    return (...args: unknown[]) => {
+      // 构建参数上下文
+      const variables: Record<string, unknown> = {}
+      udf.input_params.forEach((param, index) => {
+        // 使用传入的参数值，如果没有则使用默认值
+        if (index < args.length) {
+          variables[param.name] = args[index]
+        } else if (param.default_value !== undefined) {
+          variables[param.name] = param.default_value
+        } else if (!param.required) {
+          variables[param.name] = undefined
+        }
+      })
+
+      // 解析 GML 代码
+      const parseResult = parseGML(udf.code)
+      if (!parseResult.success || !parseResult.ast) {
+        throw new Error(`UDF parse error: ${parseResult.errors.map(e => e.message).join(', ')}`)
+      }
+
+      // 评估表达式
+      const ctx = createContext(variables)
+      const { result } = evaluateGML(parseResult.ast, ctx)
+      return result
+    }
+  } else if (udf.udf_type === 'javascript') {
+    // JavaScript 类型：使用 Function 构造器
+    // 提取参数名列表
+    const paramNames = udf.input_params.map(p => p.name)
+
+    try {
+      // 创建函数，代码作为函数体
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const fn = new Function(...paramNames, udf.code)
+      return (...args: unknown[]) => {
+        // 填充默认值
+        const finalArgs = udf.input_params.map((param, index) => {
+          if (index < args.length) {
+            return args[index]
+          }
+          return param.default_value
+        })
+        return fn(...finalArgs)
+      }
+    } catch (error) {
+      throw new Error(`UDF compile error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  throw new Error(`Unsupported UDF type: ${udf.udf_type}`)
+}
+
+/**
+ * 将 UDF 定义列表编译为 customFunctions Map
+ */
+export function compileUdfs(udfs: UdfDefinition[]): Map<string, UdfHandler> {
+  const functions = new Map<string, UdfHandler>()
+
+  for (const udf of udfs) {
+    try {
+      functions.set(udf.name, compileUdf(udf))
+    } catch (error) {
+      console.warn(`Failed to compile UDF '${udf.name}':`, error)
+    }
+  }
+
+  return functions
+}
+
+/**
+ * 向现有上下文注册自定义函数
+ */
+export function registerCustomFunction(
+  context: GMLContext,
+  name: string,
+  handler: UdfHandler
+): void {
+  if (!context.customFunctions) {
+    context.customFunctions = new Map()
+  }
+  context.customFunctions.set(name, handler)
+}
+
+/**
+ * 从上下文中移除自定义函数
+ */
+export function unregisterCustomFunction(context: GMLContext, name: string): boolean {
+  if (context.customFunctions?.has(name)) {
+    context.customFunctions.delete(name)
+    return true
+  }
+  return false
+}
+
+/**
+ * 测试 UDF 执行
+ * 用于在 UDF 编辑器中测试函数功能
+ */
+export function testUdf(
+  udf: UdfDefinition,
+  testArgs: unknown[]
+): { success: boolean; result?: unknown; error?: string; duration?: number } {
+  const startTime = performance.now()
+
+  try {
+    const handler = compileUdf(udf)
+    const result = handler(...testArgs)
+    const duration = performance.now() - startTime
+
+    return {
+      success: true,
+      result,
+      duration,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      duration: performance.now() - startTime,
+    }
+  }
 }

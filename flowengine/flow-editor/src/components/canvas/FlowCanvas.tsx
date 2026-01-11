@@ -298,6 +298,16 @@ function createDefaultNodeData(nodeType: FlowNodeType): FlowNodeData {
       return { ...baseData, nodeType: 'mcp' as const, server: '', tool: '' }
     case 'handoff':
       return { ...baseData, nodeType: 'handoff' as const, target: '' }
+    case 'oss':
+      return { ...baseData, nodeType: 'oss' as const, oss: '' }
+    case 'mq':
+      return { ...baseData, nodeType: 'mq' as const, mq: '' }
+    case 'mail':
+      return { ...baseData, nodeType: 'mail' as const, mail: '' }
+    case 'sms':
+      return { ...baseData, nodeType: 'sms' as const, sms: '' }
+    case 'service':
+      return { ...baseData, nodeType: 'service' as const, service: '' }
     default:
       return baseData as FlowNodeData
   }
@@ -318,6 +328,11 @@ function getDefaultLabel(nodeType: FlowNodeType): string {
     approval: '新审批',
     mcp: '新 MCP 调用',
     handoff: '新移交',
+    oss: '新对象存储',
+    mq: '新消息队列',
+    mail: '新邮件发送',
+    sms: '新短信发送',
+    service: '新服务调用',
   }
   return labels[nodeType]
 }

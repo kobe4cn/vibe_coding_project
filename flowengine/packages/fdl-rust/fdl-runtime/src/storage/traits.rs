@@ -12,7 +12,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 /// 存储错误类型
-/// 
+///
 /// 涵盖所有存储操作可能出现的错误。
 #[derive(Error, Debug)]
 pub enum StorageError {
@@ -156,7 +156,7 @@ pub struct ListResult<T> {
 }
 
 /// 流程存储 trait
-/// 
+///
 /// 定义所有存储后端必须实现的统一接口。
 /// 所有操作都包含 tenant_id 参数，确保多租户数据隔离。
 #[async_trait]
@@ -247,10 +247,7 @@ pub trait FlowStorage: Send + Sync {
     async fn get_published_flow(&self, flow_id: Uuid) -> Result<FlowRecord, StorageError>;
 
     // API Key operations
-    async fn create_api_key(
-        &self,
-        req: CreateApiKeyRequest,
-    ) -> Result<ApiKeyRecord, StorageError>;
+    async fn create_api_key(&self, req: CreateApiKeyRequest) -> Result<ApiKeyRecord, StorageError>;
     async fn get_api_key(
         &self,
         tenant_id: Uuid,
@@ -262,11 +259,7 @@ pub trait FlowStorage: Send + Sync {
         tenant_id: Uuid,
         flow_id: Uuid,
     ) -> Result<Vec<ApiKeyRecord>, StorageError>;
-    async fn delete_api_key(
-        &self,
-        tenant_id: Uuid,
-        key_id: Uuid,
-    ) -> Result<(), StorageError>;
+    async fn delete_api_key(&self, tenant_id: Uuid, key_id: Uuid) -> Result<(), StorageError>;
     async fn update_api_key_usage(&self, key_id: Uuid) -> Result<(), StorageError>;
 
     // Health check

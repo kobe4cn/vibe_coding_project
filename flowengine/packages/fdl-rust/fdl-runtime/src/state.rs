@@ -5,14 +5,17 @@
 //! - 流程存储（内存或数据库）
 //! - 执行器管理
 //! - 执行状态跟踪
-//! 
+//!
 //! 使用 DashMap 实现线程安全的并发访问。
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use fdl_auth::{JwtConfig, JwtService};
 use fdl_executor::Executor;
-use fdl_tools::{ConfigStore, InMemoryConfigStore, PostgresConfigStore};
+use fdl_tools::{
+    ConfigStore, InMemoryConfigStore, InMemoryToolServiceStore, PostgresConfigStore,
+    PostgresToolServiceStore, ToolServiceStore,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -165,6 +168,8 @@ pub struct AppState {
     pub storage: Storage,
     /// 工具配置存储（API 服务、数据源、UDF 配置）
     config_store: Arc<dyn ConfigStore>,
+    /// 工具服务存储（OSS、MQ、Mail、SMS、Svc 等 ToolSpec 规范服务）
+    tool_service_store: Arc<dyn ToolServiceStore>,
 }
 
 impl AppState {
@@ -173,6 +178,7 @@ impl AppState {
         let jwt_config = JwtConfig::default();
         let jwt_service = Arc::new(JwtService::new(jwt_config));
         let config_store = Arc::new(InMemoryConfigStore::new());
+        let tool_service_store = Arc::new(InMemoryToolServiceStore::new());
 
         Self {
             jwt_service,
@@ -183,6 +189,7 @@ impl AppState {
             db_pool: None,
             storage: Storage::memory(),
             config_store,
+            tool_service_store,
         }
     }
 
@@ -198,11 +205,12 @@ impl AppState {
 
         // 初始化存储后端
         // 根据配置选择内存或数据库存储，失败时回退到内存模式
-        let (storage_mode, db_pool, storage, config_store): (
+        let (storage_mode, db_pool, storage, config_store, tool_service_store): (
             StorageMode,
             Option<sqlx::PgPool>,
             Storage,
             Arc<dyn ConfigStore>,
+            Arc<dyn ToolServiceStore>,
         ) = match Storage::new(&config.database).await {
             Ok(s) => {
                 let is_db = s.is_database();
@@ -212,24 +220,46 @@ impl AppState {
                     match Self::init_database(&config.database).await {
                         Ok(pool) => {
                             // 使用 PostgreSQL 配置存储
-                            let pg_config_store =
-                                Arc::new(PostgresConfigStore::new(pool.clone()));
-                            tracing::info!("Using PostgreSQL config store");
-                            (StorageMode::Database, Some(pool), s, pg_config_store)
+                            let pg_config_store = Arc::new(PostgresConfigStore::new(pool.clone()));
+                            // 使用 PostgreSQL 工具服务存储
+                            let pg_tool_service_store =
+                                Arc::new(PostgresToolServiceStore::new(pool.clone()));
+                            tracing::info!("Using PostgreSQL config store and tool service store");
+                            (
+                                StorageMode::Database,
+                                Some(pool),
+                                s,
+                                pg_config_store,
+                                pg_tool_service_store,
+                            )
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "Failed to init database pool for config store: {}, using in-memory",
                                 e
                             );
-                            let memory_store = Arc::new(InMemoryConfigStore::new());
-                            (StorageMode::Database, None, s, memory_store)
+                            let memory_config_store = Arc::new(InMemoryConfigStore::new());
+                            let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
+                            (
+                                StorageMode::Database,
+                                None,
+                                s,
+                                memory_config_store,
+                                memory_tool_store,
+                            )
                         }
                     }
                 } else {
                     tracing::info!("Using in-memory storage");
-                    let memory_store = Arc::new(InMemoryConfigStore::new());
-                    (StorageMode::Memory, None, s, memory_store)
+                    let memory_config_store = Arc::new(InMemoryConfigStore::new());
+                    let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
+                    (
+                        StorageMode::Memory,
+                        None,
+                        s,
+                        memory_config_store,
+                        memory_tool_store,
+                    )
                 }
             }
             Err(e) => {
@@ -238,8 +268,15 @@ impl AppState {
                     "Failed to initialize storage: {}, falling back to memory",
                     e
                 );
-                let memory_store = Arc::new(InMemoryConfigStore::new());
-                (StorageMode::Memory, None, Storage::memory(), memory_store)
+                let memory_config_store = Arc::new(InMemoryConfigStore::new());
+                let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
+                (
+                    StorageMode::Memory,
+                    None,
+                    Storage::memory(),
+                    memory_config_store,
+                    memory_tool_store,
+                )
             }
         };
 
@@ -252,6 +289,7 @@ impl AppState {
             db_pool,
             storage,
             config_store,
+            tool_service_store,
         }
     }
 
@@ -278,6 +316,7 @@ impl AppState {
     pub fn with_jwt_config(jwt_config: JwtConfig) -> Self {
         let jwt_service = Arc::new(JwtService::new(jwt_config));
         let config_store = Arc::new(InMemoryConfigStore::new());
+        let tool_service_store = Arc::new(InMemoryToolServiceStore::new());
 
         Self {
             jwt_service,
@@ -288,6 +327,7 @@ impl AppState {
             db_pool: None,
             storage: Storage::memory(),
             config_store,
+            tool_service_store,
         }
     }
 
@@ -299,6 +339,16 @@ impl AppState {
     /// Get config store Arc for sharing
     pub fn config_store_arc(&self) -> Arc<dyn ConfigStore> {
         self.config_store.clone()
+    }
+
+    /// Get tool service store reference
+    pub fn tool_service_store(&self) -> &dyn ToolServiceStore {
+        self.tool_service_store.as_ref()
+    }
+
+    /// Get tool service store Arc for sharing
+    pub fn tool_service_store_arc(&self) -> Arc<dyn ToolServiceStore> {
+        self.tool_service_store.clone()
     }
 
     /// Check if using database storage
@@ -597,11 +647,7 @@ impl AppState {
     }
 
     /// Delete an API key
-    pub async fn delete_api_key(
-        &self,
-        tenant_id: &str,
-        key_id: &str,
-    ) -> Result<(), StorageError> {
+    pub async fn delete_api_key(&self, tenant_id: &str, key_id: &str) -> Result<(), StorageError> {
         let tenant_uuid = parse_tenant_id(tenant_id);
         let key_uuid = Uuid::parse_str(key_id)
             .map_err(|_| StorageError::NotFound(format!("Invalid key ID: {}", key_id)))?;
@@ -674,12 +720,12 @@ impl Default for AppState {
 }
 
 /// 解析租户 ID 字符串为 UUID
-/// 
+///
 /// 处理三种情况：
 /// 1. "default" 租户：使用固定的已知 UUID
 /// 2. 有效的 UUID 字符串：直接解析
 /// 3. 其他字符串：通过哈希生成确定性 UUID（确保相同字符串生成相同 UUID）
-/// 
+///
 /// 这种设计允许使用字符串租户 ID（如 "tenant-1"），同时保持数据库中的 UUID 类型。
 fn parse_tenant_id(tenant_id: &str) -> Uuid {
     if tenant_id == "default" {

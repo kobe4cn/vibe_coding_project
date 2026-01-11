@@ -125,10 +125,15 @@ async fn execute_sub_flow(
             context.write().await.set_variable(sub_node_id, output);
         }
 
-        // Apply sets
+        // Apply sets - 将表达式结果更新到全局变量
         if let Some(sets_expr) = &sub_node.sets {
-            let _sets_result = fdl_gml::evaluate(sets_expr, &eval_ctx)?;
-            // TODO: Apply sets to globals
+            let sets_result = fdl_gml::evaluate(sets_expr, &eval_ctx)?;
+            if let Value::Object(sets_obj) = sets_result {
+                let mut ctx = context.write().await;
+                for (key, value) in sets_obj {
+                    ctx.set_global(&key, value);
+                }
+            }
         }
     }
 

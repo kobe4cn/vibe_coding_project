@@ -10,6 +10,11 @@
 //! - `mcp://server/tool` - MCP service calls
 //! - `flow://flow-id` - Sub-flow invocation
 //! - `agent://model/prompt` - AI agent calls
+//! - `oss://service/operation` - Object Storage Service
+//! - `mq://service/operation` - Message Queue
+//! - `mail://service/send` - Email service
+//! - `sms://service/send` - SMS service
+//! - `svc://service/method` - Microservice calls
 //!
 //! ## Configuration
 //!
@@ -21,20 +26,65 @@
 pub mod api;
 pub mod config;
 pub mod database;
+pub mod discovery;
 pub mod error;
+pub mod mail;
 pub mod managed;
 pub mod mcp;
+pub mod models;
+pub mod mq;
+pub mod oss;
 pub mod postgres_config;
+pub mod postgres_service_store;
 pub mod registry;
+pub mod service_store;
+pub mod sms;
+pub mod svc;
 
 pub use config::{
     ApiServiceConfig, AuthType, ConfigStore, DatabaseType, DatasourceConfig, InMemoryConfigStore,
     UdfConfig, UdfType,
 };
+
+// ToolSpec 规范数据模型
+pub use models::{
+    // 工具服务类型
+    ToolType,
+    // 工具服务和工具
+    ToolService, Tool,
+    // 工具参数定义
+    ToolArgs, TypeDef, FieldDef, ParamDef, OutputDef, ConfigOptions,
+    // 服务配置
+    ToolServiceConfig,
+    ApiConfig, ApiAuth, RetryConfig,
+    McpConfig, McpTransport, McpServerInfo, McpClientInfo,
+    DbConfig, DbType,
+    FlowConfig,
+    AgentConfig,
+    SvcConfig, ServiceDiscovery, ServiceProtocol, LoadBalancer,
+    OssConfig, OssProvider, OssCredentials,
+    MqConfig, MqBroker, MessageSerialization,
+    MailConfig, MailProvider,
+    SmsConfig, SmsProvider,
+};
 pub use error::{ToolError, ToolResult};
 pub use managed::{ManagedToolRegistry, ParsedUri};
 pub use postgres_config::PostgresConfigStore;
 pub use registry::{ToolHandler, ToolRegistry};
+pub use service_store::{InMemoryToolServiceStore, ToolServiceStore};
+pub use postgres_service_store::PostgresToolServiceStore;
+// 工具发现
+pub use discovery::{
+    DiscoveredParameter, DiscoveredTool, OpenApiInfo, OpenApiParser, OpenApiSpec,
+    OpenApiVersion, ToolDiscoveryService,
+};
+
+// 集成服务 Handlers
+pub use mail::{MailHandler, MailOperation};
+pub use mq::{MqHandler, MqOperation};
+pub use oss::{OssHandler, OssOperation};
+pub use sms::{SmsHandler, SmsOperation};
+pub use svc::{SvcHandler, SvcOperation};
 
 use serde_json::Value;
 use std::collections::HashMap;

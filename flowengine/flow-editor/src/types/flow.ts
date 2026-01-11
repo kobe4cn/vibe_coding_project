@@ -29,6 +29,11 @@ export type FlowNodeType =
   | 'approval'
   | 'mcp'
   | 'handoff'
+  | 'oss'      // 对象存储操作
+  | 'mq'       // 消息队列操作
+  | 'mail'     // 邮件发送
+  | 'sms'      // 短信发送
+  | 'service'  // 微服务调用
 
 // Edge types for different flow paths
 export type FlowEdgeType = 'next' | 'then' | 'else' | 'fail'
@@ -41,6 +46,7 @@ export interface BaseNodeData {
   label: string
   description?: string
   only?: string // GML condition for conditional execution
+  fail?: string // 失败时跳转的节点 ID
   executionStatus?: NodeExecutionStatus
   hasBreakpoint?: boolean
 }
@@ -124,6 +130,7 @@ export interface AgentNodeData extends BaseNodeData {
   temperature?: number
   args?: string
   with?: string
+  sets?: string
 }
 
 // Guard node data
@@ -134,6 +141,7 @@ export interface GuardNodeData extends BaseNodeData {
   schema?: object
   customExpression?: string
   args?: string
+  sets?: string
 }
 
 // Approval node data
@@ -155,6 +163,7 @@ export interface MCPNodeData extends BaseNodeData {
   authKey?: string
   args?: string
   with?: string
+  sets?: string
 }
 
 // Handoff node data
@@ -165,6 +174,57 @@ export interface HandoffNodeData extends BaseNodeData {
   resumeOn?: 'completed' | 'error' | 'any'
   args?: string
   with?: string
+  sets?: string
+}
+
+// OSS node data - 对象存储操作
+export interface OSSNodeData extends BaseNodeData {
+  nodeType: 'oss'
+  oss: string      // OSS URI (e.g., "oss://bucket/path")
+  operation?: 'upload' | 'download' | 'delete' | 'list'
+  args?: string
+  with?: string
+  sets?: string
+}
+
+// MQ node data - 消息队列操作
+export interface MQNodeData extends BaseNodeData {
+  nodeType: 'mq'
+  mq: string       // MQ URI (e.g., "mq://topic/queue")
+  operation?: 'send' | 'receive' | 'subscribe'
+  args?: string
+  with?: string
+  sets?: string
+}
+
+// Mail node data - 邮件发送
+export interface MailNodeData extends BaseNodeData {
+  nodeType: 'mail'
+  mail: string     // 邮件配置或收件人
+  template?: string
+  args?: string
+  with?: string
+  sets?: string
+}
+
+// SMS node data - 短信发送
+export interface SMSNodeData extends BaseNodeData {
+  nodeType: 'sms'
+  sms: string      // 短信配置或手机号
+  template?: string
+  args?: string
+  with?: string
+  sets?: string
+}
+
+// Service node data - 微服务调用
+export interface ServiceNodeData extends BaseNodeData {
+  nodeType: 'service'
+  service: string  // 服务 URI (e.g., "svc://service/method")
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  args?: string
+  with?: string
+  sets?: string
 }
 
 // Union type for all node data
@@ -182,6 +242,11 @@ export type FlowNodeData =
   | ApprovalNodeData
   | MCPNodeData
   | HandoffNodeData
+  | OSSNodeData
+  | MQNodeData
+  | MailNodeData
+  | SMSNodeData
+  | ServiceNodeData
 
 // React Flow node type
 export type FlowNode = Node<FlowNodeData, FlowNodeType>
@@ -261,6 +326,11 @@ export const NODE_COLORS: Record<FlowNodeType, string> = {
   approval: '#86efac',  // Success - human approval
   mcp: '#93c5fd',       // Info - external tools
   handoff: '#c4b5fd',   // Secondary variant - agent handoff
+  oss: '#fdba74',       // Orange - object storage
+  mq: '#a78bfa',        // Purple - message queue
+  mail: '#f472b6',      // Pink - email
+  sms: '#34d399',       // Emerald - SMS
+  service: '#60a5fa',   // Blue - microservice
 }
 
 // Node labels for palette
@@ -278,6 +348,11 @@ export const NODE_LABELS: Record<FlowNodeType, string> = {
   approval: '人工审批',
   mcp: 'MCP 工具',
   handoff: 'Agent 移交',
+  oss: '对象存储',
+  mq: '消息队列',
+  mail: '邮件发送',
+  sms: '短信发送',
+  service: '服务调用',
 }
 
 // Node categories for palette
@@ -287,6 +362,7 @@ export const NODE_CATEGORIES = {
   control: ['condition', 'switch', 'delay'] as FlowNodeType[],
   loop: ['each', 'loop'] as FlowNodeType[],
   agent: ['agent', 'guard', 'approval', 'mcp', 'handoff'] as FlowNodeType[],
+  integration: ['oss', 'mq', 'mail', 'sms', 'service'] as FlowNodeType[],
 }
 
 export const NODE_CATEGORY_LABELS: Record<keyof typeof NODE_CATEGORIES, string> = {
@@ -295,4 +371,5 @@ export const NODE_CATEGORY_LABELS: Record<keyof typeof NODE_CATEGORIES, string> 
   control: '流程控制',
   loop: '循环遍历',
   agent: 'Agent 能力',
+  integration: '集成服务',
 }

@@ -426,6 +426,47 @@ function nodeToFDLNode(node: FlowNode): FDLNode {
       if (d.with) fdlNode.with = d.with
       break
     }
+    // 集成服务节点 - 都使用 exec 字段保存 URI
+    case 'oss': {
+      const d = data as FlowNodeData & { oss?: string; args?: string; with?: string; sets?: string }
+      if (d.oss) fdlNode.exec = d.oss
+      if (d.args) fdlNode.args = d.args
+      if (d.with) fdlNode.with = d.with
+      if (d.sets) fdlNode.sets = d.sets
+      break
+    }
+    case 'mq': {
+      const d = data as FlowNodeData & { mq?: string; args?: string; with?: string; sets?: string }
+      if (d.mq) fdlNode.exec = d.mq
+      if (d.args) fdlNode.args = d.args
+      if (d.with) fdlNode.with = d.with
+      if (d.sets) fdlNode.sets = d.sets
+      break
+    }
+    case 'mail': {
+      const d = data as FlowNodeData & { mail?: string; args?: string; with?: string; sets?: string }
+      if (d.mail) fdlNode.exec = d.mail
+      if (d.args) fdlNode.args = d.args
+      if (d.with) fdlNode.with = d.with
+      if (d.sets) fdlNode.sets = d.sets
+      break
+    }
+    case 'sms': {
+      const d = data as FlowNodeData & { sms?: string; args?: string; with?: string; sets?: string }
+      if (d.sms) fdlNode.exec = d.sms
+      if (d.args) fdlNode.args = d.args
+      if (d.with) fdlNode.with = d.with
+      if (d.sets) fdlNode.sets = d.sets
+      break
+    }
+    case 'service': {
+      const d = data as FlowNodeData & { service?: string; args?: string; with?: string; sets?: string }
+      if (d.service) fdlNode.exec = d.service
+      if (d.args) fdlNode.args = d.args
+      if (d.with) fdlNode.with = d.with
+      if (d.sets) fdlNode.sets = d.sets
+      break
+    }
   }
 
   return fdlNode
@@ -680,6 +721,49 @@ function parseTypeString(typeStr: string): { type: string; nullable?: boolean; i
 }
 
 /**
+ * Infer OSS operation from URI or args
+ * e.g., oss://bucket/path?operation=upload → 'upload'
+ */
+function inferOssOperation(uri: string): 'upload' | 'download' | 'delete' | 'list' | undefined {
+  const match = uri.match(/[?&]operation=(\w+)/i)
+  if (match) {
+    const op = match[1].toLowerCase()
+    if (['upload', 'download', 'delete', 'list'].includes(op)) {
+      return op as 'upload' | 'download' | 'delete' | 'list'
+    }
+  }
+  // 默认根据路径推断：有路径一般是 upload/download，无路径是 list
+  return undefined
+}
+
+/**
+ * Infer MQ operation from args
+ * 通过 args 表达式中的 operation 字段推断
+ */
+function inferMqOperation(args?: string): 'send' | 'receive' | 'subscribe' | undefined {
+  if (!args) return 'send' // 默认发送
+  const lowerArgs = args.toLowerCase()
+  if (lowerArgs.includes('receive')) return 'receive'
+  if (lowerArgs.includes('subscribe')) return 'subscribe'
+  return 'send'
+}
+
+/**
+ * Infer service HTTP method from URI query
+ * e.g., svc://service/path?method=POST → 'POST'
+ */
+function inferServiceMethod(uri: string): 'GET' | 'POST' | 'PUT' | 'DELETE' | undefined {
+  const match = uri.match(/[?&]method=(\w+)/i)
+  if (match) {
+    const method = match[1].toUpperCase()
+    if (['GET', 'POST', 'PUT', 'DELETE'].includes(method)) {
+      return method as 'GET' | 'POST' | 'PUT' | 'DELETE'
+    }
+  }
+  return undefined
+}
+
+/**
  * Convert FDL node to FlowNode
  */
 function fdlNodeToNode(
@@ -689,6 +773,7 @@ function fdlNodeToNode(
 ): { node: FlowNode; nodeEdges: FlowEdge[] } {
   const nodeEdges: FlowEdge[] = []
   const nodeType = inferNodeType(fdlNode)
+  console.log('[fdlNodeToNode] nodeId:', nodeId, 'nodeType:', nodeType, 'exec:', fdlNode.exec)
 
   const baseData = {
     nodeType,
@@ -812,6 +897,59 @@ function fdlNodeToNode(
         with: fdlNode.with,
       }
       break
+    case 'oss':
+      data = {
+        ...baseData,
+        nodeType: 'oss' as const,
+        oss: fdlNode.exec || '',
+        operation: inferOssOperation(fdlNode.exec || ''),
+        args: fdlNode.args,
+        with: fdlNode.with,
+        sets: fdlNode.sets,
+      }
+      break
+    case 'mq':
+      data = {
+        ...baseData,
+        nodeType: 'mq' as const,
+        mq: fdlNode.exec || '',
+        operation: inferMqOperation(fdlNode.args),
+        args: fdlNode.args,
+        with: fdlNode.with,
+        sets: fdlNode.sets,
+      }
+      break
+    case 'mail':
+      data = {
+        ...baseData,
+        nodeType: 'mail' as const,
+        mail: fdlNode.exec || '',
+        args: fdlNode.args,
+        with: fdlNode.with,
+        sets: fdlNode.sets,
+      }
+      break
+    case 'sms':
+      data = {
+        ...baseData,
+        nodeType: 'sms' as const,
+        sms: fdlNode.exec || '',
+        args: fdlNode.args,
+        with: fdlNode.with,
+        sets: fdlNode.sets,
+      }
+      break
+    case 'service':
+      data = {
+        ...baseData,
+        nodeType: 'service' as const,
+        service: fdlNode.exec || '',
+        method: inferServiceMethod(fdlNode.exec || ''),
+        args: fdlNode.args,
+        with: fdlNode.with,
+        sets: fdlNode.sets,
+      }
+      break
     default:
       data = {
         ...baseData,
@@ -827,14 +965,42 @@ function fdlNodeToNode(
     data,
   }
 
+  console.log('[fdlNodeToNode] Created node:', { id: node.id, type: node.type, dataNodeType: node.data.nodeType })
   return { node, nodeEdges }
 }
 
 /**
  * Infer node type from FDL node properties
+ * 根据 exec URI scheme 识别集成服务节点类型
  */
 function inferNodeType(fdlNode: FDLNode): FlowNodeType {
-  if (fdlNode.exec) return 'exec'
+  if (fdlNode.exec) {
+    // 根据 URI scheme 判断节点类型
+    const execUri = fdlNode.exec.toLowerCase()
+    console.log('[inferNodeType] exec URI:', fdlNode.exec, '-> lowercase:', execUri)
+    if (execUri.startsWith('oss://')) {
+      console.log('[inferNodeType] -> detected as OSS')
+      return 'oss'
+    }
+    if (execUri.startsWith('mq://')) {
+      console.log('[inferNodeType] -> detected as MQ')
+      return 'mq'
+    }
+    if (execUri.startsWith('svc://')) {
+      console.log('[inferNodeType] -> detected as SERVICE')
+      return 'service'
+    }
+    if (execUri.startsWith('mail://')) {
+      console.log('[inferNodeType] -> detected as MAIL')
+      return 'mail'
+    }
+    if (execUri.startsWith('sms://')) {
+      console.log('[inferNodeType] -> detected as SMS')
+      return 'sms'
+    }
+    console.log('[inferNodeType] -> defaulting to EXEC')
+    return 'exec'
+  }
   if (fdlNode.agent) return 'agent'
   if (fdlNode.guard) return 'guard'
   if (fdlNode.approval) return 'approval'
@@ -997,6 +1163,95 @@ function createEmptyFlow(): FlowModel {
     meta: { name: '未命名流程' },
     nodes: [],
     edges: [],
+  }
+}
+
+/**
+ * Migrate/normalize a FlowModel to ensure correct node types based on exec URI
+ * 用于修正从存储加载的旧流程中节点类型不正确的问题
+ */
+export function migrateFlowModel(flow: FlowModel): FlowModel {
+  const migratedNodes = flow.nodes.map(node => {
+    const data = node.data
+
+    // 只处理有 exec 字段的节点
+    if ('exec' in data && typeof data.exec === 'string' && data.exec) {
+      const execUri = data.exec.toLowerCase()
+      let correctType: FlowNodeType = 'exec'
+
+      if (execUri.startsWith('oss://')) {
+        correctType = 'oss'
+      } else if (execUri.startsWith('mq://')) {
+        correctType = 'mq'
+      } else if (execUri.startsWith('svc://')) {
+        correctType = 'service'
+      } else if (execUri.startsWith('mail://')) {
+        correctType = 'mail'
+      } else if (execUri.startsWith('sms://')) {
+        correctType = 'sms'
+      }
+
+      // 如果类型需要修正
+      if (node.type !== correctType || data.nodeType !== correctType) {
+        console.log('[migrateFlowModel] Correcting node type:', node.id, 'from', node.type, 'to', correctType)
+
+        // 创建修正后的节点数据
+        let migratedData: FlowNodeData
+
+        switch (correctType) {
+          case 'oss':
+            migratedData = {
+              ...data,
+              nodeType: 'oss' as const,
+              oss: data.exec,
+            } as FlowNodeData
+            break
+          case 'mq':
+            migratedData = {
+              ...data,
+              nodeType: 'mq' as const,
+              mq: data.exec,
+            } as FlowNodeData
+            break
+          case 'service':
+            migratedData = {
+              ...data,
+              nodeType: 'service' as const,
+              service: data.exec,
+            } as FlowNodeData
+            break
+          case 'mail':
+            migratedData = {
+              ...data,
+              nodeType: 'mail' as const,
+              mail: data.exec,
+            } as FlowNodeData
+            break
+          case 'sms':
+            migratedData = {
+              ...data,
+              nodeType: 'sms' as const,
+              sms: data.exec,
+            } as FlowNodeData
+            break
+          default:
+            migratedData = data
+        }
+
+        return {
+          ...node,
+          type: correctType,
+          data: migratedData,
+        }
+      }
+    }
+
+    return node
+  })
+
+  return {
+    ...flow,
+    nodes: migratedNodes,
   }
 }
 

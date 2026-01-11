@@ -374,6 +374,24 @@ impl Parser {
                 Ok(Expression::Spread(Box::new(expr)))
             }
 
+            // $ (current context/output) - 用于引用当前正在构建的输出对象
+            // 类似于 jq 的 "." 或 JSONPath 的 "$"
+            Some(Token::Dollar) => {
+                self.advance();
+                // 如果后面跟着属性访问，解析完整路径
+                let mut path = Vec::new();
+                while self.check(&Token::Dot) {
+                    self.advance();
+                    if let Some(Token::Ident(name)) = self.peek().cloned() {
+                        self.advance();
+                        path.push(name);
+                    } else {
+                        return Err(self.error("Expected identifier after '$.'"));
+                    }
+                }
+                Ok(Expression::This(path))
+            }
+
             // CASE expression
             Some(Token::Case) => self.parse_case(),
 

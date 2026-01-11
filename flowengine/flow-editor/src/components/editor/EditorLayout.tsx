@@ -20,6 +20,7 @@ import { YamlEditor } from '@/components/editor/YamlEditor'
 import { useEditorStore } from '@/stores/editorStore'
 import { useFlowStore } from '@/stores/flowStore'
 import { useExecuteStore } from '@/stores/executeStore'
+import { useAutoSave } from '@/hooks/useAutoSave'
 import { flowToYaml } from '@/lib/flowYamlConverter'
 
 // Material Design Icons
@@ -165,6 +166,11 @@ export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, ver
   } = useEditorStore()
   const { undo, redo } = useFlowStore()
 
+  // 自动保存 hook - 处理 Ctrl+S 和 afterDelay 自动保存
+  const { isSaving, lastSaveTime, saveError } = useAutoSave({
+    enabled: !isReadOnly,
+  })
+
   // Exit preview mode
   const handleExitPreview = useCallback(() => {
     navigate(`/editor/${flowId}`)
@@ -249,7 +255,14 @@ export function EditorLayout({ flowId, flowName, onBack, isReadOnly = false, ver
       )}
 
       {/* Top Bar */}
-      <Header flowId={flowId} flowName={flowName} onBack={onBack} />
+      <Header
+        flowId={flowId}
+        flowName={flowName}
+        onBack={onBack}
+        isSaving={isSaving}
+        lastSaveTime={lastSaveTime}
+        saveError={saveError}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex min-h-0 h-full">
@@ -404,9 +417,12 @@ interface HeaderProps {
   flowId: string
   flowName: string
   onBack: () => void
+  isSaving?: boolean
+  lastSaveTime?: Date | null
+  saveError?: string | null
 }
 
-function Header({ flowId, flowName, onBack }: HeaderProps) {
+function Header({ flowId, flowName, onBack, isSaving, lastSaveTime, saveError }: HeaderProps) {
   const { isDirty, flow, isReadOnly } = useFlowStore()
   const {
     toggleNodePalette,
@@ -522,20 +538,52 @@ function Header({ flowId, flowName, onBack }: HeaderProps) {
                 { label: flowName || flow.meta.name },
               ]}
             />
-            {isDirty && (
+            {isDirty && !isSaving && (
               <span
                 className="w-2 h-2 rounded-full"
                 style={{ background: 'var(--tertiary)' }}
                 title="有未保存的更改"
               />
             )}
+            {isSaving && (
+              <span
+                className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--primary-container)', color: 'var(--on-primary-container)' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                保存中...
+              </span>
+            )}
+            {!isDirty && !isSaving && lastSaveTime && (
+              <span
+                className="flex items-center gap-1 text-xs"
+                style={{ color: 'var(--on-surface-variant)' }}
+                title={`最后保存于 ${lastSaveTime.toLocaleString('zh-CN')}`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                已保存
+              </span>
+            )}
+            {saveError && (
+              <span
+                className="flex items-center gap-1 text-xs"
+                style={{ color: 'var(--error)' }}
+                title={saveError}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                </svg>
+                保存失败
+              </span>
+            )}
           </div>
           <p
             className="text-xs"
             style={{ color: 'var(--on-surface-variant)' }}
           >
-            Flow Definition Language
-          </p>
+            Flow Definition Language</p>
         </div>
       </div>
 

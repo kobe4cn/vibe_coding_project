@@ -282,6 +282,14 @@ async fn execute_single_node(
         NodeType::Loop => nodes::execute_loop_node(flow, node_id, node, context.clone()).await,
         NodeType::Agent => nodes::execute_agent_node(node_id, node, context.clone()).await,
         NodeType::Mcp => nodes::execute_mcp_node(node_id, node, context.clone()).await,
+        NodeType::Guard => nodes::execute_guard_node(node_id, node, context.clone()).await,
+        NodeType::Approval => nodes::execute_approval_node(node_id, node, context.clone()).await,
+        NodeType::Handoff => nodes::execute_handoff_node(node_id, node, context.clone()).await,
+        NodeType::Oss => nodes::execute_oss_node(node_id, node, context.clone()).await,
+        NodeType::Mq => nodes::execute_mq_node(node_id, node, context.clone()).await,
+        NodeType::Mail => nodes::execute_mail_node(node_id, node, context.clone()).await,
+        NodeType::Sms => nodes::execute_sms_node(node_id, node, context.clone()).await,
+        NodeType::Service => nodes::execute_service_node(node_id, node, context.clone()).await,
         NodeType::Unknown => {
             tracing::warn!("Unknown node type for '{}'", node_id);
             Err(ExecutorError::InvalidFlow(format!(

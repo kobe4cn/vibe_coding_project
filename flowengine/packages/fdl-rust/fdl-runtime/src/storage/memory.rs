@@ -2,7 +2,7 @@
 //!
 //! 使用 DashMap 实现线程安全的并发访问。
 //! 适用于开发和测试，数据在服务重启后丢失。
-//! 
+//!
 //! 特点：
 //! - 快速：无 I/O 操作
 //! - 简单：无需数据库配置
@@ -15,7 +15,8 @@ use uuid::Uuid;
 
 use super::traits::{
     ApiKeyRecord, CreateApiKeyRequest, CreateFlowRequest, CreateVersionRequest, ExecutionRecord,
-    FlowRecord, FlowStorage, ListOptions, ListResult, StorageError, UpdateFlowRequest, VersionRecord,
+    FlowRecord, FlowStorage, ListOptions, ListResult, StorageError, UpdateFlowRequest,
+    VersionRecord,
 };
 
 /// 内存存储实现
@@ -393,10 +394,7 @@ impl FlowStorage for MemoryStorage {
     }
 
     // API Key operations
-    async fn create_api_key(
-        &self,
-        req: CreateApiKeyRequest,
-    ) -> Result<ApiKeyRecord, StorageError> {
+    async fn create_api_key(&self, req: CreateApiKeyRequest) -> Result<ApiKeyRecord, StorageError> {
         let key = ApiKeyRecord {
             id: Uuid::new_v4(),
             tenant_id: req.tenant_id,
@@ -450,11 +448,7 @@ impl FlowStorage for MemoryStorage {
         Ok(keys)
     }
 
-    async fn delete_api_key(
-        &self,
-        tenant_id: Uuid,
-        key_id: Uuid,
-    ) -> Result<(), StorageError> {
+    async fn delete_api_key(&self, tenant_id: Uuid, key_id: Uuid) -> Result<(), StorageError> {
         if !self
             .api_keys
             .get(&key_id)

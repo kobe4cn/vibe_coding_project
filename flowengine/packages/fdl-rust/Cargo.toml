@@ -54,6 +54,30 @@ rand = "0.9"
 # HTTP client
 reqwest = { version = "0.12", features = ["json"] }
 
+# S3 compatible object storage
+rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }
+
+# Message Queue - RabbitMQ
+lapin = "2.5"
+
+# Email - SMTP
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
+
+# Base64 encoding
+base64 = "0.22"
+
+# HMAC for signing (SMS APIs)
+hmac = "0.12"
+
+# SHA1 for Aliyun SMS signature
+sha1 = "0.10"
+
+# Hex encoding for Tencent SMS
+hex = "0.4"
+
+# URL encoding for API requests
+urlencoding = "2.1"
+
 # OpenAPI documentation
 utoipa = { version = "5.3", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "9.0", features = ["axum"] }

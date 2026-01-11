@@ -3,12 +3,14 @@
  * Professional styled property editor with improved UX
  *
  * Start 节点作为普通可拖拽节点，其参数定义存储在 node.data.parameters 中
+ * 当没有选中节点时，显示 Flow 级别的设置（包括类型定义）
  */
 
 import { useMemo, useState } from 'react'
 import { useFlowStore } from '@/stores/flowStore'
-import type { FlowNode, FlowNodeData, FlowNodeType, StartParameterDef } from '@/types/flow'
+import type { FlowNode, FlowNodeData, FlowNodeType, StartParameterDef, FlowTypeDef } from '@/types/flow'
 import { NODE_LABELS, NODE_COLORS } from '@/types/flow'
+import { TypeDefsEditor } from './TypeDefEditor'
 
 // Lucide style icons
 const Icons = {
@@ -120,6 +122,46 @@ const NODE_ICONS: Record<FlowNodeType, React.ReactNode> = {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12h14"/>
       <path d="m12 5 7 7-7 7"/>
+    </svg>
+  ),
+  oss: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+      <path d="M12 12v9"/>
+      <path d="m8 17 4 4 4-4"/>
+    </svg>
+  ),
+  mq: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <rect x="14" y="14" width="7" height="7" rx="1"/>
+      <path d="M10 6h4"/>
+      <path d="M6 10v4"/>
+      <path d="M10 17.5h4"/>
+    </svg>
+  ),
+  mail: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="16" x="2" y="4" rx="2"/>
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </svg>
+  ),
+  sms: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <path d="M8 10h.01"/>
+      <path d="M12 10h.01"/>
+      <path d="M16 10h.01"/>
+    </svg>
+  ),
+  service: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/>
+      <line x1="6" y1="18" x2="6.01" y2="18"/>
     </svg>
   ),
 }
@@ -366,6 +408,7 @@ function AgentNodeEditor({ node }: { node: FlowNode }) {
     instructions?: string
     outputFormat?: string
     temperature?: number
+    sets?: string
   }
 
   return (
@@ -398,6 +441,14 @@ function AgentNodeEditor({ node }: { node: FlowNode }) {
           { value: 'markdown', label: 'Markdown' },
         ]}
       />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="result = response.content"
+        multiline
+        monospace
+      />
     </>
   )
 }
@@ -418,6 +469,7 @@ function GuardNodeEditor({ node }: { node: FlowNode }) {
     guardTypes?: string[]
     action?: string
     customExpression?: string
+    sets?: string
   }
 
   const guardTypes = ['pii', 'jailbreak', 'moderation', 'hallucination', 'schema', 'custom']
@@ -491,6 +543,14 @@ function GuardNodeEditor({ node }: { node: FlowNode }) {
           hint="GML expression for custom validation"
         />
       )}
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="validated = true"
+        multiline
+        monospace
+      />
     </>
   )
 }
@@ -533,6 +593,408 @@ function ApprovalNodeEditor({ node }: { node: FlowNode }) {
           { value: 'reject', label: 'Auto Reject' },
           { value: 'approve', label: 'Auto Approve' },
         ]}
+      />
+    </>
+  )
+}
+
+function MCPNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    server?: string
+    tool?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="MCP Server"
+        value={data.server || ''}
+        onChange={(value) => updateNode(node.id, { server: value })}
+        placeholder="filesystem"
+        hint="MCP server name from flow configuration"
+      />
+      <TextField
+        label="Tool Name"
+        value={data.tool || ''}
+        onChange={(value) => updateNode(node.id, { tool: value })}
+        placeholder="read_file"
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="path = '/tmp/file.txt'"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="content = result.content"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="fileContent = content"
+        multiline
+        monospace
+      />
+    </>
+  )
+}
+
+function HandoffNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    target?: string
+    context?: string[]
+    resumeOn?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="Target Agent"
+        value={data.target || ''}
+        onChange={(value) => updateNode(node.id, { target: value })}
+        placeholder="specialist-agent"
+        hint="Agent ID to hand off to"
+      />
+      <SelectField
+        label="Resume On"
+        value={data.resumeOn || 'completed'}
+        onChange={(value) => updateNode(node.id, { resumeOn: value })}
+        options={[
+          { value: 'completed', label: 'On Completed' },
+          { value: 'error', label: 'On Error' },
+          { value: 'any', label: 'Any Outcome' },
+        ]}
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="task = query"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="result = response.output"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="handoffResult = result"
+        multiline
+        monospace
+      />
+    </>
+  )
+}
+
+// OSS 节点编辑器 - 对象存储操作
+function OSSNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    oss?: string
+    operation?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="OSS URI"
+        value={data.oss || ''}
+        onChange={(value) => updateNode(node.id, { oss: value })}
+        placeholder="oss://bucket/path"
+        hint="对象存储 URI，如 oss://my-bucket/files/"
+        monospace
+      />
+      <SelectField
+        label="Operation"
+        value={data.operation || 'download'}
+        onChange={(value) => updateNode(node.id, { operation: value })}
+        options={[
+          { value: 'upload', label: '上传 (Upload)' },
+          { value: 'download', label: '下载 (Download)' },
+          { value: 'delete', label: '删除 (Delete)' },
+          { value: 'list', label: '列表 (List)' },
+        ]}
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="key = 'reports/' + reportId + '.pdf'"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="url = result.signedUrl"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="uploadResult = result"
+        multiline
+        monospace
+      />
+    </>
+  )
+}
+
+// MQ 节点编辑器 - 消息队列操作
+function MQNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    mq?: string
+    operation?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="MQ URI"
+        value={data.mq || ''}
+        onChange={(value) => updateNode(node.id, { mq: value })}
+        placeholder="mq://topic/queue"
+        hint="消息队列 URI，如 mq://orders/new-order"
+        monospace
+      />
+      <SelectField
+        label="Operation"
+        value={data.operation || 'send'}
+        onChange={(value) => updateNode(node.id, { operation: value })}
+        options={[
+          { value: 'send', label: '发送 (Send)' },
+          { value: 'receive', label: '接收 (Receive)' },
+          { value: 'subscribe', label: '订阅 (Subscribe)' },
+        ]}
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="message = { orderId: order.id, status: 'created' }"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="messageId = result.id"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="sendResult = result"
+        multiline
+        monospace
+      />
+    </>
+  )
+}
+
+// Mail 节点编辑器 - 邮件发送
+function MailNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    mail?: string
+    template?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="Mail Config"
+        value={data.mail || ''}
+        onChange={(value) => updateNode(node.id, { mail: value })}
+        placeholder="mail://smtp-service/send"
+        hint="邮件服务 URI 或收件人地址"
+        monospace
+      />
+      <TextField
+        label="Template"
+        value={data.template || ''}
+        onChange={(value) => updateNode(node.id, { template: value })}
+        placeholder="welcome_email"
+        hint="邮件模板 ID"
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="to = user.email, subject = '欢迎', variables = { name: user.name }"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="messageId = result.messageId"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="emailSent = true"
+        multiline
+        monospace
+      />
+    </>
+  )
+}
+
+// SMS 节点编辑器 - 短信发送
+function SMSNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    sms?: string
+    template?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="SMS Config"
+        value={data.sms || ''}
+        onChange={(value) => updateNode(node.id, { sms: value })}
+        placeholder="sms://aliyun/verification"
+        hint="短信服务 URI 或手机号"
+        monospace
+      />
+      <TextField
+        label="Template"
+        value={data.template || ''}
+        onChange={(value) => updateNode(node.id, { template: value })}
+        placeholder="SMS_VERIFY_CODE"
+        hint="短信模板 ID"
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="phone = user.phone, params = { code: verifyCode }"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="messageId = result.messageId"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="smsSent = true"
+        multiline
+        monospace
+      />
+    </>
+  )
+}
+
+// Service 节点编辑器 - 微服务调用
+function ServiceNodeEditor({ node }: { node: FlowNode }) {
+  const { updateNode } = useFlowStore()
+  const data = node.data as FlowNodeData & {
+    service?: string
+    method?: string
+    args?: string
+    with?: string
+    sets?: string
+  }
+
+  return (
+    <>
+      <TextField
+        label="Service URI"
+        value={data.service || ''}
+        onChange={(value) => updateNode(node.id, { service: value })}
+        placeholder="svc://inventory-service/check_stock"
+        hint="微服务 URI，如 svc://service-name/method"
+        monospace
+      />
+      <SelectField
+        label="HTTP Method"
+        value={data.method || 'POST'}
+        onChange={(value) => updateNode(node.id, { method: value })}
+        options={[
+          { value: 'GET', label: 'GET' },
+          { value: 'POST', label: 'POST' },
+          { value: 'PUT', label: 'PUT' },
+          { value: 'DELETE', label: 'DELETE' },
+        ]}
+      />
+      <TextField
+        label="Arguments (args)"
+        value={data.args || ''}
+        onChange={(value) => updateNode(node.id, { args: value })}
+        placeholder="productId = order.productId, quantity = order.quantity"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Transform (with)"
+        value={data.with || ''}
+        onChange={(value) => updateNode(node.id, { with: value })}
+        placeholder="available = result.inStock"
+        multiline
+        monospace
+      />
+      <TextField
+        label="Set Variables (sets)"
+        value={data.sets || ''}
+        onChange={(value) => updateNode(node.id, { sets: value })}
+        placeholder="stockResult = result"
+        multiline
+        monospace
       />
     </>
   )
@@ -753,6 +1215,133 @@ function StartNodeEditor({ node }: { node: FlowNode }) {
   )
 }
 
+/**
+ * Flow 级别设置面板 - 当没有选中节点时显示
+ * 包含流程元信息和类型定义编辑
+ */
+function FlowSettingsPanel() {
+  const { flow, updateMeta, updateArgs } = useFlowStore()
+  const [activeTab, setActiveTab] = useState<'info' | 'types'>('info')
+
+  const handleUpdateDefs = (defs: FlowTypeDef[]) => {
+    updateArgs({
+      ...flow.args,
+      defs,
+    })
+  }
+
+  return (
+    <div
+      className="h-full flex flex-col"
+      style={{ background: 'var(--surface-container)' }}
+    >
+      {/* Header */}
+      <div
+        className="px-4 py-3"
+        style={{ borderBottom: '1px solid var(--outline-variant)' }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            style={{
+              background: 'var(--primary-container)',
+              color: 'var(--on-primary-container)',
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2
+              className="text-[14px] font-semibold truncate"
+              style={{ color: 'var(--on-surface)' }}
+            >
+              Flow Settings
+            </h2>
+            <p
+              className="text-[11px]"
+              style={{ color: 'var(--on-surface-variant)' }}
+            >
+              流程级别配置
+            </p>
+          </div>
+        </div>
+
+        {/* Tab switcher */}
+        <div
+          className="flex items-center gap-1 mt-3 p-1 rounded-lg"
+          style={{ background: 'var(--surface-container-high)' }}
+        >
+          <button
+            onClick={() => setActiveTab('info')}
+            className="flex-1 px-3 py-1.5 text-[12px] font-medium rounded-md transition-all"
+            style={{
+              background: activeTab === 'info' ? 'var(--primary-container)' : 'transparent',
+              color: activeTab === 'info' ? 'var(--on-primary-container)' : 'var(--on-surface-variant)',
+            }}
+          >
+            基本信息
+          </button>
+          <button
+            onClick={() => setActiveTab('types')}
+            className="flex-1 px-3 py-1.5 text-[12px] font-medium rounded-md transition-all"
+            style={{
+              background: activeTab === 'types' ? 'var(--primary-container)' : 'transparent',
+              color: activeTab === 'types' ? 'var(--on-primary-container)' : 'var(--on-surface-variant)',
+            }}
+          >
+            类型定义
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-4">
+        {activeTab === 'info' ? (
+          <div className="space-y-4">
+            <Section title="Flow Information">
+              <TextField
+                label="名称"
+                value={flow.meta.name}
+                onChange={(value) => updateMeta({ name: value })}
+                placeholder="Flow name"
+              />
+              <TextField
+                label="描述"
+                value={flow.meta.description || ''}
+                onChange={(value) => updateMeta({ description: value })}
+                placeholder="Flow description"
+                multiline
+              />
+            </Section>
+
+            <Section title="Global Variables (vars)">
+              <TextField
+                label="初始变量"
+                value={flow.vars || ''}
+                onChange={(value) => {
+                  // Note: vars is at flow level, need to update differently
+                  // This is a simplified version
+                }}
+                placeholder="counter = 0&#10;items = []"
+                multiline
+                monospace
+                hint="定义流程启动时的初始变量"
+              />
+            </Section>
+          </div>
+        ) : (
+          <TypeDefsEditor
+            defs={flow.args?.defs || []}
+            onChange={handleUpdateDefs}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Main PropertyPanel component
 export function PropertyPanel() {
   const { flow, selectedNodeIds, updateNode } = useFlowStore()
@@ -763,29 +1352,7 @@ export function PropertyPanel() {
   }, [flow.nodes, selectedNodeIds])
 
   if (!selectedNode) {
-    return (
-      <div
-        className="h-full flex items-center justify-center"
-        style={{ background: 'var(--surface-container)' }}
-      >
-        <div className="text-center px-8">
-          <div
-            className="w-14 h-14 mx-auto mb-4 rounded-xl flex items-center justify-center"
-            style={{ backgroundColor: 'var(--surface-container-high)' }}
-          >
-            <span style={{ color: 'var(--on-surface-variant)', opacity: 0.4 }}>
-              {Icons.edit}
-            </span>
-          </div>
-          <p
-            className="text-[13px]"
-            style={{ color: 'var(--on-surface-variant)', opacity: 0.6 }}
-          >
-            Select a node to edit properties
-          </p>
-        </div>
-      </div>
-    )
+    return <FlowSettingsPanel />
   }
 
   const nodeType = selectedNode.data.nodeType as FlowNodeType
@@ -860,15 +1427,22 @@ export function PropertyPanel() {
           />
         </Section>
 
-        {/* Condition Section */}
+        {/* Execution Control Section */}
         <Section title="Execution">
           <TextField
-            label="Condition"
+            label="Condition (only)"
             value={selectedNode.data.only || ''}
             onChange={(value) => updateNode(selectedNode.id, { only: value })}
             placeholder="e.g., status == 'active'"
             monospace
             hint="GML expression to control when this node executes"
+          />
+          <TextField
+            label="Failure Handler (fail)"
+            value={selectedNode.data.fail || ''}
+            onChange={(value) => updateNode(selectedNode.id, { fail: value })}
+            placeholder="e.g., error_handler"
+            hint="Node ID to jump to on failure"
           />
         </Section>
 
@@ -899,6 +1473,20 @@ function renderNodeEditor(node: FlowNode) {
       return <GuardNodeEditor node={node} />
     case 'approval':
       return <ApprovalNodeEditor node={node} />
+    case 'mcp':
+      return <MCPNodeEditor node={node} />
+    case 'handoff':
+      return <HandoffNodeEditor node={node} />
+    case 'oss':
+      return <OSSNodeEditor node={node} />
+    case 'mq':
+      return <MQNodeEditor node={node} />
+    case 'mail':
+      return <MailNodeEditor node={node} />
+    case 'sms':
+      return <SMSNodeEditor node={node} />
+    case 'service':
+      return <ServiceNodeEditor node={node} />
     default:
       return (
         <p

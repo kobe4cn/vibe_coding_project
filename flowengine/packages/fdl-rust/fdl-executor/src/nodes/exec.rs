@@ -10,6 +10,7 @@ use crate::context::ExecutionContext;
 use crate::error::{ExecutorError, ExecutorResult};
 use crate::types::FlowNode;
 use fdl_gml::Value;
+use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -19,15 +20,31 @@ pub async fn execute_exec_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let exec_uri = node.exec.as_ref().unwrap();
+    let exec_uri_template = node.exec.as_ref().unwrap();
 
-    // Build arguments from GML expression
+    // Build evaluation context
     let eval_ctx = context.read().await.build_eval_context();
+
+    // First evaluate args (so args-defined variables can be used in URI)
     let args = if let Some(args_expr) = &node.args {
         fdl_gml::evaluate(args_expr, &eval_ctx)?
     } else {
         Value::Object(std::collections::HashMap::new())
     };
+
+    // Build URI interpolation context: merge eval_ctx with args
+    // This allows ${userid} to work when args defines userid=customerId
+    let uri_ctx = if let (Value::Object(mut base), Value::Object(args_obj)) =
+        (eval_ctx.clone(), args.clone())
+    {
+        base.extend(args_obj);
+        Value::Object(base)
+    } else {
+        eval_ctx
+    };
+
+    // Interpolate variables in URI (e.g., ${customerId}, ${userid}, ${timestamp()})
+    let exec_uri = interpolate_uri(exec_uri_template, &uri_ctx)?;
 
     tracing::info!("Executing tool: {} with args: {:?}", exec_uri, args);
 
@@ -41,7 +58,7 @@ pub async fn execute_exec_node(
 
         // Try managed registry first (uses ConfigStore for dynamic resolution)
         if let Some(managed) = ctx.managed_registry() {
-            match managed.execute(exec_uri, json_args.clone(), tool_context).await {
+            match managed.execute(&exec_uri, json_args.clone(), tool_context).await {
                 Ok(output) => {
                     tracing::info!(
                         "Tool {} executed via ManagedRegistry in {}ms",
@@ -55,7 +72,7 @@ pub async fn execute_exec_node(
                         "Tool not found in ManagedRegistry, using placeholder for {}",
                         exec_uri
                     );
-                    create_placeholder_result(exec_uri)
+                    create_placeholder_result(&exec_uri)
                 }
                 Err(e) => {
                     tracing::error!("Tool {} execution failed (ManagedRegistry): {:?}", exec_uri, e);
@@ -68,7 +85,7 @@ pub async fn execute_exec_node(
         }
         // Fallback to simple registry
         else if let Some(registry) = ctx.tool_registry() {
-            match registry.execute(exec_uri, json_args, tool_context).await {
+            match registry.execute(&exec_uri, json_args, tool_context).await {
                 Ok(output) => {
                     tracing::info!(
                         "Tool {} executed via ToolRegistry in {}ms",
@@ -82,7 +99,7 @@ pub async fn execute_exec_node(
                         "Tool not registered, using placeholder for {}",
                         exec_uri
                     );
-                    create_placeholder_result(exec_uri)
+                    create_placeholder_result(&exec_uri)
                 }
                 Err(e) => {
                     tracing::error!("Tool {} execution failed: {:?}", exec_uri, e);
@@ -98,7 +115,7 @@ pub async fn execute_exec_node(
                 "No tool registry configured, using placeholder for {}",
                 exec_uri
             );
-            create_placeholder_result(exec_uri)
+            create_placeholder_result(&exec_uri)
         }
     };
 
@@ -119,7 +136,7 @@ pub async fn execute_exec_node(
 
     // Apply with transformation if present
     let output = if let Some(with_expr) = &node.with_expr {
-        let mut scope = eval_ctx.as_object().cloned().unwrap_or_default();
+        let mut scope = uri_ctx.as_object().cloned().unwrap_or_default();
         scope.insert(node_id.to_string(), result);
         let with_ctx = Value::Object(scope);
         fdl_gml::evaluate(with_expr, &with_ctx)?
@@ -136,6 +153,59 @@ pub async fn execute_exec_node(
         next.extend(n.split(',').map(|s| s.trim().to_string()));
     }
     Ok(next)
+}
+
+/// Interpolate variables in URI template
+///
+/// Supports:
+/// - `${variable}` - Simple variable reference
+/// - `${expression}` - GML expression (e.g., `${timestamp()}`, `${user.id}`)
+fn interpolate_uri(template: &str, context: &Value) -> ExecutorResult<String> {
+    // Match ${...} patterns
+    let re = Regex::new(r"\$\{([^}]+)\}").unwrap();
+
+    let mut result = template.to_string();
+    let mut last_error: Option<String> = None;
+
+    // Find all matches and replace them
+    for cap in re.captures_iter(template) {
+        let full_match = &cap[0];
+        let expr = cap[1].trim();
+
+        // Evaluate the expression
+        match fdl_gml::evaluate(expr, context) {
+            Ok(value) => {
+                let replacement = match &value {
+                    Value::String(s) => s.clone(),
+                    Value::Int(i) => i.to_string(),
+                    Value::Float(f) => f.to_string(),
+                    Value::Bool(b) => b.to_string(),
+                    Value::Null => "null".to_string(),
+                    _ => {
+                        // For complex types, convert to JSON string
+                        serde_json::to_string(&gml_value_to_json(&value))
+                            .unwrap_or_else(|_| "".to_string())
+                    }
+                };
+                result = result.replace(full_match, &replacement);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to interpolate '{}' in URI: {}", expr, e);
+                last_error = Some(format!("Failed to interpolate '{}': {}", expr, e));
+            }
+        }
+    }
+
+    // If there were errors but some replacements succeeded, log warning
+    if let Some(err_msg) = last_error {
+        // Only fail if result still contains unreplaced patterns
+        if result.contains("${") {
+            return Err(ExecutorError::GmlError(err_msg));
+        }
+    }
+
+    tracing::debug!("Interpolated URI: {} -> {}", template, result);
+    Ok(result)
 }
 
 /// Create a placeholder result for tools that are not registered

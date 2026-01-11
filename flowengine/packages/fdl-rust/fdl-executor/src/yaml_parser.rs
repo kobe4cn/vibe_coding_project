@@ -138,6 +138,33 @@ pub struct YamlNode {
     /// MCP URI
     #[serde(default)]
     pub mcp: Option<String>,
+    /// Guard 配置
+    #[serde(default)]
+    pub guard: Option<String>,
+    /// Approval 配置
+    #[serde(default)]
+    pub approval: Option<String>,
+    /// Handoff 目标
+    #[serde(default)]
+    pub handoff: Option<String>,
+    /// OSS URI（对象存储）
+    #[serde(default)]
+    pub oss: Option<String>,
+    /// MQ URI（消息队列）
+    #[serde(default)]
+    pub mq: Option<String>,
+    /// Mail 配置
+    #[serde(default)]
+    pub mail: Option<String>,
+    /// SMS 配置
+    #[serde(default)]
+    pub sms: Option<String>,
+    /// Service URI（微服务调用）
+    #[serde(default)]
+    pub service: Option<String>,
+    /// 节点类型（前端显式指定）
+    #[serde(rename = "nodeType", default)]
+    pub node_type_str: Option<String>,
 }
 
 /// 解析 YAML 字符串为 Flow 结构
@@ -286,7 +313,15 @@ fn convert_output_def(fields: Vec<YamlOutputField>) -> OutputDef {
 }
 
 /// 转换 YAML 节点为 FlowNode
+///
+/// 支持两种工具调用语法：
+/// 1. 专用字段语法：`oss: oss://bucket/path`、`mq: mq://topic/queue` 等
+/// 2. exec 统一语法：`exec: oss://bucket/path`（自动识别 URI 前缀并填充对应字段）
 fn convert_yaml_node(yaml: YamlNode) -> FlowNode {
+    // 检测 exec URI 前缀，自动填充对应的专用字段
+    // 这样可以兼容两种写法：exec: oss://... 和 oss: oss://...
+    let (oss, mq, mail, sms, service, node_type_str) = detect_tool_type_from_exec(&yaml);
+
     FlowNode {
         name: yaml.name,
         description: yaml.description,
@@ -312,10 +347,81 @@ fn convert_yaml_node(yaml: YamlNode) -> FlowNode {
         }),
         agent: yaml.agent,
         mcp: yaml.mcp,
-        // YAML 格式不支持 Start 节点（前端可视化编辑器专用）
+        guard: yaml.guard,
+        approval: yaml.approval,
+        handoff: yaml.handoff,
+        oss,
+        mq,
+        mail,
+        sms,
+        service,
         parameters: None,
-        node_type_str: None,
+        node_type_str,
     }
+}
+
+/// 从 exec URI 前缀检测工具类型，返回填充的专用字段
+///
+/// 如果 YAML 中已显式设置了专用字段（如 oss:），则优先使用
+/// 否则从 exec 字段的 URI 前缀推断
+fn detect_tool_type_from_exec(yaml: &YamlNode) -> (
+    Option<String>,  // oss
+    Option<String>,  // mq
+    Option<String>,  // mail
+    Option<String>,  // sms
+    Option<String>,  // service
+    Option<String>,  // node_type_str
+) {
+    // 如果已显式设置专用字段，优先使用
+    if yaml.oss.is_some() {
+        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
+                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("oss".to_string())));
+    }
+    if yaml.mq.is_some() {
+        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
+                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("mq".to_string())));
+    }
+    if yaml.mail.is_some() {
+        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
+                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("mail".to_string())));
+    }
+    if yaml.sms.is_some() {
+        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
+                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("sms".to_string())));
+    }
+    if yaml.service.is_some() {
+        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
+                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("service".to_string())));
+    }
+
+    // 如果没有显式设置，从 exec 字段检测
+    if let Some(ref exec_uri) = yaml.exec {
+        let lower = exec_uri.to_lowercase();
+        if lower.starts_with("oss://") {
+            return (Some(exec_uri.clone()), None, None, None, None,
+                    yaml.node_type_str.clone().or(Some("oss".to_string())));
+        }
+        if lower.starts_with("mq://") {
+            return (None, Some(exec_uri.clone()), None, None, None,
+                    yaml.node_type_str.clone().or(Some("mq".to_string())));
+        }
+        if lower.starts_with("mail://") {
+            return (None, None, Some(exec_uri.clone()), None, None,
+                    yaml.node_type_str.clone().or(Some("mail".to_string())));
+        }
+        if lower.starts_with("sms://") {
+            return (None, None, None, Some(exec_uri.clone()), None,
+                    yaml.node_type_str.clone().or(Some("sms".to_string())));
+        }
+        if lower.starts_with("svc://") {
+            return (None, None, None, None, Some(exec_uri.clone()),
+                    yaml.node_type_str.clone().or(Some("service".to_string())));
+        }
+    }
+
+    // 没有检测到特殊工具类型，保持原样
+    (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
+     yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone())
 }
 
 #[cfg(test)]
@@ -582,5 +688,67 @@ flow:
             let merge = value.get("merge");
             println!("Merge node output: {:?}", merge);
         }
+    }
+
+    #[test]
+    fn test_exec_uri_to_specialized_fields() {
+        // 测试 exec URI 前缀自动填充到专用字段
+        let yaml = r#"
+flow:
+    name: 工具类型检测测试
+    node:
+        fetchAvatar:
+            name: 获取头像
+            exec: oss://customer-assets/avatars/test.jpg
+            args: operation = 'presign'
+        sendMessage:
+            name: 发送消息
+            exec: mq://orders/new-order
+        callService:
+            name: 调用服务
+            exec: svc://user-service/getUser
+        sendEmail:
+            name: 发送邮件
+            exec: mail://smtp/send
+        sendSms:
+            name: 发送短信
+            exec: sms://aliyun/send
+        normalExec:
+            name: 普通调用
+            exec: api://crm/customer
+"#;
+        let flow = parse_yaml(yaml).unwrap();
+
+        // 验证 OSS 节点
+        let oss_node = flow.nodes.get("fetchAvatar").unwrap();
+        assert_eq!(oss_node.node_type(), crate::types::NodeType::Oss);
+        assert!(oss_node.oss.is_some(), "OSS field should be filled from exec");
+        assert_eq!(oss_node.oss.as_ref().unwrap(), "oss://customer-assets/avatars/test.jpg");
+
+        // 验证 MQ 节点
+        let mq_node = flow.nodes.get("sendMessage").unwrap();
+        assert_eq!(mq_node.node_type(), crate::types::NodeType::Mq);
+        assert!(mq_node.mq.is_some(), "MQ field should be filled from exec");
+
+        // 验证 Service 节点
+        let svc_node = flow.nodes.get("callService").unwrap();
+        assert_eq!(svc_node.node_type(), crate::types::NodeType::Service);
+        assert!(svc_node.service.is_some(), "Service field should be filled from exec");
+
+        // 验证 Mail 节点
+        let mail_node = flow.nodes.get("sendEmail").unwrap();
+        assert_eq!(mail_node.node_type(), crate::types::NodeType::Mail);
+        assert!(mail_node.mail.is_some(), "Mail field should be filled from exec");
+
+        // 验证 SMS 节点
+        let sms_node = flow.nodes.get("sendSms").unwrap();
+        assert_eq!(sms_node.node_type(), crate::types::NodeType::Sms);
+        assert!(sms_node.sms.is_some(), "SMS field should be filled from exec");
+
+        // 验证普通 exec 节点不受影响
+        let exec_node = flow.nodes.get("normalExec").unwrap();
+        assert_eq!(exec_node.node_type(), crate::types::NodeType::Exec);
+        assert!(exec_node.oss.is_none());
+        assert!(exec_node.mq.is_none());
     }
 }

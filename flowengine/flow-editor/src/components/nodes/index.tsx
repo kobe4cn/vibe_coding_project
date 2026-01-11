@@ -20,6 +20,11 @@ import type {
   ApprovalNodeData,
   MCPNodeData,
   HandoffNodeData,
+  OSSNodeData,
+  MQNodeData,
+  MailNodeData,
+  SMSNodeData,
+  ServiceNodeData,
 } from '@/types/flow'
 
 // Lucide style SVG icons - consistent with NodePalette and PropertyPanel
@@ -129,6 +134,51 @@ const Icons = {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12h14"/>
       <path d="m12 5 7 7-7 7"/>
+    </svg>
+  ),
+  // 对象存储 - Cloud Storage icon
+  oss: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+      <path d="M12 12v9"/>
+      <path d="m8 17 4 4 4-4"/>
+    </svg>
+  ),
+  // 消息队列 - Queue icon
+  mq: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <rect x="14" y="14" width="7" height="7" rx="1"/>
+      <path d="M10 6h4"/>
+      <path d="M6 10v4"/>
+      <path d="M10 17.5h4"/>
+    </svg>
+  ),
+  // 邮件发送 - Mail icon
+  mail: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="16" x="2" y="4" rx="2"/>
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+    </svg>
+  ),
+  // 短信发送 - Message icon
+  sms: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <path d="M8 10h.01"/>
+      <path d="M12 10h.01"/>
+      <path d="M16 10h.01"/>
+    </svg>
+  ),
+  // 微服务调用 - Server icon
+  service: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+      <line x1="6" y1="6" x2="6.01" y2="6"/>
+      <line x1="6" y1="18" x2="6.01" y2="18"/>
     </svg>
   ),
 }
@@ -499,6 +549,160 @@ export const HandoffNode = memo(function HandoffNode({
   )
 })
 
+// OSS Node - Object Storage Service
+export const OSSNode = memo(function OSSNode({
+  data,
+  selected,
+}: NodeComponentProps<OSSNodeData>) {
+  const operationLabels: Record<string, string> = {
+    upload: '上传',
+    download: '下载',
+    delete: '删除',
+    list: '列表',
+  }
+
+  return (
+    <BaseNode
+      nodeType="oss"
+      label={data.label}
+      description={data.description}
+      icon={Icons.oss}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      hasBreakpoint={data.hasBreakpoint}
+    >
+      <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded truncate">
+        {data.oss || '未配置'}
+      </div>
+      {data.operation && (
+        <div className="text-xs text-gray-500 mt-1">
+          <span className="bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded">
+            {operationLabels[data.operation] || data.operation}
+          </span>
+        </div>
+      )}
+    </BaseNode>
+  )
+})
+
+// MQ Node - Message Queue
+export const MQNode = memo(function MQNode({
+  data,
+  selected,
+}: NodeComponentProps<MQNodeData>) {
+  const operationLabels: Record<string, string> = {
+    send: '发送',
+    receive: '接收',
+    subscribe: '订阅',
+  }
+
+  return (
+    <BaseNode
+      nodeType="mq"
+      label={data.label}
+      description={data.description}
+      icon={Icons.mq}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      hasBreakpoint={data.hasBreakpoint}
+    >
+      <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded truncate">
+        {data.mq || '未配置'}
+      </div>
+      {data.operation && (
+        <div className="text-xs text-gray-500 mt-1">
+          <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">
+            {operationLabels[data.operation] || data.operation}
+          </span>
+        </div>
+      )}
+    </BaseNode>
+  )
+})
+
+// Mail Node - Email Service
+export const MailNode = memo(function MailNode({
+  data,
+  selected,
+}: NodeComponentProps<MailNodeData>) {
+  return (
+    <BaseNode
+      nodeType="mail"
+      label={data.label}
+      description={data.description}
+      icon={Icons.mail}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      hasBreakpoint={data.hasBreakpoint}
+    >
+      <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded truncate">
+        {data.mail || '未配置'}
+      </div>
+      {data.template && (
+        <div className="text-xs text-gray-500 mt-1">
+          模板: <span className="text-purple-600">{data.template}</span>
+        </div>
+      )}
+    </BaseNode>
+  )
+})
+
+// SMS Node - SMS Service
+export const SMSNode = memo(function SMSNode({
+  data,
+  selected,
+}: NodeComponentProps<SMSNodeData>) {
+  return (
+    <BaseNode
+      nodeType="sms"
+      label={data.label}
+      description={data.description}
+      icon={Icons.sms}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      hasBreakpoint={data.hasBreakpoint}
+    >
+      <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded truncate">
+        {data.sms || '未配置'}
+      </div>
+      {data.template && (
+        <div className="text-xs text-gray-500 mt-1">
+          模板: <span className="text-green-600">{data.template}</span>
+        </div>
+      )}
+    </BaseNode>
+  )
+})
+
+// Service Node - Microservice Call
+export const ServiceNode = memo(function ServiceNode({
+  data,
+  selected,
+}: NodeComponentProps<ServiceNodeData>) {
+  return (
+    <BaseNode
+      nodeType="service"
+      label={data.label}
+      description={data.description}
+      icon={Icons.service}
+      selected={selected}
+      executionStatus={data.executionStatus}
+      hasBreakpoint={data.hasBreakpoint}
+    >
+      <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2 py-1 rounded truncate">
+        {data.service || '未配置'}
+      </div>
+      {data.method && (
+        <div className="text-xs text-gray-500 mt-1">
+          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+            {data.method}
+          </span>
+        </div>
+      )}
+    </BaseNode>
+  )
+})
+
 // Node type mapping for React Flow
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const nodeTypes: Record<string, any> = {
@@ -515,4 +719,10 @@ export const nodeTypes: Record<string, any> = {
   approval: ApprovalNode,
   mcp: MCPNode,
   handoff: HandoffNode,
+  // Integration service nodes
+  oss: OSSNode,
+  mq: MQNode,
+  mail: MailNode,
+  sms: SMSNode,
+  service: ServiceNode,
 }

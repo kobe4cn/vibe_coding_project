@@ -13,7 +13,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -180,9 +180,9 @@ async fn create_api_key(
     let (full_key, key_hash, key_prefix) = generate_api_key(&flow_id);
 
     // 计算过期时间
-    let expires_at = req.expires_in_days.map(|days| {
-        chrono::Utc::now() + chrono::Duration::days(days)
-    });
+    let expires_at = req
+        .expires_in_days
+        .map(|days| chrono::Utc::now() + chrono::Duration::days(days));
 
     // 创建记录
     let api_key = state

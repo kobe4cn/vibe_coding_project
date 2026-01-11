@@ -1,0 +1,83 @@
+# docker-compose.yml
+version: "3.8"
+
+services:
+  # ============================================
+  # 1. MailHog - 邮件测试服务
+  # ============================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: flowengine-mailhog
+    ports:
+      - "1025:1025"      # SMTP 端口
+      - "8025:8025"      # Web UI 端口
+
+  # ============================================
+  # 3. Mock 微服务 - 风控服务
+  # ============================================
+  risk-service:
+    build:
+      context: ./mock-services/risk-service
+      dockerfile: Dockerfile
+    container_name: flowengine-risk-service
+    ports:
+      - "8081:8080"
+    environment:
+      SERVICE_NAME: risk-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================
+  # 4. Mock 微服务 - CRM 服务
+  # ============================================
+  crm-service:
+    build:
+      context: ./mock-services/crm-service
+      dockerfile: Dockerfile
+    container_name: flowengine-crm-service
+    ports:
+      - "8082:8080"
+    environment:
+      SERVICE_NAME: crm-service
+
+  # ============================================
+  # 5. Mock 微服务 - 通知服务
+  # ============================================
+  notification-service:
+    build:
+      context: ./mock-services/notification-service
+      dockerfile: Dockerfile
+    container_name: flowengine-notification-service
+    ports:
+      - "8083:8080"
+    environment:
+      SERVICE_NAME: notification-service
+      RABBITMQ_URL: amqp://flowengine:flowengine123@rabbitmq:5672/
+      QUEUE_NAME: notification-service.customer-view
+
+  mail-service:
+    build:
+      context: ./mock-services/mail-service
+      dockerfile: Dockerfile
+    container_name: flowengine-mail-service
+    ports:
+      - "8084:8080"
+    environment:
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      FROM_ADDRESS: noreply@flowengine.local
+    depends_on:
+      - mailhog
+
+  sms-service:
+    build:
+      context: ./mock-services/sms-service
+      dockerfile: Dockerfile
+    container_name: flowengine-sms-service
+    ports:
+      - "8085:8080"
+    environment:
+      SMS_PROVIDER: mock
