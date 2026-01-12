@@ -144,6 +144,16 @@ pub enum StorageMode {
     Database,
 }
 
+/// 存储初始化结果类型
+/// 包含存储模式、数据库连接池、存储实例、配置存储和工具服务存储
+type StorageInitResult = (
+    StorageMode,
+    Option<sqlx::PgPool>,
+    Storage,
+    Arc<dyn ConfigStore>,
+    Arc<dyn ToolServiceStore>,
+);
+
 /// 应用状态：在所有处理器之间共享
 ///
 /// 使用 Arc 实现共享所有权，DashMap 实现线程安全的并发访问。
@@ -205,80 +215,78 @@ impl AppState {
 
         // 初始化存储后端
         // 根据配置选择内存或数据库存储，失败时回退到内存模式
-        let (storage_mode, db_pool, storage, config_store, tool_service_store): (
-            StorageMode,
-            Option<sqlx::PgPool>,
-            Storage,
-            Arc<dyn ConfigStore>,
-            Arc<dyn ToolServiceStore>,
-        ) = match Storage::new(&config.database).await {
-            Ok(s) => {
-                let is_db = s.is_database();
-                if is_db {
-                    tracing::info!("Database storage initialized successfully");
-                    // 获取数据库连接池
-                    match Self::init_database(&config.database).await {
-                        Ok(pool) => {
-                            // 使用 PostgreSQL 配置存储
-                            let pg_config_store = Arc::new(PostgresConfigStore::new(pool.clone()));
-                            // 使用 PostgreSQL 工具服务存储
-                            let pg_tool_service_store =
-                                Arc::new(PostgresToolServiceStore::new(pool.clone()));
-                            tracing::info!("Using PostgreSQL config store and tool service store");
-                            (
-                                StorageMode::Database,
-                                Some(pool),
-                                s,
-                                pg_config_store,
-                                pg_tool_service_store,
-                            )
+        let (storage_mode, db_pool, storage, config_store, tool_service_store): StorageInitResult =
+            match Storage::new(&config.database).await {
+                Ok(s) => {
+                    let is_db = s.is_database();
+                    if is_db {
+                        tracing::info!("Database storage initialized successfully");
+                        // 获取数据库连接池
+                        match Self::init_database(&config.database).await {
+                            Ok(pool) => {
+                                // 使用 PostgreSQL 配置存储
+                                let pg_config_store =
+                                    Arc::new(PostgresConfigStore::new(pool.clone()));
+                                // 使用 PostgreSQL 工具服务存储
+                                let pg_tool_service_store =
+                                    Arc::new(PostgresToolServiceStore::new(pool.clone()));
+                                tracing::info!(
+                                    "Using PostgreSQL config store and tool service store"
+                                );
+                                (
+                                    StorageMode::Database,
+                                    Some(pool),
+                                    s,
+                                    pg_config_store,
+                                    pg_tool_service_store,
+                                )
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to init database pool for config store: {}, using in-memory",
+                                    e
+                                );
+                                let memory_config_store = Arc::new(InMemoryConfigStore::new());
+                                let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
+                                (
+                                    StorageMode::Database,
+                                    None,
+                                    s,
+                                    memory_config_store,
+                                    memory_tool_store,
+                                )
+                            }
                         }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to init database pool for config store: {}, using in-memory",
-                                e
-                            );
-                            let memory_config_store = Arc::new(InMemoryConfigStore::new());
-                            let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
-                            (
-                                StorageMode::Database,
-                                None,
-                                s,
-                                memory_config_store,
-                                memory_tool_store,
-                            )
-                        }
+                    } else {
+                        tracing::info!("Using in-memory storage");
+                        let memory_config_store = Arc::new(InMemoryConfigStore::new());
+                        let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
+                        (
+                            StorageMode::Memory,
+                            None,
+                            s,
+                            memory_config_store,
+                            memory_tool_store,
+                        )
                     }
-                } else {
-                    tracing::info!("Using in-memory storage");
+                }
+                Err(e) => {
+                    // 存储初始化失败时回退到内存模式，确保服务可以启动
+                    tracing::error!(
+                        "Failed to initialize storage: {}, falling back to memory",
+                        e
+                    );
                     let memory_config_store = Arc::new(InMemoryConfigStore::new());
                     let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
                     (
                         StorageMode::Memory,
                         None,
-                        s,
+                        Storage::memory(),
                         memory_config_store,
                         memory_tool_store,
                     )
                 }
-            }
-            Err(e) => {
-                // 存储初始化失败时回退到内存模式，确保服务可以启动
-                tracing::error!(
-                    "Failed to initialize storage: {}, falling back to memory",
-                    e
-                );
-                let memory_config_store = Arc::new(InMemoryConfigStore::new());
-                let memory_tool_store = Arc::new(InMemoryToolServiceStore::new());
-                (
-                    StorageMode::Memory,
-                    None,
-                    Storage::memory(),
-                    memory_config_store,
-                    memory_tool_store,
-                )
-            }
-        };
+            };
 
         Self {
             jwt_service,

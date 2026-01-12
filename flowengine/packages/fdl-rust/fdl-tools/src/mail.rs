@@ -12,7 +12,7 @@ use crate::models::MailConfig;
 use crate::registry::{ToolHandler, ToolMetadata};
 use crate::{ToolContext, ToolOutput};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -31,7 +31,7 @@ pub enum MailOperation {
 }
 
 impl MailOperation {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "send" | "mail" | "email" => Some(MailOperation::Send),
             "template" | "send_template" | "sendtemplate" => Some(MailOperation::SendTemplate),
@@ -79,7 +79,7 @@ impl MailHandler {
 
         let service_id = parts[0].to_string();
         let operation = if parts.len() > 1 {
-            MailOperation::from_str(parts[1]).unwrap_or(MailOperation::Send)
+            MailOperation::from_strs(parts[1]).unwrap_or(MailOperation::Send)
         } else {
             MailOperation::Send
         };
@@ -104,7 +104,7 @@ impl MailHandler {
             _ => {
                 return Err(ToolError::InvalidArgument(
                     "'to' must be a string or array of strings".to_string(),
-                ))
+                ));
             }
         };
 
@@ -203,7 +203,7 @@ impl MailHandler {
             _ => {
                 return Err(ToolError::InvalidArgument(
                     "'to' must be a string or array of strings".to_string(),
-                ))
+                ));
             }
         };
 
@@ -252,7 +252,9 @@ impl MailHandler {
             .get("messageId")
             .or_else(|| args.get("id"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::InvalidArgument("Missing 'messageId' parameter".to_string()))?;
+            .ok_or_else(|| {
+                ToolError::InvalidArgument("Missing 'messageId' parameter".to_string())
+            })?;
 
         // 模拟状态查询
         let result = json!({
@@ -295,7 +297,8 @@ impl ToolHandler for MailHandler {
         let result = match operation {
             MailOperation::Send => self.execute_send(&connection.config, &args).await?,
             MailOperation::SendTemplate => {
-                self.execute_send_template(&connection.config, &args).await?
+                self.execute_send_template(&connection.config, &args)
+                    .await?
             }
             MailOperation::Verify => self.execute_verify(&connection.config, &args).await?,
             MailOperation::Status => self.execute_status(&connection.config, &args).await?,
@@ -401,13 +404,14 @@ mod tests {
             }
         });
 
-        let result = handler
-            .execute("sendgrid/template", args, &context)
-            .await;
+        let result = handler.execute("sendgrid/template", args, &context).await;
         assert!(result.is_ok());
 
         let output = result.unwrap();
-        assert_eq!(output.value.get("templateId"), Some(&json!("welcome-template")));
+        assert_eq!(
+            output.value.get("templateId"),
+            Some(&json!("welcome-template"))
+        );
     }
 
     #[tokio::test]

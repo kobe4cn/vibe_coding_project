@@ -9,7 +9,7 @@ use crate::lexer::{Lexer, Token};
 use crate::value::Value;
 
 /// GML 解析器
-/// 
+///
 /// 维护 token 序列和当前位置，通过递归下降方法解析各种语法结构。
 pub struct Parser {
     tokens: Vec<Token>,

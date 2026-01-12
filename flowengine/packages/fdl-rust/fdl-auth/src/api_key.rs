@@ -77,19 +77,18 @@ pub struct ApiKeyContext {
 /// - `X-API-Key: <key>`
 pub fn extract_api_key(headers: &axum::http::HeaderMap) -> Option<String> {
     // 优先检查 Authorization 头
-    if let Some(auth_header) = headers.get("Authorization") {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if let Some(key) = auth_str.strip_prefix("Bearer ") {
-                return Some(key.trim().to_string());
-            }
-        }
+    if let Some(auth_header) = headers.get("Authorization")
+        && let Ok(auth_str) = auth_header.to_str()
+        && let Some(key) = auth_str.strip_prefix("Bearer ")
+    {
+        return Some(key.trim().to_string());
     }
 
     // 备选：X-API-Key 头
-    if let Some(key_header) = headers.get("X-API-Key") {
-        if let Ok(key_str) = key_header.to_str() {
-            return Some(key_str.trim().to_string());
-        }
+    if let Some(key_header) = headers.get("X-API-Key")
+        && let Ok(key_str) = key_header.to_str()
+    {
+        return Some(key_str.trim().to_string());
     }
 
     None

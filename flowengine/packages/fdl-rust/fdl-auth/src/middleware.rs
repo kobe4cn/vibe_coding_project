@@ -18,7 +18,7 @@ use chrono::Utc;
 use std::sync::Arc;
 
 /// Axum 认证层
-/// 
+///
 /// 配置认证中间件的行为，包括是否必需认证、开发模式等。
 #[derive(Clone)]
 pub struct AuthLayer {
@@ -92,7 +92,7 @@ impl AuthLayer {
 }
 
 /// 认证中间件函数
-/// 
+///
 /// 从请求头中提取 Bearer token，验证后注入 claims 到请求扩展中。
 /// 支持可选认证和开发模式，方便开发和测试。
 pub async fn auth_middleware(layer: AuthLayer, mut request: Request<Body>, next: Next) -> Response {

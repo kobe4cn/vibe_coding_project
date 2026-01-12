@@ -7,7 +7,7 @@ use crate::jwt::Claims;
 use std::collections::HashSet;
 
 /// 权限类型
-/// 
+///
 /// 定义了系统中所有可用的权限，包括流程、版本、管理和系统权限。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Permission {
@@ -48,7 +48,7 @@ pub enum Role {
 
 impl Role {
     /// 获取角色的权限集合
-    /// 
+    ///
     /// 每个角色都有预定义的权限集合，采用最小权限原则。
     /// SuperAdmin 拥有所有权限，包括系统管理权限。
     pub fn permissions(&self) -> HashSet<Permission> {
@@ -123,7 +123,7 @@ impl Role {
 }
 
 /// 检查 claims 是否具有特定权限
-/// 
+///
 /// 遍历用户的所有角色，如果任一角色拥有该权限，则返回 true。
 /// 这实现了多角色的权限并集逻辑。
 pub fn has_permission(claims: &Claims, permission: Permission) -> bool {

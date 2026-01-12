@@ -22,15 +22,11 @@ fn gml_value_to_json(value: &Value) -> serde_json::Value {
         Value::Null => serde_json::Value::Null,
         Value::Bool(b) => serde_json::Value::Bool(*b),
         Value::Int(i) => serde_json::Value::Number((*i).into()),
-        Value::Float(f) => {
-            serde_json::Number::from_f64(*f)
-                .map(serde_json::Value::Number)
-                .unwrap_or(serde_json::Value::Null)
-        }
+        Value::Float(f) => serde_json::Number::from_f64(*f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
         Value::String(s) => serde_json::Value::String(s.clone()),
-        Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(gml_value_to_json).collect())
-        }
+        Value::Array(arr) => serde_json::Value::Array(arr.iter().map(gml_value_to_json).collect()),
         Value::Object(obj) => {
             let map: serde_json::Map<String, serde_json::Value> = obj
                 .iter()
@@ -56,9 +52,7 @@ fn json_value_to_gml(value: &serde_json::Value) -> Value {
             }
         }
         serde_json::Value::String(s) => Value::String(s.clone()),
-        serde_json::Value::Array(arr) => {
-            Value::Array(arr.iter().map(json_value_to_gml).collect())
-        }
+        serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_value_to_gml).collect()),
         serde_json::Value::Object(obj) => {
             let map: HashMap<String, Value> = obj
                 .iter()
@@ -148,7 +142,11 @@ async fn apply_sets(
 ) -> ExecutorResult<()> {
     if let Some(sets_expr) = &node.sets {
         let mut ctx = context.write().await;
-        let mut eval_scope = ctx.build_eval_context().as_object().cloned().unwrap_or_default();
+        let mut eval_scope = ctx
+            .build_eval_context()
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         eval_scope.insert(node_id.to_string(), result.clone());
         let sets_ctx = Value::Object(eval_scope);
         let sets_result = fdl_gml::evaluate(sets_expr, &sets_ctx)?;
@@ -192,7 +190,10 @@ pub async fn execute_guard_node(
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
     let guard_config = node.guard.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidFlow(format!("Guard node '{}' missing guard configuration", node_id))
+        ExecutorError::InvalidFlow(format!(
+            "Guard node '{}' missing guard configuration",
+            node_id
+        ))
     })?;
 
     // 构建评估上下文
@@ -202,11 +203,11 @@ pub async fn execute_guard_node(
     let result = if guard_config.contains(':') {
         // 简单格式：pii:block, moderation:warn 等
         let parts: Vec<&str> = guard_config.split(':').collect();
-        let guard_type = parts.get(0).unwrap_or(&"custom");
+        let guard_type = parts.first().unwrap_or(&"custom");
         let action = parts.get(1).unwrap_or(&"block");
 
         Value::object([
-            ("passed", Value::bool(true)),  // 默认通过，实际检查由外部服务实现
+            ("passed", Value::bool(true)), // 默认通过，实际检查由外部服务实现
             ("guardType", Value::string(guard_type.to_string())),
             ("action", Value::string(action.to_string())),
         ])
@@ -231,10 +232,8 @@ pub async fn execute_guard_node(
     context.write().await.set_variable(node_id, output);
 
     // 如果检查失败且有 fail 处理器，跳转到 fail 节点
-    if !passed {
-        if let Some(fail_node) = &node.fail {
-            return Ok(vec![fail_node.clone()]);
-        }
+    if !passed && let Some(fail_node) = &node.fail {
+        return Ok(vec![fail_node.clone()]);
     }
 
     Ok(get_next_nodes(node))
@@ -303,10 +302,7 @@ pub async fn execute_handoff_node(
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
     let handoff_target = node.handoff.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidFlow(format!(
-            "Handoff node '{}' missing handoff target",
-            node_id
-        ))
+        ExecutorError::InvalidFlow(format!("Handoff node '{}' missing handoff target", node_id))
     })?;
 
     // 构建评估上下文
@@ -367,18 +363,19 @@ pub async fn execute_oss_node(
     };
 
     // 尝试通过工具注册表执行
-    let result = if let Some(tool_result) = execute_tool_call(oss_uri, &args, &context, node_id).await? {
-        tool_result
-    } else {
-        // 没有注册表或工具未找到，使用模拟数据
-        Value::object([
-            ("uri", Value::string(oss_uri.clone())),
-            ("success", Value::bool(true)),
-            ("operation", Value::string("mock")),
-            ("args", args),
-            ("_mock", Value::bool(true)),
-        ])
-    };
+    let result =
+        if let Some(tool_result) = execute_tool_call(oss_uri, &args, &context, node_id).await? {
+            tool_result
+        } else {
+            // 没有注册表或工具未找到，使用模拟数据
+            Value::object([
+                ("uri", Value::string(oss_uri.clone())),
+                ("success", Value::bool(true)),
+                ("operation", Value::string("mock")),
+                ("args", args),
+                ("_mock", Value::bool(true)),
+            ])
+        };
 
     // 应用 sets
     apply_sets(node, node_id, &result, &context).await?;
@@ -421,18 +418,22 @@ pub async fn execute_mq_node(
     };
 
     // 尝试通过工具注册表执行
-    let result = if let Some(tool_result) = execute_tool_call(mq_uri, &args, &context, node_id).await? {
-        tool_result
-    } else {
-        // 没有注册表或工具未找到，使用模拟数据
-        Value::object([
-            ("uri", Value::string(mq_uri.clone())),
-            ("success", Value::bool(true)),
-            ("messageId", Value::string(format!("msg-{}", uuid::Uuid::new_v4()))),
-            ("args", args),
-            ("_mock", Value::bool(true)),
-        ])
-    };
+    let result =
+        if let Some(tool_result) = execute_tool_call(mq_uri, &args, &context, node_id).await? {
+            tool_result
+        } else {
+            // 没有注册表或工具未找到，使用模拟数据
+            Value::object([
+                ("uri", Value::string(mq_uri.clone())),
+                ("success", Value::bool(true)),
+                (
+                    "messageId",
+                    Value::string(format!("msg-{}", uuid::Uuid::new_v4())),
+                ),
+                ("args", args),
+                ("_mock", Value::bool(true)),
+            ])
+        };
 
     // 应用 sets
     apply_sets(node, node_id, &result, &context).await?;
@@ -462,7 +463,10 @@ pub async fn execute_mail_node(
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
     let mail_config = node.mail.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidFlow(format!("Mail node '{}' missing mail configuration", node_id))
+        ExecutorError::InvalidFlow(format!(
+            "Mail node '{}' missing mail configuration",
+            node_id
+        ))
     })?;
 
     // 构建评估上下文
@@ -488,9 +492,7 @@ pub async fn execute_mail_node(
     // 合并 mail_params 到 args
     if let (Value::Object(args_map), Value::Object(params_map)) = (&mut args, mail_params.clone()) {
         for (k, v) in params_map {
-            if !args_map.contains_key(&k) {
-                args_map.insert(k, v);
-            }
+            args_map.entry(k).or_insert(v);
         }
     }
 
@@ -504,7 +506,10 @@ pub async fn execute_mail_node(
                 ("success", Value::bool(true)),
                 ("uri", Value::string(mail_config.clone())),
                 ("args", args),
-                ("messageId", Value::string(format!("mail-{}", uuid::Uuid::new_v4()))),
+                (
+                    "messageId",
+                    Value::string(format!("mail-{}", uuid::Uuid::new_v4())),
+                ),
                 ("_mock", Value::bool(true)),
             ])
         }
@@ -514,7 +519,10 @@ pub async fn execute_mail_node(
             ("success", Value::bool(true)),
             ("config", mail_params),
             ("args", args),
-            ("messageId", Value::string(format!("mail-{}", uuid::Uuid::new_v4()))),
+            (
+                "messageId",
+                Value::string(format!("mail-{}", uuid::Uuid::new_v4())),
+            ),
             ("_mock", Value::bool(true)),
         ])
     };
@@ -573,9 +581,8 @@ pub async fn execute_sms_node(
     // 合并 sms_params 到 args
     if let (Value::Object(args_map), Value::Object(params_map)) = (&mut args, sms_params.clone()) {
         for (k, v) in params_map {
-            if !args_map.contains_key(&k) {
-                args_map.insert(k, v);
-            }
+            //
+            args_map.entry(k).or_insert(v);
         }
     }
 
@@ -589,7 +596,10 @@ pub async fn execute_sms_node(
                 ("success", Value::bool(true)),
                 ("uri", Value::string(sms_config.clone())),
                 ("args", args),
-                ("messageId", Value::string(format!("sms-{}", uuid::Uuid::new_v4()))),
+                (
+                    "messageId",
+                    Value::string(format!("sms-{}", uuid::Uuid::new_v4())),
+                ),
                 ("_mock", Value::bool(true)),
             ])
         }
@@ -599,7 +609,10 @@ pub async fn execute_sms_node(
             ("success", Value::bool(true)),
             ("config", sms_params),
             ("args", args),
-            ("messageId", Value::string(format!("sms-{}", uuid::Uuid::new_v4()))),
+            (
+                "messageId",
+                Value::string(format!("sms-{}", uuid::Uuid::new_v4())),
+            ),
             ("_mock", Value::bool(true)),
         ])
     };
@@ -631,10 +644,7 @@ pub async fn execute_service_node(
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
     let service_uri = node.service.as_ref().ok_or_else(|| {
-        ExecutorError::InvalidFlow(format!(
-            "Service node '{}' missing service URI",
-            node_id
-        ))
+        ExecutorError::InvalidFlow(format!("Service node '{}' missing service URI", node_id))
     })?;
 
     // 构建评估上下文
@@ -648,7 +658,9 @@ pub async fn execute_service_node(
     };
 
     // 尝试通过工具注册表执行
-    let result = if let Some(tool_result) = execute_tool_call(service_uri, &args, &context, node_id).await? {
+    let result = if let Some(tool_result) =
+        execute_tool_call(service_uri, &args, &context, node_id).await?
+    {
         tool_result
     } else {
         // 没有注册表或工具未找到，使用模拟数据
@@ -676,10 +688,8 @@ pub async fn execute_service_node(
     // 存储结果
     context.write().await.set_variable(node_id, output);
 
-    if !success {
-        if let Some(fail_node) = &node.fail {
-            return Ok(vec![fail_node.clone()]);
-        }
+    if !success && let Some(fail_node) = &node.fail {
+        return Ok(vec![fail_node.clone()]);
     }
 
     Ok(get_next_nodes(node))

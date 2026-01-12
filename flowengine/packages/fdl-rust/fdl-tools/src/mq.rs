@@ -36,7 +36,7 @@ pub enum MqOperation {
 }
 
 impl MqOperation {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "send" | "publish" | "push" | "produce" => Some(MqOperation::Send),
             "receive" | "pull" | "consume" | "get" => Some(MqOperation::Receive),
@@ -111,7 +111,7 @@ impl MqHandler {
         let operation_from_args = args
             .get("operation")
             .and_then(|v| v.as_str())
-            .and_then(MqOperation::from_str);
+            .and_then(MqOperation::from_strs);
 
         let parts: Vec<&str> = path.splitn(4, '/').collect();
 
@@ -138,7 +138,7 @@ impl MqHandler {
 
         // 尝试从路径解析 operation
         if parts.len() > 1 {
-            if let Some(op) = MqOperation::from_str(parts[1]) {
+            if let Some(op) = MqOperation::from_strs(parts[1]) {
                 // mq://service/operation/topic/queue
                 let topic = if parts.len() > 2 {
                     Some(parts[2].to_string())
@@ -477,7 +477,9 @@ mod tests {
     #[tokio::test]
     async fn test_mq_handler_send() {
         let handler = MqHandler::new();
-        handler.register_service("test-mq", create_test_config()).await;
+        handler
+            .register_service("test-mq", create_test_config())
+            .await;
 
         let context = ToolContext::default();
         let args = json!({
@@ -616,7 +618,9 @@ mod tests {
     #[tokio::test]
     async fn test_execute_with_operation_in_args() {
         let handler = MqHandler::new();
-        handler.register_service("rabbitmq", create_test_config()).await;
+        handler
+            .register_service("rabbitmq", create_test_config())
+            .await;
 
         let context = ToolContext::default();
         let args = json!({
@@ -625,7 +629,9 @@ mod tests {
         });
 
         // 使用 exchange/routing-key 格式
-        let result = handler.execute("rabbitmq/customer.events/user.created", args, &context).await;
+        let result = handler
+            .execute("rabbitmq/customer.events/user.created", args, &context)
+            .await;
         assert!(result.is_ok());
 
         let output = result.unwrap();
@@ -662,7 +668,11 @@ mod tests {
             let result = handler.parse_path_with_args("test/topic", &args);
             assert!(result.is_ok(), "Failed for alias: {}", alias);
             let (_, operation, _, _) = result.unwrap();
-            assert_eq!(operation, expected_op, "Alias '{}' should map to {:?}", alias, expected_op);
+            assert_eq!(
+                operation, expected_op,
+                "Alias '{}' should map to {:?}",
+                alias, expected_op
+            );
         }
     }
 }

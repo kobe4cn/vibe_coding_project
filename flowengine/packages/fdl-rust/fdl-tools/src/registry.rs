@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// 工具处理器 trait
-/// 
+///
 /// 所有工具类型（API、数据库、MCP 等）都必须实现此 trait。
 /// 提供统一的执行接口和元数据查询功能。
 #[async_trait]
@@ -38,7 +38,7 @@ pub struct ToolMetadata {
 }
 
 /// 工具注册表
-/// 
+///
 /// 管理所有已注册的工具处理器，支持按工具类型查找和执行。
 /// 使用 Arc 实现共享所有权，允许多线程安全访问。
 pub struct ToolRegistry {
@@ -70,10 +70,10 @@ impl ToolRegistry {
     }
 
     /// 通过 URI 执行工具
-    /// 
+    ///
     /// URI 格式：`tool_type://path?options`
     /// 例如：`api://crm-service/customer?timeout=5000`
-    /// 
+    ///
     /// 解析 URI 后，根据工具类型查找对应的处理器并执行。
     pub async fn execute(
         &self,

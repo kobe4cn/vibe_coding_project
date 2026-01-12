@@ -326,19 +326,18 @@ async fn webhook(
             if let Ok(version) = state_clone
                 .get_version(&tenant_clone, &flow_id_clone, &version_id.to_string())
                 .await
+                && let Ok(frontend_flow) = serde_json::from_value::<FrontendFlow>(version.data)
             {
-                if let Ok(frontend_flow) = serde_json::from_value::<FrontendFlow>(version.data) {
-                    let _ = execute_flow(
-                        state_clone,
-                        exec_id_clone,
-                        flow_id_clone,
-                        tenant_clone,
-                        frontend_flow,
-                        inputs,
-                        false,
-                    )
-                    .await;
-                }
+                let _ = execute_flow(
+                    state_clone,
+                    exec_id_clone,
+                    flow_id_clone,
+                    tenant_clone,
+                    frontend_flow,
+                    inputs,
+                    false,
+                )
+                .await;
             }
         });
     }

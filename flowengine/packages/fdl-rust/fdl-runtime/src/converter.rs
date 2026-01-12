@@ -199,37 +199,66 @@ pub struct FrontendFlow {
     pub args: Option<FrontendArgs>,
 }
 
+/// 工具类型检测结果
+/// 包含各种工具类型的 URI（oss、mq、mail、sms、service）
+type ToolTypeDetectionResult = (
+    Option<String>, // oss
+    Option<String>, // mq
+    Option<String>, // mail
+    Option<String>, // sms
+    Option<String>, // service
+);
+
 /// 从 exec URI 前缀检测工具类型，返回填充的专用字段
 ///
 /// 如果前端已显式设置了专用字段（如 oss:），则优先使用
 /// 否则从 exec 字段的 URI 前缀推断
-fn detect_tool_type_from_exec(data: &FrontendNodeData) -> (
-    Option<String>,  // oss
-    Option<String>,  // mq
-    Option<String>,  // mail
-    Option<String>,  // sms
-    Option<String>,  // service
-) {
+fn detect_tool_type_from_exec(data: &FrontendNodeData) -> ToolTypeDetectionResult {
     // 如果已显式设置专用字段，优先使用
     if data.oss.is_some() {
-        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
-                data.sms.clone(), data.service.clone());
+        return (
+            data.oss.clone(),
+            data.mq.clone(),
+            data.mail.clone(),
+            data.sms.clone(),
+            data.service.clone(),
+        );
     }
     if data.mq.is_some() {
-        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
-                data.sms.clone(), data.service.clone());
+        return (
+            data.oss.clone(),
+            data.mq.clone(),
+            data.mail.clone(),
+            data.sms.clone(),
+            data.service.clone(),
+        );
     }
     if data.mail.is_some() {
-        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
-                data.sms.clone(), data.service.clone());
+        return (
+            data.oss.clone(),
+            data.mq.clone(),
+            data.mail.clone(),
+            data.sms.clone(),
+            data.service.clone(),
+        );
     }
     if data.sms.is_some() {
-        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
-                data.sms.clone(), data.service.clone());
+        return (
+            data.oss.clone(),
+            data.mq.clone(),
+            data.mail.clone(),
+            data.sms.clone(),
+            data.service.clone(),
+        );
     }
     if data.service.is_some() {
-        return (data.oss.clone(), data.mq.clone(), data.mail.clone(),
-                data.sms.clone(), data.service.clone());
+        return (
+            data.oss.clone(),
+            data.mq.clone(),
+            data.mail.clone(),
+            data.sms.clone(),
+            data.service.clone(),
+        );
     }
 
     // 如果没有显式设置，从 exec 字段检测
@@ -253,8 +282,13 @@ fn detect_tool_type_from_exec(data: &FrontendNodeData) -> (
     }
 
     // 没有检测到特殊工具类型，保持原样
-    (data.oss.clone(), data.mq.clone(), data.mail.clone(),
-     data.sms.clone(), data.service.clone())
+    (
+        data.oss.clone(),
+        data.mq.clone(),
+        data.mail.clone(),
+        data.sms.clone(),
+        data.service.clone(),
+    )
 }
 
 /// 将前端流程转换为执行器流程
@@ -411,12 +445,11 @@ pub fn convert_frontend_to_executor(frontend: &FrontendFlow) -> Flow {
 
     // 如果有 entry，更新 Start 节点的 next 字段为逗号分隔的所有入口节点
     // 这确保调度器能并行执行所有入口节点
-    if let Some(ref entry) = args.entry {
-        if let Some(start_node) = frontend.nodes.iter().find(|n| n.data.node_type == "start") {
-            if let Some(node) = nodes.get_mut(&start_node.id) {
-                node.next = Some(entry.join(", "));
-            }
-        }
+    if let Some(ref entry) = args.entry
+        && let Some(start_node) = frontend.nodes.iter().find(|n| n.data.node_type == "start")
+        && let Some(node) = nodes.get_mut(&start_node.id)
+    {
+        node.next = Some(entry.join(", "));
     }
 
     Flow {
@@ -657,14 +690,12 @@ pub fn filter_output_by_definition(
         let mut found_value: Option<serde_json::Value> = None;
 
         // 优先从终止节点提取
-        if let Some(ref terminal) = terminal_node {
-            if let Some(node_value) = raw_obj.get(terminal) {
-                if let Some(node_obj) = node_value.as_object() {
-                    if let Some(value) = node_obj.get(field_name) {
-                        found_value = Some(value.clone());
-                    }
-                }
-            }
+        if let Some(ref terminal) = terminal_node
+            && let Some(node_value) = raw_obj.get(terminal)
+            && let Some(node_obj) = node_value.as_object()
+            && let Some(value) = node_obj.get(field_name)
+        {
+            found_value = Some(value.clone());
         }
 
         // 如果终止节点没有该字段，从其他节点查找
@@ -676,11 +707,11 @@ pub fn filter_output_by_definition(
                 }
 
                 // 如果节点值是对象，检查是否包含目标字段
-                if let Some(node_obj) = node_value.as_object() {
-                    if let Some(value) = node_obj.get(field_name) {
-                        found_value = Some(value.clone());
-                        break;
-                    }
+                if let Some(node_obj) = node_value.as_object()
+                    && let Some(value) = node_obj.get(field_name)
+                {
+                    found_value = Some(value.clone());
+                    break;
                 }
             }
         }

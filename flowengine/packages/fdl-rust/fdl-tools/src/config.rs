@@ -566,17 +566,17 @@ impl ConfigStore for InMemoryConfigStore {
         let udfs = self.udfs.read().unwrap();
 
         // 先从租户配置查找
-        if let Some(tenant_udfs) = udfs.get(tenant_id) {
-            if let Some(udf) = tenant_udfs.get(name) {
-                return Ok(Some(udf.clone()));
-            }
+        if let Some(tenant_udfs) = udfs.get(tenant_id)
+            && let Some(udf) = tenant_udfs.get(name)
+        {
+            return Ok(Some(udf.clone()));
         }
 
         // 再从全局配置查找
-        if let Some(global_udfs) = udfs.get("__global__") {
-            if let Some(udf) = global_udfs.get(name) {
-                return Ok(Some(udf.clone()));
-            }
+        if let Some(global_udfs) = udfs.get("__global__")
+            && let Some(udf) = global_udfs.get(name)
+        {
+            return Ok(Some(udf.clone()));
         }
 
         Ok(None)
@@ -621,17 +621,29 @@ mod tests {
             updated_at: None,
         };
 
-        store.save_api_service("tenant1", config.clone()).await.unwrap();
+        store
+            .save_api_service("tenant1", config.clone())
+            .await
+            .unwrap();
 
-        let result = store.get_api_service("tenant1", "test-service").await.unwrap();
+        let result = store
+            .get_api_service("tenant1", "test-service")
+            .await
+            .unwrap();
         assert!(result.is_some());
         assert_eq!(result.unwrap().base_url, "https://api.test.com");
 
         let list = store.list_api_services("tenant1").await.unwrap();
         assert_eq!(list.len(), 1);
 
-        store.delete_api_service("tenant1", "test-service").await.unwrap();
-        let result = store.get_api_service("tenant1", "test-service").await.unwrap();
+        store
+            .delete_api_service("tenant1", "test-service")
+            .await
+            .unwrap();
+        let result = store
+            .get_api_service("tenant1", "test-service")
+            .await
+            .unwrap();
         assert!(result.is_none());
     }
 

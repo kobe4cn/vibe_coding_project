@@ -12,7 +12,7 @@ use crate::models::OssConfig;
 use crate::registry::{ToolHandler, ToolMetadata};
 use crate::{ToolContext, ToolOutput};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -37,7 +37,7 @@ pub enum OssOperation {
 }
 
 impl OssOperation {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "upload" | "put" | "save" => Some(OssOperation::Upload),
             "download" | "get" | "load" => Some(OssOperation::Download),
@@ -91,10 +91,7 @@ impl OssHandler {
     /// 注册 OSS 服务配置
     pub async fn register_service(&self, service_id: &str, config: OssConfig) {
         let mut connections = self.connections.write().await;
-        connections.insert(
-            service_id.to_string(),
-            OssConnection { config },
-        );
+        connections.insert(service_id.to_string(), OssConnection { config });
     }
 
     /// 解析路径，支持从 args 中获取 operation
@@ -111,7 +108,7 @@ impl OssHandler {
         let operation_from_args = args
             .get("operation")
             .and_then(|v| v.as_str())
-            .and_then(OssOperation::from_str);
+            .and_then(OssOperation::from_strs);
 
         if let Some(op) = operation_from_args {
             // args 中指定了 operation，路径格式为 service-id/path/to/key
@@ -142,7 +139,7 @@ impl OssHandler {
 
         // 检查第二部分是否是有效的 operation
         if parts.len() > 1 {
-            if let Some(op) = OssOperation::from_str(parts[1]) {
+            if let Some(op) = OssOperation::from_strs(parts[1]) {
                 // 路径格式: service-id/operation/key
                 let key = if parts.len() > 2 {
                     Some(parts[2].to_string())
@@ -162,20 +159,19 @@ impl OssHandler {
     }
 
     /// 执行上传操作
-    async fn execute_upload(
-        &self,
-        config: &OssConfig,
-        args: &Value,
-    ) -> ToolResult<Value> {
-        let key = args.get("key")
+    async fn execute_upload(&self, config: &OssConfig, args: &Value) -> ToolResult<Value> {
+        let key = args
+            .get("key")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArgument("Missing 'key' parameter".to_string()))?;
 
-        let content = args.get("content")
+        let content = args
+            .get("content")
             .or_else(|| args.get("data"))
             .or_else(|| args.get("body"));
 
-        let content_type = args.get("contentType")
+        let content_type = args
+            .get("contentType")
             .or_else(|| args.get("content_type"))
             .and_then(|v| v.as_str())
             .unwrap_or("application/octet-stream");
@@ -195,12 +191,9 @@ impl OssHandler {
     }
 
     /// 执行下载操作
-    async fn execute_download(
-        &self,
-        config: &OssConfig,
-        args: &Value,
-    ) -> ToolResult<Value> {
-        let key = args.get("key")
+    async fn execute_download(&self, config: &OssConfig, args: &Value) -> ToolResult<Value> {
+        let key = args
+            .get("key")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArgument("Missing 'key' parameter".to_string()))?;
 
@@ -219,12 +212,9 @@ impl OssHandler {
     }
 
     /// 执行删除操作
-    async fn execute_delete(
-        &self,
-        config: &OssConfig,
-        args: &Value,
-    ) -> ToolResult<Value> {
-        let key = args.get("key")
+    async fn execute_delete(&self, config: &OssConfig, args: &Value) -> ToolResult<Value> {
+        let key = args
+            .get("key")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArgument("Missing 'key' parameter".to_string()))?;
 
@@ -239,16 +229,11 @@ impl OssHandler {
     }
 
     /// 执行列表操作
-    async fn execute_list(
-        &self,
-        config: &OssConfig,
-        args: &Value,
-    ) -> ToolResult<Value> {
-        let prefix = args.get("prefix")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+    async fn execute_list(&self, config: &OssConfig, args: &Value) -> ToolResult<Value> {
+        let prefix = args.get("prefix").and_then(|v| v.as_str()).unwrap_or("");
 
-        let max_keys = args.get("maxKeys")
+        let max_keys = args
+            .get("maxKeys")
             .or_else(|| args.get("limit"))
             .and_then(|v| v.as_i64())
             .unwrap_or(1000);
@@ -278,28 +263,30 @@ impl OssHandler {
     }
 
     /// 执行预签名操作
-    async fn execute_presign(
-        &self,
-        config: &OssConfig,
-        args: &Value,
-    ) -> ToolResult<Value> {
-        let key = args.get("key")
+    async fn execute_presign(&self, config: &OssConfig, args: &Value) -> ToolResult<Value> {
+        let key = args
+            .get("key")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::InvalidArgument("Missing 'key' parameter".to_string()))?;
 
-        let expires_in = args.get("expiresIn")
+        let expires_in = args
+            .get("expiresIn")
             .or_else(|| args.get("expires"))
             .and_then(|v| v.as_i64())
             .unwrap_or(3600); // 默认 1 小时
 
-        let operation = args.get("operation")
+        let operation = args
+            .get("operation")
             .and_then(|v| v.as_str())
             .unwrap_or("get");
 
         // 模拟预签名 URL
         let signed_url = format!(
             "{}/{}/{}?X-Signature=mock_signature&X-Expires={}",
-            config.endpoint.as_deref().unwrap_or("https://s3.amazonaws.com"),
+            config
+                .endpoint
+                .as_deref()
+                .unwrap_or("https://s3.amazonaws.com"),
             config.bucket,
             key,
             expires_in
@@ -346,12 +333,11 @@ impl ToolHandler for OssHandler {
 
         // 如果路径中有 key，合并到 args 中
         let mut args = args;
-        if let Some(key) = key_from_path {
-            if let Value::Object(ref mut map) = args {
-                if !map.contains_key("key") {
-                    map.insert("key".to_string(), Value::String(key));
-                }
-            }
+        if let Some(key) = key_from_path
+            && let Value::Object(ref mut map) = args
+            && !map.contains_key("key")
+        {
+            map.insert("key".to_string(), Value::String(key));
         }
 
         let result = match operation {
@@ -503,12 +489,17 @@ mod tests {
         });
 
         // 路径格式: minio/reports/customer-5.json (不包含 operation)
-        let result = handler.execute("minio/reports/customer-5.json", args, &context).await;
+        let result = handler
+            .execute("minio/reports/customer-5.json", args, &context)
+            .await;
         assert!(result.is_ok());
 
         let output = result.unwrap();
         assert_eq!(output.value.get("success"), Some(&json!(true)));
-        assert_eq!(output.value.get("key"), Some(&json!("reports/customer-5.json")));
+        assert_eq!(
+            output.value.get("key"),
+            Some(&json!("reports/customer-5.json"))
+        );
     }
 
     #[tokio::test]

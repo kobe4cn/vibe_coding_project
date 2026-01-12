@@ -169,9 +169,8 @@ pub struct YamlNode {
 
 /// 解析 YAML 字符串为 Flow 结构
 pub fn parse_yaml(yaml_str: &str) -> ExecutorResult<Flow> {
-    let doc: YamlDocument = serde_yaml::from_str(yaml_str).map_err(|e| {
-        ExecutorError::InvalidFlow(format!("YAML parse error: {}", e))
-    })?;
+    let doc: YamlDocument = serde_yaml::from_str(yaml_str)
+        .map_err(|e| ExecutorError::InvalidFlow(format!("YAML parse error: {}", e)))?;
 
     convert_yaml_to_flow(doc.flow)
 }
@@ -233,7 +232,10 @@ fn convert_yaml_to_flow(yaml: YamlFlow) -> ExecutorResult<Flow> {
                 .iter()
                 .map(|(k, v)| (k.clone(), convert_param_def(v.clone())))
                 .collect(),
-            out: yaml_args.out.as_ref().map(|o| convert_output_def(o.clone())),
+            out: yaml_args
+                .out
+                .as_ref()
+                .map(|o| convert_output_def(o.clone())),
             entry: entry_nodes,
         }
     } else {
@@ -305,10 +307,7 @@ fn convert_param_def(yaml: YamlParamDef) -> ParamDef {
 
 /// 转换输出定义
 fn convert_output_def(fields: Vec<YamlOutputField>) -> OutputDef {
-    let map: HashMap<String, String> = fields
-        .into_iter()
-        .map(|f| (f.name, f.r#type))
-        .collect();
+    let map: HashMap<String, String> = fields.into_iter().map(|f| (f.name, f.r#type)).collect();
     OutputDef::Structured(map)
 }
 
@@ -360,68 +359,138 @@ fn convert_yaml_node(yaml: YamlNode) -> FlowNode {
     }
 }
 
+/// 工具类型检测结果
+/// 包含各种工具类型的 URI（oss、mq、mail、sms、service）和节点类型字符串
+type ToolTypeDetectionResult = (
+    Option<String>, // oss
+    Option<String>, // mq
+    Option<String>, // mail
+    Option<String>, // sms
+    Option<String>, // service
+    Option<String>, // node_type_str
+);
+
 /// 从 exec URI 前缀检测工具类型，返回填充的专用字段
 ///
 /// 如果 YAML 中已显式设置了专用字段（如 oss:），则优先使用
 /// 否则从 exec 字段的 URI 前缀推断
-fn detect_tool_type_from_exec(yaml: &YamlNode) -> (
-    Option<String>,  // oss
-    Option<String>,  // mq
-    Option<String>,  // mail
-    Option<String>,  // sms
-    Option<String>,  // service
-    Option<String>,  // node_type_str
-) {
+fn detect_tool_type_from_exec(yaml: &YamlNode) -> ToolTypeDetectionResult {
     // 如果已显式设置专用字段，优先使用
     if yaml.oss.is_some() {
-        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
-                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("oss".to_string())));
+        return (
+            yaml.oss.clone(),
+            yaml.mq.clone(),
+            yaml.mail.clone(),
+            yaml.sms.clone(),
+            yaml.service.clone(),
+            yaml.node_type_str.clone().or(Some("oss".to_string())),
+        );
     }
     if yaml.mq.is_some() {
-        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
-                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("mq".to_string())));
+        return (
+            yaml.oss.clone(),
+            yaml.mq.clone(),
+            yaml.mail.clone(),
+            yaml.sms.clone(),
+            yaml.service.clone(),
+            yaml.node_type_str.clone().or(Some("mq".to_string())),
+        );
     }
     if yaml.mail.is_some() {
-        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
-                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("mail".to_string())));
+        return (
+            yaml.oss.clone(),
+            yaml.mq.clone(),
+            yaml.mail.clone(),
+            yaml.sms.clone(),
+            yaml.service.clone(),
+            yaml.node_type_str.clone().or(Some("mail".to_string())),
+        );
     }
     if yaml.sms.is_some() {
-        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
-                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("sms".to_string())));
+        return (
+            yaml.oss.clone(),
+            yaml.mq.clone(),
+            yaml.mail.clone(),
+            yaml.sms.clone(),
+            yaml.service.clone(),
+            yaml.node_type_str.clone().or(Some("sms".to_string())),
+        );
     }
     if yaml.service.is_some() {
-        return (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
-                yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone().or(Some("service".to_string())));
+        return (
+            yaml.oss.clone(),
+            yaml.mq.clone(),
+            yaml.mail.clone(),
+            yaml.sms.clone(),
+            yaml.service.clone(),
+            yaml.node_type_str.clone().or(Some("service".to_string())),
+        );
     }
 
     // 如果没有显式设置，从 exec 字段检测
     if let Some(ref exec_uri) = yaml.exec {
         let lower = exec_uri.to_lowercase();
         if lower.starts_with("oss://") {
-            return (Some(exec_uri.clone()), None, None, None, None,
-                    yaml.node_type_str.clone().or(Some("oss".to_string())));
+            return (
+                Some(exec_uri.clone()),
+                None,
+                None,
+                None,
+                None,
+                yaml.node_type_str.clone().or(Some("oss".to_string())),
+            );
         }
         if lower.starts_with("mq://") {
-            return (None, Some(exec_uri.clone()), None, None, None,
-                    yaml.node_type_str.clone().or(Some("mq".to_string())));
+            return (
+                None,
+                Some(exec_uri.clone()),
+                None,
+                None,
+                None,
+                yaml.node_type_str.clone().or(Some("mq".to_string())),
+            );
         }
         if lower.starts_with("mail://") {
-            return (None, None, Some(exec_uri.clone()), None, None,
-                    yaml.node_type_str.clone().or(Some("mail".to_string())));
+            return (
+                None,
+                None,
+                Some(exec_uri.clone()),
+                None,
+                None,
+                yaml.node_type_str.clone().or(Some("mail".to_string())),
+            );
         }
         if lower.starts_with("sms://") {
-            return (None, None, None, Some(exec_uri.clone()), None,
-                    yaml.node_type_str.clone().or(Some("sms".to_string())));
+            return (
+                None,
+                None,
+                None,
+                Some(exec_uri.clone()),
+                None,
+                yaml.node_type_str.clone().or(Some("sms".to_string())),
+            );
         }
         if lower.starts_with("svc://") {
-            return (None, None, None, None, Some(exec_uri.clone()),
-                    yaml.node_type_str.clone().or(Some("service".to_string())));
+            return (
+                None,
+                None,
+                None,
+                None,
+                Some(exec_uri.clone()),
+                yaml.node_type_str.clone().or(Some("service".to_string())),
+            );
         }
     }
 
     // 没有检测到特殊工具类型，保持原样
-    (yaml.oss.clone(), yaml.mq.clone(), yaml.mail.clone(),
-     yaml.sms.clone(), yaml.service.clone(), yaml.node_type_str.clone())
+    (
+        yaml.oss.clone(),
+        yaml.mq.clone(),
+        yaml.mail.clone(),
+        yaml.sms.clone(),
+        yaml.service.clone(),
+        yaml.node_type_str.clone(),
+    )
 }
 
 #[cfg(test)]
@@ -506,7 +575,10 @@ flow:
 
         // 验证 customer 节点
         let customer = flow.nodes.get("customer").unwrap();
-        assert_eq!(customer.exec, Some("api://crm-service/customer".to_string()));
+        assert_eq!(
+            customer.exec,
+            Some("api://crm-service/customer".to_string())
+        );
         assert_eq!(customer.next, Some("merge".to_string()));
 
         // 验证 merge 节点
@@ -515,7 +587,10 @@ flow:
 
         // 验证 orderCount 节点
         let order_count = flow.nodes.get("orderCount").unwrap();
-        assert_eq!(order_count.exec, Some("db://ec.mysql.order/count".to_string()));
+        assert_eq!(
+            order_count.exec,
+            Some("db://ec.mysql.order/count".to_string())
+        );
         assert!(order_count.args.is_some());
     }
 
@@ -602,22 +677,40 @@ flow:
         let value = result.unwrap();
 
         // 验证系统变量已被过滤
-        assert!(value.get("tenantId").is_none(), "tenantId should be filtered");
+        assert!(
+            value.get("tenantId").is_none(),
+            "tenantId should be filtered"
+        );
         assert!(value.get("buCode").is_none(), "buCode should be filtered");
 
         // 验证 customer 节点被执行
-        assert!(value.get("customer").is_some(), "customer node should be executed");
+        assert!(
+            value.get("customer").is_some(),
+            "customer node should be executed"
+        );
 
         // 验证 orderCount 节点被执行
-        assert!(value.get("orderCount").is_some(), "orderCount node should be executed");
+        assert!(
+            value.get("orderCount").is_some(),
+            "orderCount node should be executed"
+        );
 
         // 验证 merge 节点被执行
-        assert!(value.get("merge").is_some(), "merge node should be executed");
+        assert!(
+            value.get("merge").is_some(),
+            "merge node should be executed"
+        );
 
         // 验证 merge 节点正确展开了 customer 的结果
         let merge = value.get("merge").unwrap();
-        assert!(merge.get("success").is_some(), "merge should have spread customer's success field");
-        assert!(merge.get("orders").is_some(), "merge should have orders field");
+        assert!(
+            merge.get("success").is_some(),
+            "merge should have spread customer's success field"
+        );
+        assert!(
+            merge.get("orders").is_some(),
+            "merge should have orders field"
+        );
     }
 
     #[tokio::test]
@@ -653,9 +746,18 @@ flow:
 
         // 节点结果应该包含所有字段
         let compute = compute.unwrap();
-        assert!(compute.get("result").is_some(), "result should be in compute output");
-        assert!(compute.get("message").is_some(), "message should be in compute output");
-        assert!(compute.get("extra").is_some(), "extra should be in compute output (runtime will filter)");
+        assert!(
+            compute.get("result").is_some(),
+            "result should be in compute output"
+        );
+        assert!(
+            compute.get("message").is_some(),
+            "message should be in compute output"
+        );
+        assert!(
+            compute.get("extra").is_some(),
+            "extra should be in compute output (runtime will filter)"
+        );
     }
 
     #[tokio::test]
@@ -722,8 +824,14 @@ flow:
         // 验证 OSS 节点
         let oss_node = flow.nodes.get("fetchAvatar").unwrap();
         assert_eq!(oss_node.node_type(), crate::types::NodeType::Oss);
-        assert!(oss_node.oss.is_some(), "OSS field should be filled from exec");
-        assert_eq!(oss_node.oss.as_ref().unwrap(), "oss://customer-assets/avatars/test.jpg");
+        assert!(
+            oss_node.oss.is_some(),
+            "OSS field should be filled from exec"
+        );
+        assert_eq!(
+            oss_node.oss.as_ref().unwrap(),
+            "oss://customer-assets/avatars/test.jpg"
+        );
 
         // 验证 MQ 节点
         let mq_node = flow.nodes.get("sendMessage").unwrap();
@@ -733,17 +841,26 @@ flow:
         // 验证 Service 节点
         let svc_node = flow.nodes.get("callService").unwrap();
         assert_eq!(svc_node.node_type(), crate::types::NodeType::Service);
-        assert!(svc_node.service.is_some(), "Service field should be filled from exec");
+        assert!(
+            svc_node.service.is_some(),
+            "Service field should be filled from exec"
+        );
 
         // 验证 Mail 节点
         let mail_node = flow.nodes.get("sendEmail").unwrap();
         assert_eq!(mail_node.node_type(), crate::types::NodeType::Mail);
-        assert!(mail_node.mail.is_some(), "Mail field should be filled from exec");
+        assert!(
+            mail_node.mail.is_some(),
+            "Mail field should be filled from exec"
+        );
 
         // 验证 SMS 节点
         let sms_node = flow.nodes.get("sendSms").unwrap();
         assert_eq!(sms_node.node_type(), crate::types::NodeType::Sms);
-        assert!(sms_node.sms.is_some(), "SMS field should be filled from exec");
+        assert!(
+            sms_node.sms.is_some(),
+            "SMS field should be filled from exec"
+        );
 
         // 验证普通 exec 节点不受影响
         let exec_node = flow.nodes.get("normalExec").unwrap();

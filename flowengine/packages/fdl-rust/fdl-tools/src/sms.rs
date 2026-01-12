@@ -10,7 +10,7 @@ use crate::models::SmsConfig;
 use crate::registry::{ToolHandler, ToolMetadata};
 use crate::{ToolContext, ToolOutput};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -31,7 +31,7 @@ pub enum SmsOperation {
 }
 
 impl SmsOperation {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "send" | "sms" => Some(SmsOperation::Send),
             "template" | "send_template" | "sendtemplate" => Some(SmsOperation::SendTemplate),
@@ -80,7 +80,7 @@ impl SmsHandler {
 
         let service_id = parts[0].to_string();
         let operation = if parts.len() > 1 {
-            SmsOperation::from_str(parts[1]).unwrap_or(SmsOperation::Send)
+            SmsOperation::from_strs(parts[1]).unwrap_or(SmsOperation::Send)
         } else {
             SmsOperation::Send
         };
@@ -92,19 +92,19 @@ impl SmsHandler {
     fn normalize_phone(&self, phone: &str, config: &SmsConfig) -> String {
         let phone = phone.trim();
         // 如果配置了区域且手机号不带国际码，添加国际码
-        if let Some(region) = &config.region {
-            if !phone.starts_with('+') {
-                let country_code = match region.to_lowercase().as_str() {
-                    "cn" | "china" => "+86",
-                    "us" | "usa" => "+1",
-                    "uk" => "+44",
-                    "hk" => "+852",
-                    "tw" => "+886",
-                    _ => "",
-                };
-                if !country_code.is_empty() {
-                    return format!("{}{}", country_code, phone);
-                }
+        if let Some(region) = &config.region
+            && !phone.starts_with('+')
+        {
+            let country_code = match region.to_lowercase().as_str() {
+                "cn" | "china" => "+86",
+                "us" | "usa" => "+1",
+                "uk" => "+44",
+                "hk" => "+852",
+                "tw" => "+886",
+                _ => "",
+            };
+            if !country_code.is_empty() {
+                return format!("{}{}", country_code, phone);
             }
         }
         phone.to_string()
@@ -124,9 +124,7 @@ impl SmsHandler {
             .or_else(|| args.get("message"))
             .or_else(|| args.get("text"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                ToolError::InvalidArgument("Missing 'content' parameter".to_string())
-            })?;
+            .ok_or_else(|| ToolError::InvalidArgument("Missing 'content' parameter".to_string()))?;
 
         let normalized_phone = self.normalize_phone(phone, config);
         let message_id = uuid::Uuid::new_v4().to_string();
@@ -208,7 +206,7 @@ impl SmsHandler {
             _ => {
                 return Err(ToolError::InvalidArgument(
                     "'phones' must be an array or comma-separated string".to_string(),
-                ))
+                ));
             }
         };
 
@@ -260,7 +258,9 @@ impl SmsHandler {
             .or_else(|| args.get("id"))
             .or_else(|| args.get("bizId"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::InvalidArgument("Missing 'messageId' parameter".to_string()))?;
+            .ok_or_else(|| {
+                ToolError::InvalidArgument("Missing 'messageId' parameter".to_string())
+            })?;
 
         // 模拟状态查询
         let result = json!({
@@ -317,7 +317,8 @@ impl ToolHandler for SmsHandler {
         let result = match operation {
             SmsOperation::Send => self.execute_send(&connection.config, &args).await?,
             SmsOperation::SendTemplate => {
-                self.execute_send_template(&connection.config, &args).await?
+                self.execute_send_template(&connection.config, &args)
+                    .await?
             }
             SmsOperation::BatchSend => self.execute_batch_send(&connection.config, &args).await?,
             SmsOperation::Status => self.execute_status(&connection.config, &args).await?,
@@ -394,10 +395,7 @@ mod tests {
         assert_eq!(output.value.get("success"), Some(&json!(true)));
         assert!(output.value.get("messageId").is_some());
         // 验证国际码添加
-        assert_eq!(
-            output.value.get("phone"),
-            Some(&json!("+8613800138000"))
-        );
+        assert_eq!(output.value.get("phone"), Some(&json!("+8613800138000")));
     }
 
     #[tokio::test]
@@ -422,16 +420,11 @@ mod tests {
             }
         });
 
-        let result = handler
-            .execute("aliyun-sms/template", args, &context)
-            .await;
+        let result = handler.execute("aliyun-sms/template", args, &context).await;
         assert!(result.is_ok());
 
         let output = result.unwrap();
-        assert_eq!(
-            output.value.get("templateCode"),
-            Some(&json!("SMS_12345"))
-        );
+        assert_eq!(output.value.get("templateCode"), Some(&json!("SMS_12345")));
     }
 
     #[tokio::test]

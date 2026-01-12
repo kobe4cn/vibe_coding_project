@@ -47,36 +47,57 @@ pub use config::{
 };
 
 // ToolSpec 规范数据模型
-pub use models::{
-    // 工具服务类型
-    ToolType,
-    // 工具服务和工具
-    ToolService, Tool,
-    // 工具参数定义
-    ToolArgs, TypeDef, FieldDef, ParamDef, OutputDef, ConfigOptions,
-    // 服务配置
-    ToolServiceConfig,
-    ApiConfig, ApiAuth, RetryConfig,
-    McpConfig, McpTransport, McpServerInfo, McpClientInfo,
-    DbConfig, DbType,
-    FlowConfig,
-    AgentConfig,
-    SvcConfig, ServiceDiscovery, ServiceProtocol, LoadBalancer,
-    OssConfig, OssProvider, OssCredentials,
-    MqConfig, MqBroker, MessageSerialization,
-    MailConfig, MailProvider,
-    SmsConfig, SmsProvider,
-};
 pub use error::{ToolError, ToolResult};
 pub use managed::{ManagedToolRegistry, ParsedUri};
+pub use models::{
+    AgentConfig,
+    ApiAuth,
+    ApiConfig,
+    ConfigOptions,
+    DbConfig,
+    DbType,
+    FieldDef,
+    FlowConfig,
+    LoadBalancer,
+    MailConfig,
+    MailProvider,
+    McpClientInfo,
+    McpConfig,
+    McpServerInfo,
+    McpTransport,
+    MessageSerialization,
+    MqBroker,
+    MqConfig,
+    OssConfig,
+    OssCredentials,
+    OssProvider,
+    OutputDef,
+    ParamDef,
+    RetryConfig,
+    ServiceDiscovery,
+    ServiceProtocol,
+    SmsConfig,
+    SmsProvider,
+    SvcConfig,
+    Tool,
+    // 工具参数定义
+    ToolArgs,
+    // 工具服务和工具
+    ToolService,
+    // 服务配置
+    ToolServiceConfig,
+    // 工具服务类型
+    ToolType,
+    TypeDef,
+};
 pub use postgres_config::PostgresConfigStore;
+pub use postgres_service_store::PostgresToolServiceStore;
 pub use registry::{ToolHandler, ToolRegistry};
 pub use service_store::{InMemoryToolServiceStore, ToolServiceStore};
-pub use postgres_service_store::PostgresToolServiceStore;
 // 工具发现
 pub use discovery::{
-    DiscoveredParameter, DiscoveredTool, OpenApiInfo, OpenApiParser, OpenApiSpec,
-    OpenApiVersion, ToolDiscoveryService,
+    DiscoveredParameter, DiscoveredTool, OpenApiInfo, OpenApiParser, OpenApiSpec, OpenApiVersion,
+    ToolDiscoveryService,
 };
 
 // 集成服务 Handlers

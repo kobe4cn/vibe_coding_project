@@ -43,11 +43,22 @@ pub struct ManagedToolRegistry {
     http_client: Client,
 }
 
+/// RabbitMQ 执行参数
+/// 组合执行 RabbitMQ 操作所需的所有参数
+struct RabbitMqExecuteParams<'a> {
+    operation: &'a str,
+    queue_name: &'a str,
+    uri_exchange: Option<&'a str>,
+    uri_routing_key: &'a str,
+    args: &'a Value,
+    start: Instant,
+}
+
 impl ManagedToolRegistry {
     /// 创建 HTTP 客户端（禁用代理以避免 localhost 请求被代理）
     fn create_http_client() -> Client {
         Client::builder()
-            .no_proxy()  // 禁用系统代理，避免 localhost 请求被代理导致 503
+            .no_proxy() // 禁用系统代理，避免 localhost 请求被代理导致 503
             .build()
             .unwrap_or_else(|_| Client::new())
     }
@@ -85,16 +96,15 @@ impl ManagedToolRegistry {
         tool_type: ToolType,
         service_code: &str,
     ) -> ToolResult<Option<ToolServiceConfig>> {
-        if let Some(store) = &self.service_store {
-            if let Some(service) = store
+        if let Some(store) = &self.service_store
+            && let Some(service) = store
                 .get_service_by_code(tenant_id, tool_type, service_code)
                 .await?
-            {
-                if service.enabled {
-                    return Ok(Some(service.config));
-                }
-            }
+            && service.enabled
+        {
+            return Ok(Some(service.config));
         }
+
         Ok(None)
     }
 
@@ -558,7 +568,11 @@ impl ManagedToolRegistry {
                     }
                 };
 
-                tracing::info!("OSS upload to '{}', content length: {} bytes", path, content.len());
+                tracing::info!(
+                    "OSS upload to '{}', content length: {} bytes",
+                    path,
+                    content.len()
+                );
 
                 let content_type = args
                     .get("contentType")
@@ -870,16 +884,15 @@ impl ManagedToolRegistry {
         // 根据 broker 类型选择实现
         match mq_config.broker {
             MqBroker::RabbitMq => {
-                self.execute_rabbitmq(
-                    &mq_config,
+                let params = RabbitMqExecuteParams {
                     operation,
-                    queue,
-                    parsed_exchange.as_deref(),
-                    &parsed_routing_key,
-                    &args,
+                    queue_name: queue,
+                    uri_exchange: parsed_exchange.as_deref(),
+                    uri_routing_key: &parsed_routing_key,
+                    args: &args,
                     start,
-                )
-                .await
+                };
+                self.execute_rabbitmq(&mq_config, &params).await
             }
             _ => {
                 // 其他 broker 暂未实现
@@ -893,12 +906,7 @@ impl ManagedToolRegistry {
     async fn execute_rabbitmq(
         &self,
         config: &MqConfig,
-        operation: &str,
-        queue_name: &str,
-        uri_exchange: Option<&str>,
-        uri_routing_key: &str,
-        args: &Value,
-        start: Instant,
+        params: &RabbitMqExecuteParams<'_>,
     ) -> ToolResult<ToolOutput> {
         // 建立连接
         let conn = Connection::connect(&config.connection_string, ConnectionProperties::default())
@@ -908,11 +916,11 @@ impl ManagedToolRegistry {
             })?;
 
         // 获取队列名
-        let queue = config.default_queue.as_deref().unwrap_or(queue_name);
+        let queue = config.default_queue.as_deref().unwrap_or(params.queue_name);
 
-        let result = match operation {
+        let result = match params.operation {
             "publish" | "send" => {
-                let message = args.get("message").cloned().unwrap_or(Value::Null);
+                let message = params.args.get("message").cloned().unwrap_or(Value::Null);
 
                 // 序列化消息
                 let payload = match config.serialization {
@@ -928,19 +936,21 @@ impl ManagedToolRegistry {
                 };
 
                 // 获取 exchange：args > URI > config > 默认空
-                let exchange = args
+                let exchange = params
+                    .args
                     .get("exchange")
                     .and_then(|v| v.as_str())
-                    .or(uri_exchange)
+                    .or(params.uri_exchange)
                     .or(config.default_exchange.as_deref())
                     .unwrap_or("");
 
                 // 获取 routing_key：args > URI > config > queue
-                let routing_key = args
+                let routing_key = params
+                    .args
                     .get("routingKey")
-                    .or_else(|| args.get("routing_key"))
+                    .or_else(|| params.args.get("routing_key"))
                     .and_then(|v| v.as_str())
-                    .unwrap_or(uri_routing_key);
+                    .unwrap_or(params.uri_routing_key);
                 let routing_key = if routing_key.is_empty() {
                     config.default_routing_key.as_deref().unwrap_or(queue)
                 } else {
@@ -949,7 +959,12 @@ impl ManagedToolRegistry {
 
                 // 使用独立 channel 声明 queue/exchange/binding（失败不影响发布）
                 // AMQP 协议中，声明失败会关闭 channel，所以用单独的 channel
-                tracing::info!("Setting up RabbitMQ resources: queue='{}', exchange='{}', routing_key='{}'", queue, exchange, routing_key);
+                tracing::info!(
+                    "Setting up RabbitMQ resources: queue='{}', exchange='{}', routing_key='{}'",
+                    queue,
+                    exchange,
+                    routing_key
+                );
 
                 // Step 1: 声明队列
                 match conn.create_channel().await {
@@ -964,12 +979,16 @@ impl ManagedToolRegistry {
                         {
                             Ok(q) => tracing::info!(
                                 "Queue '{}' ready: {} messages, {} consumers",
-                                q.name(), q.message_count(), q.consumer_count()
+                                q.name(),
+                                q.message_count(),
+                                q.consumer_count()
                             ),
                             Err(e) => tracing::warn!("Queue '{}' declaration failed: {}", queue, e),
                         }
                     }
-                    Err(e) => tracing::warn!("Failed to create channel for queue declaration: {}", e),
+                    Err(e) => {
+                        tracing::warn!("Failed to create channel for queue declaration: {}", e)
+                    }
                 }
 
                 // Step 2: 如果指定了 exchange，声明并绑定
@@ -982,7 +1001,7 @@ impl ManagedToolRegistry {
                                     exchange,
                                     lapin::ExchangeKind::Topic,
                                     lapin::options::ExchangeDeclareOptions {
-                                        durable: true,  // 匹配生产环境的 durable exchange
+                                        durable: true, // 匹配生产环境的 durable exchange
                                         ..Default::default()
                                     },
                                     lapin::types::FieldTable::default(),
@@ -990,19 +1009,29 @@ impl ManagedToolRegistry {
                                 .await
                             {
                                 Ok(_) => {
-                                    tracing::info!("Exchange '{}' declared successfully (durable=true)", exchange);
+                                    tracing::info!(
+                                        "Exchange '{}' declared successfully (durable=true)",
+                                        exchange
+                                    );
                                     true
                                 }
                                 Err(e) => {
                                     // 声明失败可能是因为 exchange 已存在但配置不同
                                     // 尝试使用 passive=true 检查 exchange 是否存在
-                                    tracing::warn!("Exchange '{}' declaration failed: {}", exchange, e);
+                                    tracing::warn!(
+                                        "Exchange '{}' declaration failed: {}",
+                                        exchange,
+                                        e
+                                    );
                                     false
                                 }
                             }
                         }
                         Err(e) => {
-                            tracing::warn!("Failed to create channel for exchange declaration: {}", e);
+                            tracing::warn!(
+                                "Failed to create channel for exchange declaration: {}",
+                                e
+                            );
                             false
                         }
                     };
@@ -1023,31 +1052,38 @@ impl ManagedToolRegistry {
                             {
                                 Ok(_) => tracing::info!(
                                     "Queue '{}' bound to exchange '{}' with routing key '{}'",
-                                    queue, exchange, routing_key
+                                    queue,
+                                    exchange,
+                                    routing_key
                                 ),
                                 Err(e) => tracing::warn!(
                                     "Queue '{}' bind to exchange '{}' failed: {}",
-                                    queue, exchange, e
+                                    queue,
+                                    exchange,
+                                    e
                                 ),
                             }
                         }
-                        Err(e) => tracing::warn!("Failed to create channel for queue binding: {}", e),
+                        Err(e) => {
+                            tracing::warn!("Failed to create channel for queue binding: {}", e)
+                        }
                     }
 
                     let _ = exchange_ok; // suppress unused warning
                 }
 
                 // 创建发布用的 channel 并启用 publisher confirms
-                let pub_channel = conn
-                    .create_channel()
-                    .await
-                    .map_err(|e| ToolError::ExecutionError(format!("Failed to create publish channel: {}", e)))?;
+                let pub_channel = conn.create_channel().await.map_err(|e| {
+                    ToolError::ExecutionError(format!("Failed to create publish channel: {}", e))
+                })?;
 
                 // 启用 publisher confirms 以获得准确的确认
                 pub_channel
                     .confirm_select(lapin::options::ConfirmSelectOptions::default())
                     .await
-                    .map_err(|e| ToolError::ExecutionError(format!("Failed to enable confirms: {}", e)))?;
+                    .map_err(|e| {
+                        ToolError::ExecutionError(format!("Failed to enable confirms: {}", e))
+                    })?;
 
                 tracing::info!(
                     "RabbitMQ publish: exchange='{}', routing_key='{}', queue='{}', payload_size={}",
@@ -1079,13 +1115,16 @@ impl ManagedToolRegistry {
                 let nacked = confirm.is_nack();
                 tracing::info!(
                     "RabbitMQ publish confirmed: ack={}, nack={}, confirm={:?}",
-                    acked, nacked, confirm
+                    acked,
+                    nacked,
+                    confirm
                 );
 
                 if !acked {
                     tracing::warn!(
                         "Message was NOT acknowledged! exchange='{}', routing_key='{}'. Check if exchange exists and has bindings.",
-                        exchange, routing_key
+                        exchange,
+                        routing_key
                     );
                 }
 
@@ -1100,10 +1139,9 @@ impl ManagedToolRegistry {
             }
             "consume" | "receive" | "get" => {
                 // 创建 channel
-                let channel = conn
-                    .create_channel()
-                    .await
-                    .map_err(|e| ToolError::ExecutionError(format!("Failed to create channel: {}", e)))?;
+                let channel = conn.create_channel().await.map_err(|e| {
+                    ToolError::ExecutionError(format!("Failed to create channel: {}", e))
+                })?;
 
                 // 尝试获取一条消息（non-blocking）
                 let delivery = channel
@@ -1119,7 +1157,8 @@ impl ManagedToolRegistry {
                             .unwrap_or(Value::String(content.clone()));
 
                         // 自动 ack
-                        let auto_ack = args
+                        let auto_ack = params
+                            .args
                             .get("auto_ack")
                             .and_then(|v| v.as_bool())
                             .unwrap_or(true);
@@ -1150,10 +1189,9 @@ impl ManagedToolRegistry {
             }
             "purge" => {
                 // 创建 channel
-                let channel = conn
-                    .create_channel()
-                    .await
-                    .map_err(|e| ToolError::ExecutionError(format!("Failed to create channel: {}", e)))?;
+                let channel = conn.create_channel().await.map_err(|e| {
+                    ToolError::ExecutionError(format!("Failed to create channel: {}", e))
+                })?;
 
                 // 清空队列
                 let purged_count = channel
@@ -1170,7 +1208,7 @@ impl ManagedToolRegistry {
             _ => {
                 serde_json::json!({
                     "success": false,
-                    "error": format!("Unknown MQ operation: {}", operation)
+                    "error": format!("Unknown MQ operation: {}", params.operation)
                 })
             }
         };
@@ -1178,11 +1216,11 @@ impl ManagedToolRegistry {
         // 关闭连接
         let _ = conn.close(0, "normal shutdown").await;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = params.start.elapsed().as_millis() as u64;
         Ok(ToolOutput {
             value: result,
             duration_ms,
-            messages: vec![format!("MQ operation '{}' completed", operation)],
+            messages: vec![format!("MQ operation '{}' completed", params.operation)],
         })
     }
 
@@ -1277,7 +1315,11 @@ impl ManagedToolRegistry {
 
         // 获取服务端点（支持服务发现）
         let endpoint = self.resolve_service_endpoint(&svc_config)?;
-        tracing::info!("Resolved endpoint for '{}': {}", parsed.service_name, endpoint);
+        tracing::info!(
+            "Resolved endpoint for '{}': {}",
+            parsed.service_name,
+            endpoint
+        );
 
         // 构建完整 URL
         let url = format!("{}/{}", endpoint.trim_end_matches('/'), endpoint_path);
@@ -1366,7 +1408,11 @@ impl ManagedToolRegistry {
                 method,
                 url,
                 status,
-                if message.is_empty() { "<empty>" } else { &message }
+                if message.is_empty() {
+                    "<empty>"
+                } else {
+                    &message
+                }
             );
             return Err(ToolError::HttpError {
                 status: status.as_u16(),

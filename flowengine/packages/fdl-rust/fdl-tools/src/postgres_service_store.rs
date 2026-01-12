@@ -3,9 +3,7 @@
 //! 实现 ToolServiceStore trait，将 ToolService 和 Tool 持久化到 PostgreSQL。
 
 use crate::error::{ToolError, ToolResult};
-use crate::models::{
-    Tool, ToolArgs, ToolService, ToolServiceConfig, ToolType,
-};
+use crate::models::{Tool, ToolArgs, ToolService, ToolServiceConfig, ToolType};
 use crate::service_store::ToolServiceStore;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -39,8 +37,7 @@ impl PostgresToolServiceStore {
 
     /// 解析 ID 为 UUID
     fn parse_id(id: &str) -> ToolResult<Uuid> {
-        Uuid::parse_str(id)
-            .map_err(|e| ToolError::InvalidUri(format!("Invalid UUID: {}", e)))
+        Uuid::parse_str(id).map_err(|e| ToolError::InvalidUri(format!("Invalid UUID: {}", e)))
     }
 
     /// ToolType 转数据库字符串
@@ -61,7 +58,7 @@ impl PostgresToolServiceStore {
 
     /// 从数据库字符串解析 ToolType
     fn parse_tool_type(s: &str) -> Option<ToolType> {
-        ToolType::from_str(s)
+        ToolType::from_strs(s)
     }
 }
 
@@ -84,8 +81,10 @@ impl TryFrom<ToolServiceRow> for ToolService {
     type Error = ToolError;
 
     fn try_from(row: ToolServiceRow) -> Result<Self, Self::Error> {
-        let tool_type = PostgresToolServiceStore::parse_tool_type(&row.tool_type)
-            .ok_or_else(|| ToolError::InvalidUri(format!("Unknown tool type: {}", row.tool_type)))?;
+        let tool_type =
+            PostgresToolServiceStore::parse_tool_type(&row.tool_type).ok_or_else(|| {
+                ToolError::InvalidUri(format!("Unknown tool type: {}", row.tool_type))
+            })?;
 
         let config: ToolServiceConfig = serde_json::from_value(row.config)
             .map_err(|e| ToolError::ExecutionError(format!("Failed to parse config: {}", e)))?;
@@ -128,8 +127,9 @@ impl TryFrom<ToolRow> for Tool {
         let args: ToolArgs = serde_json::from_value(row.args)
             .map_err(|e| ToolError::ExecutionError(format!("Failed to parse args: {}", e)))?;
 
-        let opts = row.opts
-            .map(|v| serde_json::from_value(v))
+        let opts = row
+            .opts
+            .map(serde_json::from_value)
             .transpose()
             .map_err(|e| ToolError::ExecutionError(format!("Failed to parse opts: {}", e)))?;
 
@@ -169,9 +169,7 @@ impl ToolServiceStore for PostgresToolServiceStore {
         .await
         .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
 
-        rows.into_iter()
-            .map(ToolService::try_from)
-            .collect()
+        rows.into_iter().map(ToolService::try_from).collect()
     }
 
     async fn list_services_by_type(
@@ -197,9 +195,7 @@ impl ToolServiceStore for PostgresToolServiceStore {
         .await
         .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
 
-        rows.into_iter()
-            .map(ToolService::try_from)
-            .collect()
+        rows.into_iter().map(ToolService::try_from).collect()
     }
 
     async fn get_service(&self, tenant_id: &str, id: &str) -> ToolResult<Option<ToolService>> {
@@ -252,8 +248,7 @@ impl ToolServiceStore for PostgresToolServiceStore {
 
     async fn save_service(&self, tenant_id: &str, service: ToolService) -> ToolResult<ToolService> {
         let tenant_uuid = Self::parse_tenant_id(tenant_id);
-        let service_uuid = Uuid::parse_str(&service.id)
-            .unwrap_or_else(|_| Uuid::new_v4());
+        let service_uuid = Uuid::parse_str(&service.id).unwrap_or_else(|_| Uuid::new_v4());
         let tool_type_str = Self::tool_type_to_string(&service.tool_type);
         let config_json = serde_json::to_value(&service.config)
             .map_err(|e| ToolError::ExecutionError(format!("Failed to serialize config: {}", e)))?;
@@ -300,14 +295,12 @@ impl ToolServiceStore for PostgresToolServiceStore {
             .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
 
         // 再删除服务本身
-        let result = sqlx::query(
-            "DELETE FROM tool_services WHERE tenant_id = $1 AND id = $2"
-        )
-        .bind(tenant_uuid)
-        .bind(service_uuid)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
+        let result = sqlx::query("DELETE FROM tool_services WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_uuid)
+            .bind(service_uuid)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -326,7 +319,7 @@ impl ToolServiceStore for PostgresToolServiceStore {
             UPDATE tool_services
             SET enabled = $3, updated_at = NOW()
             WHERE tenant_id = $1 AND id = $2
-            "#
+            "#,
         )
         .bind(tenant_uuid)
         .bind(service_uuid)
@@ -357,9 +350,7 @@ impl ToolServiceStore for PostgresToolServiceStore {
         .await
         .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
 
-        rows.into_iter()
-            .map(Tool::try_from)
-            .collect()
+        rows.into_iter().map(Tool::try_from).collect()
     }
 
     async fn get_tool(&self, _tenant_id: &str, id: &str) -> ToolResult<Option<Tool>> {
@@ -407,13 +398,14 @@ impl ToolServiceStore for PostgresToolServiceStore {
     }
 
     async fn save_tool(&self, _tenant_id: &str, tool: Tool) -> ToolResult<Tool> {
-        let tool_uuid = Uuid::parse_str(&tool.id)
-            .unwrap_or_else(|_| Uuid::new_v4());
+        let tool_uuid = Uuid::parse_str(&tool.id).unwrap_or_else(|_| Uuid::new_v4());
         let service_uuid = Self::parse_id(&tool.service_id)?;
         let args_json = serde_json::to_value(&tool.args)
             .map_err(|e| ToolError::ExecutionError(format!("Failed to serialize args: {}", e)))?;
-        let opts_json = tool.opts.as_ref()
-            .map(|o| serde_json::to_value(o))
+        let opts_json = tool
+            .opts
+            .as_ref()
+            .map(serde_json::to_value)
             .transpose()
             .map_err(|e| ToolError::ExecutionError(format!("Failed to serialize opts: {}", e)))?;
 
@@ -468,14 +460,12 @@ impl ToolServiceStore for PostgresToolServiceStore {
     ) -> ToolResult<bool> {
         let tool_uuid = Self::parse_id(id)?;
 
-        let result = sqlx::query(
-            "UPDATE tools SET enabled = $2, updated_at = NOW() WHERE id = $1"
-        )
-        .bind(tool_uuid)
-        .bind(enabled)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
+        let result = sqlx::query("UPDATE tools SET enabled = $2, updated_at = NOW() WHERE id = $1")
+            .bind(tool_uuid)
+            .bind(enabled)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ToolError::DatabaseError(e.to_string()))?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -490,11 +480,9 @@ impl ToolServiceStore for PostgresToolServiceStore {
         // 解析 URI: tool-type://service-code/tool-code
         let parsed = crate::parse_tool_uri(uri)?;
 
-        let tool_type = ToolType::from_str(&parsed.tool_type)
-            .ok_or_else(|| ToolError::InvalidUri(format!(
-                "Unknown tool type: {}",
-                parsed.tool_type
-            )))?;
+        let tool_type = ToolType::from_strs(&parsed.tool_type).ok_or_else(|| {
+            ToolError::InvalidUri(format!("Unknown tool type: {}", parsed.tool_type))
+        })?;
 
         let path_parts: Vec<&str> = parsed.path.split('/').collect();
         if path_parts.len() < 2 {
@@ -551,12 +539,27 @@ mod tests {
 
     #[test]
     fn test_tool_type_conversion() {
-        assert_eq!(PostgresToolServiceStore::tool_type_to_string(&ToolType::Api), "api");
-        assert_eq!(PostgresToolServiceStore::tool_type_to_string(&ToolType::Mcp), "mcp");
-        assert_eq!(PostgresToolServiceStore::tool_type_to_string(&ToolType::Db), "db");
+        assert_eq!(
+            PostgresToolServiceStore::tool_type_to_string(&ToolType::Api),
+            "api"
+        );
+        assert_eq!(
+            PostgresToolServiceStore::tool_type_to_string(&ToolType::Mcp),
+            "mcp"
+        );
+        assert_eq!(
+            PostgresToolServiceStore::tool_type_to_string(&ToolType::Db),
+            "db"
+        );
 
-        assert_eq!(PostgresToolServiceStore::parse_tool_type("api"), Some(ToolType::Api));
-        assert_eq!(PostgresToolServiceStore::parse_tool_type("mcp"), Some(ToolType::Mcp));
+        assert_eq!(
+            PostgresToolServiceStore::parse_tool_type("api"),
+            Some(ToolType::Api)
+        );
+        assert_eq!(
+            PostgresToolServiceStore::parse_tool_type("mcp"),
+            Some(ToolType::Mcp)
+        );
         assert_eq!(PostgresToolServiceStore::parse_tool_type("unknown"), None);
     }
 }

@@ -902,10 +902,10 @@ async fn delete_udf(
     Query(query): Query<TenantQuery>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     // 检查是否是内置 UDF
-    if let Ok(Some(udf)) = state.config_store().get_udf(&query.tenant_id, &name).await {
-        if udf.is_builtin {
-            return Err(StatusCode::FORBIDDEN);
-        }
+    if let Ok(Some(udf)) = state.config_store().get_udf(&query.tenant_id, &name).await
+        && udf.is_builtin
+    {
+        return Err(StatusCode::FORBIDDEN);
     }
 
     state
@@ -967,20 +967,20 @@ fn parse_udf_type(s: &str) -> UdfType {
 /// 掩码后：`postgres://***:***@host:port/database`
 fn mask_connection_string(conn_str: &str) -> String {
     // 尝试解析 URL 格式的连接字符串
-    if let Some(at_pos) = conn_str.find('@') {
-        if let Some(scheme_end) = conn_str.find("://") {
-            let scheme = &conn_str[..scheme_end + 3]; // 包含 "://"
-            let after_scheme = &conn_str[scheme_end + 3..at_pos];
-            let after_at = &conn_str[at_pos..];
+    if let Some(at_pos) = conn_str.find('@')
+        && let Some(scheme_end) = conn_str.find("://")
+    {
+        let scheme = &conn_str[..scheme_end + 3]; // 包含 "://"
+        let after_scheme = &conn_str[scheme_end + 3..at_pos];
+        let after_at = &conn_str[at_pos..];
 
-            // 检查是否有用户名:密码格式
-            if after_scheme.contains(':') {
-                // 用户名和密码都掩码
-                return format!("{}***:***{}", scheme, after_at);
-            } else if !after_scheme.is_empty() {
-                // 只有用户名，没有密码
-                return format!("{}***{}", scheme, after_at);
-            }
+        // 检查是否有用户名:密码格式
+        if after_scheme.contains(':') {
+            // 用户名和密码都掩码
+            return format!("{}***:***{}", scheme, after_at);
+        } else if !after_scheme.is_empty() {
+            // 只有用户名，没有密码
+            return format!("{}***{}", scheme, after_at);
         }
     }
 
@@ -1208,15 +1208,18 @@ async fn update_oss_service(
             config.path_style = path_style;
         }
         // 密钥字段：只有非掩码值才更新
-        if let Some(access_key_id) = req.get("access_key_id").and_then(|v| v.as_str()) {
-            if !access_key_id.is_empty() && !access_key_id.contains('*') {
-                config.credentials.access_key_id = access_key_id.to_string();
-            }
+        if let Some(access_key_id) = req.get("access_key_id").and_then(|v| v.as_str())
+            && !access_key_id.is_empty()
+            && !access_key_id.contains('*')
+        {
+            config.credentials.access_key_id = access_key_id.to_string();
         }
-        if let Some(secret_access_key) = req.get("secret_access_key").and_then(|v| v.as_str()) {
-            if !secret_access_key.is_empty() && !secret_access_key.contains('*') {
-                config.credentials.secret_access_key = secret_access_key.to_string();
-            }
+
+        if let Some(secret_access_key) = req.get("secret_access_key").and_then(|v| v.as_str())
+            && !secret_access_key.is_empty()
+            && !secret_access_key.contains('*')
+        {
+            config.credentials.secret_access_key = secret_access_key.to_string();
         }
     }
 
@@ -1486,11 +1489,12 @@ async fn update_mq_service(
             config.broker = parse_mq_broker(broker);
         }
         // 只有当连接字符串不包含掩码时才更新
-        if let Some(connection_string) = req.get("connection_string").and_then(|v| v.as_str()) {
-            if !connection_string.contains('*') {
-                config.connection_string = connection_string.to_string();
-            }
+        if let Some(connection_string) = req.get("connection_string").and_then(|v| v.as_str())
+            && !connection_string.contains('*')
+        {
+            config.connection_string = connection_string.to_string();
         }
+
         if let Some(default_queue) = req.get("default_queue").and_then(|v| v.as_str()) {
             config.default_queue = Some(default_queue.to_string());
         }

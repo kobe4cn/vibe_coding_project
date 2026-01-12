@@ -133,7 +133,11 @@ pub async fn execute_mcp_node(
     // Apply sets if present - 将表达式结果更新到全局变量
     if let Some(sets_expr) = &node.sets {
         let mut ctx = context.write().await;
-        let mut eval_scope = ctx.build_eval_context().as_object().cloned().unwrap_or_default();
+        let mut eval_scope = ctx
+            .build_eval_context()
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         eval_scope.insert(node_id.to_string(), result.clone());
         let sets_ctx = Value::Object(eval_scope);
         let sets_result = fdl_gml::evaluate(sets_expr, &sets_ctx)?;

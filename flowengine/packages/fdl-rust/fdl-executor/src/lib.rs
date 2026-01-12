@@ -188,10 +188,7 @@ impl Executor {
             ctx.execution_id = snapshot.execution_id.to_string();
             ctx.flow_id = Some(snapshot.flow_id.clone());
             ctx.tenant_id = snapshot.tenant_id.clone();
-            ctx.bu_code = self
-                .tool_context
-                .bu_code
-                .clone();
+            ctx.bu_code = self.tool_context.bu_code.clone();
             ctx.set_inputs(snapshot.inputs.clone());
 
             // Restore variables
@@ -242,7 +239,9 @@ impl Executor {
                 status,
             );
             if let Err(ref e) = result {
-                final_snapshot.metadata.insert("error".to_string(), e.to_string());
+                final_snapshot
+                    .metadata
+                    .insert("error".to_string(), e.to_string());
             }
             persistence.save(&final_snapshot).await?;
         }

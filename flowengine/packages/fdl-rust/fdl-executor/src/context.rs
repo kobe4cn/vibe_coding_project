@@ -148,7 +148,7 @@ impl ExecutionContext {
     }
 
     /// 构建 GML 求值上下文
-    /// 
+    ///
     /// 将执行上下文转换为 GML 表达式求值器可以使用的 Value 对象。
     /// 变量优先级（从低到高）：
     /// 1. 输入参数
@@ -260,7 +260,7 @@ impl ExecutionContext {
     }
 
     /// 将子上下文的结果合并回父上下文
-    /// 
+    ///
     /// 只合并子流程的变量输出，不会覆盖父流程的变量。
     /// 这允许子流程返回结果给父流程，同时保持父流程状态的独立性。
     pub fn merge_child_results(&mut self, child: &ExecutionContext) {

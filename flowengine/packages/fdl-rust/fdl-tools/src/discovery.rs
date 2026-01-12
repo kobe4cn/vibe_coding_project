@@ -118,10 +118,10 @@ impl OpenApiParser {
         }
 
         // Swagger 2.0 使用 "swagger" 字段
-        if let Some(swagger) = value.get("swagger").and_then(|v| v.as_str()) {
-            if swagger == "2.0" {
-                return Ok(OpenApiVersion::V2);
-            }
+        if let Some(swagger) = value.get("swagger").and_then(|v| v.as_str())
+            && swagger == "2.0"
+        {
+            return Ok(OpenApiVersion::V2);
         }
 
         Err(ToolError::ParseError(
@@ -141,7 +141,10 @@ impl OpenApiParser {
                 .and_then(|v| v.as_str())
                 .unwrap_or("Untitled API")
                 .to_string(),
-            description: info.get("description").and_then(|v| v.as_str()).map(String::from),
+            description: info
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(String::from),
             version: info
                 .get("version")
                 .and_then(|v| v.as_str())
@@ -173,11 +176,12 @@ impl OpenApiParser {
             OpenApiVersion::V3_0 | OpenApiVersion::V3_1 => {
                 // OpenAPI 3.x: servers 数组
                 let servers = value.get("servers").and_then(|v| v.as_array());
-                if let Some(servers) = servers {
-                    if let Some(first) = servers.first() {
-                        return Ok(first.get("url").and_then(|v| v.as_str()).map(String::from));
-                    }
+                if let Some(servers) = servers
+                    && let Some(first) = servers.first()
+                {
+                    return Ok(first.get("url").and_then(|v| v.as_str()).map(String::from));
                 }
+
                 Ok(None)
             }
         }
@@ -198,11 +202,10 @@ impl OpenApiParser {
                 let methods = ["get", "post", "put", "patch", "delete", "options", "head"];
 
                 for method in &methods {
-                    if let Some(operation) = path_obj.get(*method) {
-                        if let Some(tool) = Self::parse_operation(path, method, operation, version)?
-                        {
-                            tools.push(tool);
-                        }
+                    if let Some(operation) = path_obj.get(*method)
+                        && let Some(tool) = Self::parse_operation(path, method, operation, version)?
+                    {
+                        tools.push(tool);
                     }
                 }
             }
@@ -268,8 +271,7 @@ impl OpenApiParser {
     fn generate_operation_id(path: &str, method: &str) -> String {
         let clean_path = path
             .replace('/', "_")
-            .replace('{', "")
-            .replace('}', "")
+            .replace(['{', '}'], "")
             .trim_matches('_')
             .to_string();
         format!("{}_{}", method, clean_path)
@@ -299,8 +301,14 @@ impl OpenApiParser {
                 .and_then(|v| v.as_str())
                 .unwrap_or("query")
                 .to_string();
-            let required = param.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
-            let description = param.get("description").and_then(|v| v.as_str()).map(String::from);
+            let required = param
+                .get("required")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let description = param
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(String::from);
 
             // 解析类型
             let param_type = Self::extract_type(param);
@@ -326,18 +334,18 @@ impl OpenApiParser {
     ) -> ToolResult<Option<JsonValue>> {
         match version {
             OpenApiVersion::V3_0 | OpenApiVersion::V3_1 => {
-                if let Some(request_body) = operation.get("requestBody") {
-                    if let Some(content) = request_body.get("content") {
-                        // 优先获取 application/json
-                        if let Some(json_content) = content.get("application/json") {
-                            return Ok(json_content.get("schema").cloned());
-                        }
-                        // 其他内容类型
-                        if let Some(obj) = content.as_object() {
-                            if let Some((_, first_content)) = obj.iter().next() {
-                                return Ok(first_content.get("schema").cloned());
-                            }
-                        }
+                if let Some(request_body) = operation.get("requestBody")
+                    && let Some(content) = request_body.get("content")
+                {
+                    // 优先获取 application/json
+                    if let Some(json_content) = content.get("application/json") {
+                        return Ok(json_content.get("schema").cloned());
+                    }
+                    // 其他内容类型
+                    if let Some(obj) = content.as_object()
+                        && let Some((_, first_content)) = obj.iter().next()
+                    {
+                        return Ok(first_content.get("schema").cloned());
                     }
                 }
             }
@@ -374,10 +382,10 @@ impl OpenApiParser {
         if let Some(response) = success_response {
             match version {
                 OpenApiVersion::V3_0 | OpenApiVersion::V3_1 => {
-                    if let Some(content) = response.get("content") {
-                        if let Some(json_content) = content.get("application/json") {
-                            return Ok(json_content.get("schema").cloned());
-                        }
+                    if let Some(content) = response.get("content")
+                        && let Some(json_content) = content.get("application/json")
+                    {
+                        return Ok(json_content.get("schema").cloned());
                     }
                 }
                 OpenApiVersion::V2 => {
@@ -392,10 +400,10 @@ impl OpenApiParser {
     /// 提取类型
     fn extract_type(param: &JsonValue) -> String {
         // OpenAPI 3.x: schema.type
-        if let Some(schema) = param.get("schema") {
-            if let Some(t) = schema.get("type").and_then(|v| v.as_str()) {
-                return t.to_string();
-            }
+        if let Some(schema) = param.get("schema")
+            && let Some(t) = schema.get("type").and_then(|v| v.as_str())
+        {
+            return t.to_string();
         }
 
         // Swagger 2.0: 直接在参数上
@@ -685,7 +693,10 @@ mod tests {
 
         assert_eq!(spec.version, OpenApiVersion::V3_0);
         assert_eq!(spec.info.title, "Pet Store API");
-        assert_eq!(spec.base_url, Some("https://api.petstore.com/v1".to_string()));
+        assert_eq!(
+            spec.base_url,
+            Some("https://api.petstore.com/v1".to_string())
+        );
         assert_eq!(spec.tools.len(), 3);
 
         // Check listPets operation

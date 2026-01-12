@@ -21,8 +21,8 @@ pub mod repository;
 pub mod tenant;
 
 pub use api_key::{
-    ApiKeyContext, ApiKeyError, ApiKeyValidator, ApiKeyValidatorWrapper,
-    api_key_auth_middleware, extract_api_key, hash_api_key,
+    ApiKeyContext, ApiKeyError, ApiKeyValidator, ApiKeyValidatorWrapper, api_key_auth_middleware,
+    extract_api_key, hash_api_key,
 };
 pub use audit::{AuditEntry, AuditEventType, AuditLogger, AuditSeverity, InMemoryAuditLogger};
 pub use error::{AuthError, AuthResult};

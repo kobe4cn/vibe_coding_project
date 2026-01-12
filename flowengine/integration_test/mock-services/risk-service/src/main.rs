@@ -47,10 +47,7 @@ async fn credit_evaluate(Json(req): Json<CreditCheckRequest>) -> Json<CreditChec
         customer_id: req.customer_id,
         score,
         level: level.to_string(),
-        factors: vec![
-            "历史订单记录良好".to_string(),
-            "账户活跃度高".to_string(),
-        ],
+        factors: vec!["历史订单记录良好".to_string(), "账户活跃度高".to_string()],
         checked_at: chrono::Utc::now().to_rfc3339(),
     })
 }
@@ -63,6 +60,8 @@ async fn main() {
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8081".to_string());
     println!("Risk Service running on :{}", port);
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }

@@ -6,7 +6,7 @@
 use crate::value::Value;
 
 /// GML 脚本：一系列语句的集合
-/// 
+///
 /// 脚本可以包含多个语句，语句之间用逗号分隔（可选）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Script {
@@ -25,7 +25,7 @@ pub enum Statement {
 }
 
 /// 赋值语句
-/// 
+///
 /// 用于在 GML 脚本中创建变量，支持临时变量（$ 前缀）用于中间计算。
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
@@ -51,7 +51,7 @@ pub enum Expression {
     This(Vec<String>),
 
     /// 数组/对象索引访问：`arr[0]`、`arr[#]` 或 `obj[key]`
-    /// 
+    ///
     /// 支持三种索引类型：
     /// - 数字索引：`arr[0]`
     /// - 最后元素：`arr[#]`
@@ -117,7 +117,7 @@ pub enum Expression {
 }
 
 /// 索引类型
-/// 
+///
 /// 区分不同类型的索引，以便求值器进行优化处理。
 #[derive(Debug, Clone, PartialEq)]
 pub enum IndexType {

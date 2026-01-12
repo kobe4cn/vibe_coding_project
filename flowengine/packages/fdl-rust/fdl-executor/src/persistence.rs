@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// 执行状态
-/// 
+///
 /// 表示流程执行的当前状态，用于跟踪执行进度和恢复执行。
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ExecutionStatus {
@@ -65,7 +65,7 @@ pub enum NodeStatus {
 }
 
 /// 执行快照：用于持久化的执行状态快照
-/// 
+///
 /// 快照包含恢复执行所需的所有信息：
 /// - 执行上下文（变量、输入）
 /// - 节点执行状态（已完成、失败、进行中）
@@ -175,7 +175,7 @@ impl ExecutionSnapshot {
 }
 
 /// 持久化配置
-/// 
+///
 /// 控制何时和如何保存执行快照，平衡性能和可靠性。
 #[derive(Debug, Clone)]
 pub struct PersistenceConfig {

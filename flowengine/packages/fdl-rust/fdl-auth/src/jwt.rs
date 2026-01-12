@@ -11,7 +11,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 use serde::{Deserialize, Serialize};
 
 /// JWT 配置
-/// 
+///
 /// 配置 JWT token 的签名密钥、发行者和过期时间。
 #[derive(Debug, Clone)]
 pub struct JwtConfig {
@@ -33,7 +33,7 @@ impl Default for JwtConfig {
 }
 
 /// JWT Claims（声明）
-/// 
+///
 /// 包含用户身份和权限信息，嵌入在 JWT token 中。
 /// 这些信息用于多租户隔离和基于角色的访问控制（RBAC）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,7 +104,7 @@ impl JwtService {
     }
 
     /// 生成刷新 token
-    /// 
+    ///
     /// Refresh token 用于获取新的 access token，具有更长的过期时间。
     /// 不包含业务单元代码和业务角色，仅用于身份验证。
     pub fn generate_refresh_token(&self, user_id: &str, tenant_id: &str) -> AuthResult<String> {

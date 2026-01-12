@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// 租户上下文
-/// 
+///
 /// 包含租户的基本信息、配置和状态，用于多租户数据隔离和资源管理。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TenantContext {
@@ -85,12 +85,12 @@ impl TenantContext {
     }
 
     /// 检查配额是否在限制范围内
-    /// 
+    ///
     /// 验证租户的使用量是否超过配额限制，包括：
     /// - 流程数量限制
     /// - 每日执行次数限制
     /// - 存储空间限制
-    /// 
+    ///
     /// 如果任何一项超过限制，返回 QuotaExceeded 错误。
     pub fn check_quota(&self, quota: &TenantQuota, usage: &TenantUsage) -> crate::AuthResult<()> {
         if usage.flow_count >= quota.max_flows {

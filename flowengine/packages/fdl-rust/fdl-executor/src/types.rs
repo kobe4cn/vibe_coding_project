@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// 流程定义
-/// 
+///
 /// 包含流程的元数据、参数定义、全局变量和节点定义。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Flow {

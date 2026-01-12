@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// GML 值类型，表示 GML 中所有可能的值
-/// 
+///
 /// 使用 untagged 枚举确保序列化为标准 JSON 格式（无类型标签）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(untagged)]
@@ -80,7 +80,7 @@ impl Value {
     }
 
     /// 检查值是否为真值（truthy）
-    /// 
+    ///
     /// GML 的真值规则：
     /// - Null: false
     /// - Bool: 直接使用布尔值

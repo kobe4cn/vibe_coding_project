@@ -59,7 +59,7 @@ impl ToolType {
     }
 
     /// 从字符串解析工具类型
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "api" => Some(ToolType::Api),
             "mcp" => Some(ToolType::Mcp),
@@ -194,14 +194,9 @@ fn default_timeout() -> u64 {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ApiAuth {
     /// Basic 认证
-    Basic {
-        username: String,
-        password: String,
-    },
+    Basic { username: String, password: String },
     /// Bearer Token 认证
-    Bearer {
-        token: String,
-    },
+    Bearer { token: String },
     /// OAuth2 认证
     OAuth2 {
         client_id: String,
@@ -394,9 +389,15 @@ pub enum ServiceDiscovery {
     /// 静态配置
     Static { endpoints: Vec<String> },
     /// Consul
-    Consul { address: String, service_name: String },
+    Consul {
+        address: String,
+        service_name: String,
+    },
     /// Kubernetes DNS
-    K8sDns { service_name: String, namespace: String },
+    K8sDns {
+        service_name: String,
+        namespace: String,
+    },
 }
 
 /// 服务协议
@@ -866,9 +867,9 @@ mod tests {
 
     #[test]
     fn test_tool_type_from_str() {
-        assert_eq!(ToolType::from_str("api"), Some(ToolType::Api));
-        assert_eq!(ToolType::from_str("API"), Some(ToolType::Api));
-        assert_eq!(ToolType::from_str("unknown"), None);
+        assert_eq!(ToolType::from_strs("api"), Some(ToolType::Api));
+        assert_eq!(ToolType::from_strs("API"), Some(ToolType::Api));
+        assert_eq!(ToolType::from_strs("unknown"), None);
     }
 
     #[test]
@@ -881,13 +882,7 @@ mod tests {
             retry: None,
         });
 
-        let service = ToolService::new(
-            ToolType::Api,
-            "crm",
-            "CRM 服务",
-            config,
-            "tenant-1",
-        );
+        let service = ToolService::new(ToolType::Api, "crm", "CRM 服务", config, "tenant-1");
 
         assert_eq!(service.tool_type, ToolType::Api);
         assert_eq!(service.code, "crm");
@@ -900,8 +895,12 @@ mod tests {
             .with_description("获取客户列表")
             .with_args(
                 ToolArgs::new()
-                    .with_input(ParamDef::optional("page", "int").with_default(serde_json::json!(1)))
-                    .with_input(ParamDef::optional("pageSize", "int").with_default(serde_json::json!(20)))
+                    .with_input(
+                        ParamDef::optional("page", "int").with_default(serde_json::json!(1)),
+                    )
+                    .with_input(
+                        ParamDef::optional("pageSize", "int").with_default(serde_json::json!(20)),
+                    )
                     .with_output(OutputDef {
                         output_type: "Customer[]".to_string(),
                         description: Some("客户列表".to_string()),
@@ -923,24 +922,18 @@ mod tests {
             retry: None,
         });
 
-        let service = ToolService::new(
-            ToolType::Api,
-            "crm",
-            "CRM 服务",
-            config,
-            "tenant-1",
-        );
+        let service = ToolService::new(ToolType::Api, "crm", "CRM 服务", config, "tenant-1");
 
-        assert_eq!(service.build_uri("customer_list"), "api://crm/customer_list");
+        assert_eq!(
+            service.build_uri("customer_list"),
+            "api://crm/customer_list"
+        );
     }
 
     #[test]
     fn test_serialize_deserialize() {
         let tool = Tool::new("test", "Test Tool")
-            .with_args(
-                ToolArgs::new()
-                    .with_input(ParamDef::required("id", "string")),
-            );
+            .with_args(ToolArgs::new().with_input(ParamDef::required("id", "string")));
 
         let json = serde_json::to_string(&tool).unwrap();
         let deserialized: Tool = serde_json::from_str(&json).unwrap();
@@ -960,13 +953,7 @@ mod tests {
             read_only: false,
         });
 
-        let service = ToolService::new(
-            ToolType::Db,
-            "main_db",
-            "主数据库",
-            config,
-            "tenant-1",
-        );
+        let service = ToolService::new(ToolType::Db, "main_db", "主数据库", config, "tenant-1");
 
         assert_eq!(service.tool_type, ToolType::Db);
         assert_eq!(service.build_uri("list"), "db://main_db/list");

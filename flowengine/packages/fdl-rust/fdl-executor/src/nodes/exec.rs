@@ -58,7 +58,10 @@ pub async fn execute_exec_node(
 
         // Try managed registry first (uses ConfigStore for dynamic resolution)
         if let Some(managed) = ctx.managed_registry() {
-            match managed.execute(&exec_uri, json_args.clone(), tool_context).await {
+            match managed
+                .execute(&exec_uri, json_args.clone(), tool_context)
+                .await
+            {
                 Ok(output) => {
                     tracing::info!(
                         "Tool {} executed via ManagedRegistry in {}ms",
@@ -75,7 +78,11 @@ pub async fn execute_exec_node(
                     create_placeholder_result(&exec_uri)
                 }
                 Err(e) => {
-                    tracing::error!("Tool {} execution failed (ManagedRegistry): {:?}", exec_uri, e);
+                    tracing::error!(
+                        "Tool {} execution failed (ManagedRegistry): {:?}",
+                        exec_uri,
+                        e
+                    );
                     return Err(ExecutorError::NodeExecutionError {
                         node: node_id.to_string(),
                         message: format!("Tool execution failed: {}", e),
@@ -95,10 +102,7 @@ pub async fn execute_exec_node(
                     json_value_to_gml(&output.value)
                 }
                 Err(fdl_tools::ToolError::ToolNotFound(_)) => {
-                    tracing::warn!(
-                        "Tool not registered, using placeholder for {}",
-                        exec_uri
-                    );
+                    tracing::warn!("Tool not registered, using placeholder for {}", exec_uri);
                     create_placeholder_result(&exec_uri)
                 }
                 Err(e) => {
@@ -122,7 +126,11 @@ pub async fn execute_exec_node(
     // Apply sets if present (update global variables)
     if let Some(sets_expr) = &node.sets {
         let mut ctx = context.write().await;
-        let mut eval_scope = ctx.build_eval_context().as_object().cloned().unwrap_or_default();
+        let mut eval_scope = ctx
+            .build_eval_context()
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
         eval_scope.insert(node_id.to_string(), result.clone());
         let sets_ctx = Value::Object(eval_scope);
         let sets_result = fdl_gml::evaluate(sets_expr, &sets_ctx)?;
@@ -223,15 +231,11 @@ fn gml_value_to_json(value: &Value) -> serde_json::Value {
         Value::Null => serde_json::Value::Null,
         Value::Bool(b) => serde_json::Value::Bool(*b),
         Value::Int(i) => serde_json::Value::Number((*i).into()),
-        Value::Float(f) => {
-            serde_json::Number::from_f64(*f)
-                .map(serde_json::Value::Number)
-                .unwrap_or(serde_json::Value::Null)
-        }
+        Value::Float(f) => serde_json::Number::from_f64(*f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
         Value::String(s) => serde_json::Value::String(s.clone()),
-        Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(gml_value_to_json).collect())
-        }
+        Value::Array(arr) => serde_json::Value::Array(arr.iter().map(gml_value_to_json).collect()),
         Value::Object(obj) => {
             let map: serde_json::Map<String, serde_json::Value> = obj
                 .iter()
@@ -257,9 +261,7 @@ fn json_value_to_gml(value: &serde_json::Value) -> Value {
             }
         }
         serde_json::Value::String(s) => Value::String(s.clone()),
-        serde_json::Value::Array(arr) => {
-            Value::Array(arr.iter().map(json_value_to_gml).collect())
-        }
+        serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_value_to_gml).collect()),
         serde_json::Value::Object(obj) => {
             let map: std::collections::HashMap<String, Value> = obj
                 .iter()

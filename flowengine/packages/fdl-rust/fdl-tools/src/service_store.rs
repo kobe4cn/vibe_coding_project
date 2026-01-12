@@ -148,7 +148,11 @@ impl ToolServiceStore for InMemoryToolServiceStore {
             .cloned())
     }
 
-    async fn save_service(&self, tenant_id: &str, mut service: ToolService) -> ToolResult<ToolService> {
+    async fn save_service(
+        &self,
+        tenant_id: &str,
+        mut service: ToolService,
+    ) -> ToolResult<ToolService> {
         service.tenant_id = tenant_id.to_string();
         service.updated_at = Some(chrono::Utc::now());
         if service.created_at.is_none() {
@@ -251,11 +255,9 @@ impl ToolServiceStore for InMemoryToolServiceStore {
         // 解析 URI: tool-type://service-code/tool-code
         let parsed = crate::parse_tool_uri(uri)?;
 
-        let tool_type = ToolType::from_str(&parsed.tool_type)
-            .ok_or_else(|| crate::error::ToolError::InvalidUri(format!(
-                "Unknown tool type: {}",
-                parsed.tool_type
-            )))?;
+        let tool_type = ToolType::from_strs(&parsed.tool_type).ok_or_else(|| {
+            crate::error::ToolError::InvalidUri(format!("Unknown tool type: {}", parsed.tool_type))
+        })?;
 
         let path_parts: Vec<&str> = parsed.path.split('/').collect();
         if path_parts.len() < 2 {

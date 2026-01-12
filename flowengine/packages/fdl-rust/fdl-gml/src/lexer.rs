@@ -6,7 +6,7 @@
 use crate::error::{GmlError, GmlResult};
 
 /// Token 类型
-/// 
+///
 /// 定义了 GML 语言中所有可能的词法单元，包括字面量、标识符、关键字、操作符和分隔符。
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {

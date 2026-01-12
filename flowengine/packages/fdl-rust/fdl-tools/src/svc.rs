@@ -11,10 +11,10 @@ use crate::models::{LoadBalancer, ServiceDiscovery, SvcConfig};
 use crate::registry::{ToolHandler, ToolMetadata};
 use crate::{ToolContext, ToolOutput};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::RwLock;
 
 /// Svc 操作类型
@@ -31,7 +31,7 @@ pub enum SvcOperation {
 }
 
 impl SvcOperation {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_strs(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "call" | "invoke" | "rpc" => Some(SvcOperation::Call),
             "health" | "healthcheck" | "ping" => Some(SvcOperation::Health),
@@ -89,7 +89,7 @@ impl SvcHandler {
 
         // 尝试解析第二部分为操作或方法名
         let (operation, method) = if parts.len() > 1 {
-            if let Some(op) = SvcOperation::from_str(parts[1]) {
+            if let Some(op) = SvcOperation::from_strs(parts[1]) {
                 // svc://service/operation/method
                 let method = if parts.len() > 2 {
                     Some(parts[2].to_string())
@@ -176,14 +176,12 @@ impl SvcHandler {
     ) -> ToolResult<Value> {
         let method = method
             .or_else(|| args.get("method").and_then(|v| v.as_str()))
-            .ok_or_else(|| {
-                ToolError::InvalidArgument("Missing 'method' parameter".to_string())
-            })?;
+            .ok_or_else(|| ToolError::InvalidArgument("Missing 'method' parameter".to_string()))?;
 
         let endpoints = self.get_endpoints(&connection.config);
-        let endpoint = self.select_endpoint(connection, &endpoints).ok_or_else(|| {
-            ToolError::ExecutionError("No available endpoints".to_string())
-        })?;
+        let endpoint = self
+            .select_endpoint(connection, &endpoints)
+            .ok_or_else(|| ToolError::ExecutionError("No available endpoints".to_string()))?;
 
         let request_body = args.get("body").or_else(|| args.get("data"));
         let headers: HashMap<String, String> = args
@@ -235,11 +233,9 @@ impl SvcHandler {
             })
             .collect();
 
-        let all_healthy = health_results.iter().all(|h| {
-            h.get("healthy")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        });
+        let all_healthy = health_results
+            .iter()
+            .all(|h| h.get("healthy").and_then(|v| v.as_bool()).unwrap_or(false));
 
         let result = json!({
             "success": true,
@@ -285,10 +281,16 @@ impl SvcHandler {
 
         let discovery_str = match &connection.config.discovery {
             ServiceDiscovery::Static { .. } => "static".to_string(),
-            ServiceDiscovery::Consul { address, service_name } => {
+            ServiceDiscovery::Consul {
+                address,
+                service_name,
+            } => {
                 format!("consul://{}/{}", address, service_name)
             }
-            ServiceDiscovery::K8sDns { service_name, namespace } => {
+            ServiceDiscovery::K8sDns {
+                service_name,
+                namespace,
+            } => {
                 format!("k8s://{}.{}", service_name, namespace)
             }
         };
@@ -324,9 +326,9 @@ impl ToolHandler for SvcHandler {
 
         // 获取服务配置
         let connections = self.connections.read().await;
-        let connection = connections.get(&service_id).ok_or_else(|| {
-            ToolError::ToolNotFound(format!("Service not found: {}", service_id))
-        })?;
+        let connection = connections
+            .get(&service_id)
+            .ok_or_else(|| ToolError::ToolNotFound(format!("Service not found: {}", service_id)))?;
 
         let result = match operation {
             SvcOperation::Call => {
