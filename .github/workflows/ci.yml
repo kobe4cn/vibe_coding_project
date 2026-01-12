@@ -134,7 +134,7 @@ jobs:
 
   # Docker build test
   docker:
-    name: Docker Build
+    name: Project Alpha Images
     runs-on: ubuntu-latest
     needs: [backend, frontend, a2ui_front]
 
