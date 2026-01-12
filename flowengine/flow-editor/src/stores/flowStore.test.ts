@@ -11,8 +11,10 @@ import type { FlowModel, FlowNode, FlowEdge } from '@/types/flow'
 function createTestFlow(name: string = 'Test Flow'): FlowModel {
   return {
     meta: { name, description: 'Test' },
-    inputs: [],
-    outputs: [],
+    args: {
+      inputs: [],
+      outputs: [],
+    },
     nodes: [],
     edges: [],
   }
@@ -24,7 +26,7 @@ function createTestNode(id: string = 'test-node'): FlowNode {
     id,
     type: 'mapping',
     position: { x: 100, y: 100 },
-    data: { label: 'Test Node' },
+    data: { nodeType: 'mapping', label: 'Test Node', with: '{}' },
   }
 }
 

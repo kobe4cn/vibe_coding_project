@@ -212,32 +212,39 @@ export function ExecutePanel() {
               </div>
               <div className="text-sm space-y-1">
                 <p>执行 ID: {result.execution_id}</p>
-                {result.result?.duration_ms && (
-                  <p>耗时: {result.result.duration_ms}ms</p>
+                {result.result && typeof result.result === 'object' && 'duration_ms' in result.result && (
+                  <p>耗时: {String((result.result as { duration_ms: number }).duration_ms)}ms</p>
                 )}
               </div>
             </div>
 
             {/* Outputs */}
-            {result.result?.outputs && (
-              <div>
-                <h4
-                  className="text-sm font-medium mb-2"
-                  style={{ color: 'var(--on-surface)' }}
-                >
-                  输出结果
-                </h4>
-                <pre
-                  className="p-4 rounded-xl text-xs font-mono overflow-auto"
-                  style={{
-                    background: 'var(--surface-container-low)',
-                    color: 'var(--on-surface)',
-                  }}
-                >
-                  {JSON.stringify(result.result.outputs, null, 2)}
-                </pre>
-              </div>
-            )}
+            {(() => {
+              const execResult = result.result
+              if (execResult && typeof execResult === 'object' && 'outputs' in execResult && execResult.outputs) {
+                const outputs = (execResult as { outputs: unknown }).outputs
+                return (
+                  <div>
+                    <h4
+                      className="text-sm font-medium mb-2"
+                      style={{ color: 'var(--on-surface)' }}
+                    >
+                      输出结果
+                    </h4>
+                    <pre
+                      className="p-4 rounded-xl text-xs font-mono overflow-auto"
+                      style={{
+                        background: 'var(--surface-container-low)',
+                        color: 'var(--on-surface)',
+                      }}
+                    >
+                      {JSON.stringify(outputs, null, 2)}
+                    </pre>
+                  </div>
+                )
+              }
+              return null
+            })()}
 
             {/* Node Results */}
             {result.result?.node_results &&

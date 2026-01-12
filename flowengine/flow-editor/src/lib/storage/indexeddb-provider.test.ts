@@ -46,14 +46,16 @@ vi.mock('idb-keyval', () => ({
 function createTestFlowModel(name: string = 'Test Flow'): FlowModel {
   return {
     meta: { name, description: 'Test description' },
-    inputs: [],
-    outputs: [],
+    args: {
+      inputs: [],
+      outputs: [],
+    },
     nodes: [
       {
         id: 'node-1',
         type: 'mapping',
         position: { x: 100, y: 100 },
-        data: { label: 'Test Node' },
+        data: { nodeType: 'mapping', label: 'Test Node', with: '{}' },
       },
     ],
     edges: [],

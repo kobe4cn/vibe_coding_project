@@ -40,8 +40,10 @@ function createEmptyFlow(name: string = '新流程'): FlowModel {
       name,
       description: '',
     },
-    inputs: [],
-    outputs: [],
+    args: {
+      inputs: [],
+      outputs: [],
+    },
     nodes: [],
     edges: [],
   }

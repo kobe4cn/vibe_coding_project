@@ -749,7 +749,8 @@ class GMLParser {
       errorMsg = '表达式不完整，可能缺少闭合的括号或引号'
     } else if (token.value === ':') {
       errorMsg = `GML 对象语法错误：字段赋值请使用 '=' 而非 ':'`
-    } else if (token.type === 'string' && token.value.startsWith('"')) {
+    } else if (token.value.startsWith('"')) {
+      // 检查值是否以双引号开头，而不是检查 token.type
       errorMsg = `GML 字符串请使用单引号 ' 而非双引号 "`
     }
 

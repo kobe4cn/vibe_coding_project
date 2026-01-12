@@ -63,8 +63,10 @@ function createLegacyVersion(
   const versionId = `v${versionNum}-${Date.now()}`
   const flow: FlowModel = {
     meta: { name: flowName, description: 'Test' },
-    inputs: [],
-    outputs: [],
+    args: {
+      inputs: [],
+      outputs: [],
+    },
     nodes: [],
     edges: [],
   }

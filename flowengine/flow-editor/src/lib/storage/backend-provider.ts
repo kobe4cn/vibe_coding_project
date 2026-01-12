@@ -364,6 +364,7 @@ export interface ExecuteFlowRequest {
     nodes: unknown[]
     edges: unknown[]
     vars?: string
+    args?: unknown
   }
   inputs?: Record<string, unknown>
   async_mode?: boolean

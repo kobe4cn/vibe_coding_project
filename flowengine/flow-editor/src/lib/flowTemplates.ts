@@ -21,8 +21,10 @@ const emptyFlow: FlowModel = {
     name: '',
     description: '',
   },
-  inputs: [],
-  outputs: [],
+  args: {
+    inputs: [],
+    outputs: [],
+  },
   nodes: [],
   edges: [],
 }
@@ -35,25 +37,28 @@ const apiWorkflowTemplate: FlowModel = {
     name: 'API 工作流',
     description: 'HTTP 请求和数据处理',
   },
-  inputs: [
-    { name: 'url', type: 'string', description: 'API URL' },
-    { name: 'method', type: 'string', default: 'GET', description: 'HTTP 方法' },
-  ],
-  outputs: [
-    { name: 'result', type: 'object', description: '处理后的结果' },
-  ],
+  args: {
+    inputs: [
+      { name: 'url', type: 'string', description: 'API URL' },
+      { name: 'method', type: 'string', defaultValue: 'GET', description: 'HTTP 方法' },
+    ],
+    outputs: [
+      { name: 'result', type: 'object', description: '处理后的结果' },
+    ],
+  },
   nodes: [
     {
       id: 'exec-1',
       type: 'exec',
       position: { x: 100, y: 100 },
       data: {
+        nodeType: 'exec',
         label: 'HTTP 请求',
-        tool: 'http',
-        params: {
+        exec: 'http://example.com/api',
+        args: JSON.stringify({
           url: '${inputs.url}',
           method: '${inputs.method}',
-        },
+        }),
       },
     },
     {
@@ -61,15 +66,16 @@ const apiWorkflowTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 350, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '数据映射',
-        mappings: [
-          { target: 'result', source: '${exec-1.data}' },
-        ],
+        with: JSON.stringify({
+          result: '${exec-1.data}',
+        }),
       },
     },
   ],
   edges: [
-    { id: 'e1', source: 'exec-1', target: 'mapping-1' },
+    { id: 'e1', source: 'exec-1', target: 'mapping-1', data: { edgeType: 'next' } },
   ],
 }
 
@@ -81,21 +87,24 @@ const conditionalWorkflowTemplate: FlowModel = {
     name: '条件工作流',
     description: '带条件分支的流程',
   },
-  inputs: [
-    { name: 'value', type: 'number', description: '判断值' },
-    { name: 'threshold', type: 'number', default: 10, description: '阈值' },
-  ],
-  outputs: [
-    { name: 'result', type: 'string', description: '处理结果' },
-  ],
+  args: {
+    inputs: [
+      { name: 'value', type: 'number', description: '判断值' },
+      { name: 'threshold', type: 'number', defaultValue: '10', description: '阈值' },
+    ],
+    outputs: [
+      { name: 'result', type: 'string', description: '处理结果' },
+    ],
+  },
   nodes: [
     {
       id: 'condition-1',
       type: 'condition',
       position: { x: 100, y: 100 },
       data: {
+        nodeType: 'condition',
         label: '条件判断',
-        condition: '${inputs.value} > ${inputs.threshold}',
+        when: '${inputs.value} > ${inputs.threshold}',
       },
     },
     {
@@ -103,10 +112,11 @@ const conditionalWorkflowTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 350, y: 50 },
       data: {
+        nodeType: 'mapping',
         label: '大于阈值',
-        mappings: [
-          { target: 'result', source: '"高于阈值"' },
-        ],
+        with: JSON.stringify({
+          result: '"高于阈值"',
+        }),
       },
     },
     {
@@ -114,16 +124,17 @@ const conditionalWorkflowTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 350, y: 200 },
       data: {
+        nodeType: 'mapping',
         label: '小于等于阈值',
-        mappings: [
-          { target: 'result', source: '"低于或等于阈值"' },
-        ],
+        with: JSON.stringify({
+          result: '"低于或等于阈值"',
+        }),
       },
     },
   ],
   edges: [
-    { id: 'e1', source: 'condition-1', sourceHandle: 'true', target: 'mapping-true' },
-    { id: 'e2', source: 'condition-1', sourceHandle: 'false', target: 'mapping-false' },
+    { id: 'e1', source: 'condition-1', sourceHandle: 'then', target: 'mapping-true', data: { edgeType: 'then' } },
+    { id: 'e2', source: 'condition-1', sourceHandle: 'else', target: 'mapping-false', data: { edgeType: 'else' } },
   ],
 }
 
@@ -135,22 +146,23 @@ const loopWorkflowTemplate: FlowModel = {
     name: '循环工作流',
     description: '遍历数组数据',
   },
-  inputs: [
-    { name: 'items', type: 'array', description: '要处理的数组' },
-  ],
-  outputs: [
-    { name: 'results', type: 'array', description: '处理结果数组' },
-  ],
+  args: {
+    inputs: [
+      { name: 'items', type: 'array', description: '要处理的数组' },
+    ],
+    outputs: [
+      { name: 'results', type: 'array', description: '处理结果数组' },
+    ],
+  },
   nodes: [
     {
       id: 'each-1',
       type: 'each',
       position: { x: 100, y: 100 },
       data: {
+        nodeType: 'each',
         label: '遍历数组',
-        collection: '${inputs.items}',
-        itemVar: 'item',
-        indexVar: 'index',
+        each: '${inputs.items} => item, index',
       },
     },
     {
@@ -158,15 +170,16 @@ const loopWorkflowTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 350, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '处理单项',
-        mappings: [
-          { target: 'processed', source: '${item}' },
-        ],
+        with: JSON.stringify({
+          processed: '${item}',
+        }),
       },
     },
   ],
   edges: [
-    { id: 'e1', source: 'each-1', target: 'mapping-1' },
+    { id: 'e1', source: 'each-1', target: 'mapping-1', data: { edgeType: 'next' } },
   ],
 }
 
@@ -178,23 +191,26 @@ const aiAgentTemplate: FlowModel = {
     name: 'AI Agent 工作流',
     description: 'AI 驱动的智能流程',
   },
-  inputs: [
-    { name: 'prompt', type: 'string', description: '用户输入' },
-    { name: 'context', type: 'string', description: '上下文信息' },
-  ],
-  outputs: [
-    { name: 'response', type: 'string', description: 'AI 响应' },
-  ],
+  args: {
+    inputs: [
+      { name: 'prompt', type: 'string', description: '用户输入' },
+      { name: 'context', type: 'string', description: '上下文信息' },
+    ],
+    outputs: [
+      { name: 'response', type: 'string', description: 'AI 响应' },
+    ],
+  },
   nodes: [
     {
       id: 'mapping-1',
       type: 'mapping',
       position: { x: 100, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '准备提示词',
-        mappings: [
-          { target: 'fullPrompt', source: '`上下文: ${inputs.context}\n\n用户问题: ${inputs.prompt}`' },
-        ],
+        with: JSON.stringify({
+          fullPrompt: '`上下文: ${inputs.context}\n\n用户问题: ${inputs.prompt}`',
+        }),
       },
     },
     {
@@ -202,10 +218,13 @@ const aiAgentTemplate: FlowModel = {
       type: 'agent',
       position: { x: 350, y: 100 },
       data: {
+        nodeType: 'agent',
         label: 'AI Agent',
         model: 'gpt-4',
-        systemPrompt: '你是一个智能助手，请根据上下文回答用户问题。',
-        userPrompt: '${mapping-1.fullPrompt}',
+        instructions: '你是一个智能助手，请根据上下文回答用户问题。',
+        args: JSON.stringify({
+          prompt: '${mapping-1.fullPrompt}',
+        }),
       },
     },
     {
@@ -213,16 +232,17 @@ const aiAgentTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 600, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '提取响应',
-        mappings: [
-          { target: 'response', source: '${agent-1.response}' },
-        ],
+        with: JSON.stringify({
+          response: '${agent-1.response}',
+        }),
       },
     },
   ],
   edges: [
-    { id: 'e1', source: 'mapping-1', target: 'agent-1' },
-    { id: 'e2', source: 'agent-1', target: 'mapping-2' },
+    { id: 'e1', source: 'mapping-1', target: 'agent-1', data: { edgeType: 'next' } },
+    { id: 'e2', source: 'agent-1', target: 'mapping-2', data: { edgeType: 'next' } },
   ],
 }
 
@@ -234,22 +254,25 @@ const dataPipelineTemplate: FlowModel = {
     name: '数据管道',
     description: '多步骤数据处理',
   },
-  inputs: [
-    { name: 'data', type: 'object', description: '输入数据' },
-  ],
-  outputs: [
-    { name: 'transformed', type: 'object', description: '转换后的数据' },
-  ],
+  args: {
+    inputs: [
+      { name: 'data', type: 'object', description: '输入数据' },
+    ],
+    outputs: [
+      { name: 'transformed', type: 'object', description: '转换后的数据' },
+    ],
+  },
   nodes: [
     {
       id: 'mapping-1',
       type: 'mapping',
       position: { x: 100, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '数据验证',
-        mappings: [
-          { target: 'validated', source: '${inputs.data}' },
-        ],
+        with: JSON.stringify({
+          validated: '${inputs.data}',
+        }),
       },
     },
     {
@@ -257,10 +280,11 @@ const dataPipelineTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 350, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '数据转换',
-        mappings: [
-          { target: 'transformed', source: '${mapping-1.validated}' },
-        ],
+        with: JSON.stringify({
+          transformed: '${mapping-1.validated}',
+        }),
       },
     },
     {
@@ -268,16 +292,17 @@ const dataPipelineTemplate: FlowModel = {
       type: 'mapping',
       position: { x: 600, y: 100 },
       data: {
+        nodeType: 'mapping',
         label: '数据输出',
-        mappings: [
-          { target: 'result', source: '${mapping-2.transformed}' },
-        ],
+        with: JSON.stringify({
+          result: '${mapping-2.transformed}',
+        }),
       },
     },
   ],
   edges: [
-    { id: 'e1', source: 'mapping-1', target: 'mapping-2' },
-    { id: 'e2', source: 'mapping-2', target: 'mapping-3' },
+    { id: 'e1', source: 'mapping-1', target: 'mapping-2', data: { edgeType: 'next' } },
+    { id: 'e2', source: 'mapping-2', target: 'mapping-3', data: { edgeType: 'next' } },
   ],
 }
 

@@ -36,7 +36,7 @@ interface PendingRequest {
  * WebSocket client for FDL Runtime
  */
 export class WsClient {
-  private config: Required<WsClientConfig>
+  private config: WsClientConfig & Required<Pick<WsClientConfig, 'reconnectAttempts' | 'reconnectDelay' | 'heartbeatInterval'>>
   private ws: WebSocket | null = null
   private connectionState: ConnectionState = 'disconnected'
   private reconnectCount = 0
@@ -53,7 +53,7 @@ export class WsClient {
       reconnectAttempts: config.reconnectAttempts ?? DEFAULT_CONFIG.reconnectAttempts!,
       reconnectDelay: config.reconnectDelay ?? DEFAULT_CONFIG.reconnectDelay!,
       heartbeatInterval: config.heartbeatInterval ?? DEFAULT_CONFIG.heartbeatInterval!,
-    }
+    } as WsClientConfig & Required<Pick<WsClientConfig, 'reconnectAttempts' | 'reconnectDelay' | 'heartbeatInterval'>>
   }
 
   /**
