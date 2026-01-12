@@ -32,6 +32,11 @@ async fn health() -> &'static str {
 }
 
 async fn credit_evaluate(Json(req): Json<CreditCheckRequest>) -> Json<CreditCheckResponse> {
+    // 记录检查类型（如果提供）
+    if let Some(ref check_type) = req.check_type {
+        println!("Credit check type: {}", check_type);
+    }
+
     let hash: u32 = req.customer_id.bytes().map(|b| b as u32).sum();
     let score = 600 + (hash % 200) as i32;
 

@@ -7,8 +7,8 @@ use axum::{
     Router,
 };
 use lettre::{
-    message::header::ContentType, transport::smtp::client::Tls, AsyncSmtpTransport,
-    AsyncTransport, Message, Tokio1Executor,
+    message::header::ContentType, transport::smtp::client::Tls, AsyncSmtpTransport, AsyncTransport,
+    Message, Tokio1Executor,
 };
 use serde::{Deserialize, Serialize};
 

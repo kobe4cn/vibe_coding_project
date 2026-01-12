@@ -1,9 +1,7 @@
 //! 通知服务 - RabbitMQ 消息消费者
 
 use futures_lite::StreamExt;
-use lapin::{
-    options::*, types::FieldTable, Connection, ConnectionProperties,
-};
+use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -42,10 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let channel = conn.create_channel().await?;
 
     // 声明 exchange
-    let exchange_name = std::env::var("EXCHANGE_NAME")
-        .unwrap_or_else(|_| "customer.events".to_string());
-    let routing_key = std::env::var("ROUTING_KEY")
-        .unwrap_or_else(|_| "view.updated".to_string());
+    let exchange_name =
+        std::env::var("EXCHANGE_NAME").unwrap_or_else(|_| "customer.events".to_string());
+    let routing_key = std::env::var("ROUTING_KEY").unwrap_or_else(|_| "view.updated".to_string());
 
     channel
         .exchange_declare(
@@ -105,7 +102,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(event) => {
                     println!("  Event Type: {}", event.event_type);
                     println!("  Event ID: {}", event.event_id);
+                    println!("  Timestamp: {}", event.timestamp);
                     println!("  Customer ID: {}", event.payload.customer_id);
+                    if let Some(ref report_url) = event.payload.report_url {
+                        println!("  Report URL: {}", report_url);
+                    }
                     println!("  Credit Level: {}", event.payload.credit_level);
 
                     match event.payload.credit_level.as_str() {
