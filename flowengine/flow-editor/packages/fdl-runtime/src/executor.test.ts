@@ -3,10 +3,10 @@
  * Focus on sub-flow execution (each and loop nodes)
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import type { FlowModel, FlowNode, FlowEdge } from '../../../src/types/flow'
 import { FlowExecutor } from './executor'
-import type { RuntimeConfig, ExecutionEvent } from './types'
+import type { ExecutionEvent } from './types'
 
 // Helper to create test nodes
 function createNode(

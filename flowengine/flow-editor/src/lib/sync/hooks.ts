@@ -51,7 +51,10 @@ export function useSyncInit(
 
   useEffect(() => {
     if (!local || !remote) {
-      setIsInitialized(false)
+      // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+      requestAnimationFrame(() => {
+        setIsInitialized(false)
+      })
       return
     }
 

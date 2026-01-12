@@ -104,7 +104,9 @@ export function PublishDialog({
   const apiBaseUrl = useMemo(() => getApiBaseUrl(), [])
   const [isPublished, setIsPublished] = useState(false)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
-  const [publishedVersionId, setPublishedVersionId] = useState<string | null>(null)
+  // 已发布的版本 ID（预留，用于未来功能）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_publishedVersionId, setPublishedVersionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

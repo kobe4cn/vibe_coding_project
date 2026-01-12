@@ -1320,7 +1320,7 @@ function FlowSettingsPanel() {
               <TextField
                 label="初始变量"
                 value={flow.vars || ''}
-                onChange={(value) => {
+                onChange={(_value) => {
                   // Note: vars is at flow level, need to update differently
                   // This is a simplified version
                 }}

@@ -424,7 +424,7 @@ class GMLParser {
 
   private parseConditional(): GMLExpression {
     const start = this.current().start
-    let expr = this.parseLogicalOr()
+    const expr = this.parseLogicalOr()
 
     if (this.current().value === '?') {
       this.advance()

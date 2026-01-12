@@ -113,56 +113,8 @@ export function YamlEditor() {
     )
   }, [])
 
-  // 处理 YAML 内容变化
-  // 注意：自动保存由 useAutoSave hook 统一处理
-  const handleEditorChange = useCallback(
-    (value: string | undefined) => {
-      if (!value) return
-
-      isUserEditingRef.current = true
-      setYamlContent(value)
-      setIsSyncing(true)
-
-      // 清除之前的同步定时器
-      if (syncTimeoutRef.current) {
-        window.clearTimeout(syncTimeoutRef.current)
-      }
-
-      // 延迟解析，避免频繁解析
-      syncTimeoutRef.current = window.setTimeout(() => {
-        const { flow: newFlow, error } = yamlToFlow(value)
-        if (error) {
-          setYamlError(error)
-          setGmlDiagnostics([])
-          updateErrorMarkers(error, [])
-        } else {
-          // YAML 解析成功后，进行 GML 语法验证
-          const diagnostics = validateGMLInYaml(value)
-          setGmlDiagnostics(diagnostics)
-
-          // 更新 GML 区域装饰（语法高亮）
-          updateGMLDecorations(value)
-
-          if (diagnostics.length > 0) {
-            // 有 GML 错误时显示第一个错误，但不阻止 flow 同步
-            setYamlError(diagnostics[0].friendlyMessage)
-            updateErrorMarkers(null, diagnostics)
-          } else {
-            setYamlError(null)
-            clearErrorMarkers()
-          }
-
-          lastFlowHashRef.current = getFlowHash(newFlow)
-          setFlow(newFlow)
-          isUserEditingRef.current = false
-        }
-        setIsSyncing(false)
-      }, 500)
-    },
-    [setYamlContent, setIsSyncing, setFlow, setYamlError, getFlowHash, updateGMLDecorations]
-  )
-
   // 更新错误标记 - 支持 YAML 错误和 GML 诊断
+  // 需要在 handleEditorChange 之前定义，避免在声明前访问
   const updateErrorMarkers = useCallback((
     yamlError: string | null,
     gmlDiags: YAMLGMLDiagnostic[]
@@ -223,6 +175,7 @@ export function YamlEditor() {
   }, [])
 
   // 清除错误标记
+  // 需要在 handleEditorChange 之前定义，避免在声明前访问
   const clearErrorMarkers = useCallback(() => {
     if (!monacoRef.current || !editorRef.current) return
 
@@ -232,7 +185,57 @@ export function YamlEditor() {
     monacoRef.current.editor.setModelMarkers(model, 'fdl-validator', [])
   }, [])
 
+  // 处理 YAML 内容变化
+  // 注意：自动保存由 useAutoSave hook 统一处理
+  const handleEditorChange = useCallback(
+    (value: string | undefined) => {
+      if (!value) return
+
+      isUserEditingRef.current = true
+      setYamlContent(value)
+      setIsSyncing(true)
+
+      // 清除之前的同步定时器
+      if (syncTimeoutRef.current) {
+        window.clearTimeout(syncTimeoutRef.current)
+      }
+
+      // 延迟解析，避免频繁解析
+      syncTimeoutRef.current = window.setTimeout(() => {
+        const { flow: newFlow, error } = yamlToFlow(value)
+        if (error) {
+          setYamlError(error)
+          setGmlDiagnostics([])
+          updateErrorMarkers(error, [])
+        } else {
+          // YAML 解析成功后，进行 GML 语法验证
+          const diagnostics = validateGMLInYaml(value)
+          setGmlDiagnostics(diagnostics)
+
+          // 更新 GML 区域装饰（语法高亮）
+          updateGMLDecorations(value)
+
+          if (diagnostics.length > 0) {
+            // 有 GML 错误时显示第一个错误，但不阻止 flow 同步
+            setYamlError(diagnostics[0].friendlyMessage)
+            updateErrorMarkers(null, diagnostics)
+          } else {
+            setYamlError(null)
+            clearErrorMarkers()
+          }
+
+          lastFlowHashRef.current = getFlowHash(newFlow)
+          setFlow(newFlow)
+          isUserEditingRef.current = false
+        }
+        setIsSyncing(false)
+      }, 500)
+    },
+    [setYamlContent, setIsSyncing, setFlow, setYamlError, getFlowHash, updateGMLDecorations, updateErrorMarkers, clearErrorMarkers]
+  )
+
   // 编辑器挂载
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
@@ -512,7 +515,8 @@ export function YamlEditor() {
     setThemesReady(true)
   }, [resolvedTheme])
 
-  // 辅助函数：创建补全建议
+  // 辅助函数：创建补全建议（仅用于类型定义）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function createSuggestions(): Array<{
     label: string
     kind: ReturnType<typeof monacoRef.current extends Monaco ? Monaco['languages']['CompletionItemKind']['Keyword'] : never>

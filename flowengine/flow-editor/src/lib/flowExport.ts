@@ -55,7 +55,7 @@ export async function exportFlow(
     return null
   }
 
-  let versions: FlowVersion[] = []
+  const versions: FlowVersion[] = []
 
   if (includeVersions) {
     const versionSummaries = await storage.listVersions(flowId)

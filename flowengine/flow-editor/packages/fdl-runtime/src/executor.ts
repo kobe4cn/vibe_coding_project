@@ -9,13 +9,11 @@ import type {
   NodeExecutionResult,
   ExecutionEvent,
   RuntimeConfig,
-  NodeExecutionState,
   ExecutionHistoryEntry,
 } from './types'
 import type { FlowModel, FlowNode, FlowEdge, FlowNodeData } from '../../../src/types/flow'
 import { parseGML, evaluateGML, createContext as createGMLContext } from '@flow-editor/fdl-parser'
 import type { GMLContext } from '@flow-editor/fdl-parser'
-import { ParallelScheduler, buildDependencyGraph } from './scheduler'
 
 export class FlowExecutor {
   private flow: FlowModel
@@ -947,7 +945,7 @@ export class FlowExecutor {
           this.context.vars[key] = val
         }
       }
-    } catch (e) {
+    } catch {
       // Fall back to simple parsing
       const lines = setsExpr.split('\n')
       for (const line of lines) {

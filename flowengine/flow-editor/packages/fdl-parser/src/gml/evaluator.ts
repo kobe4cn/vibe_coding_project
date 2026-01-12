@@ -624,7 +624,6 @@ export function compileUdf(udf: UdfDefinition): UdfHandler {
 
     try {
       // 创建函数，代码作为函数体
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
       const fn = new Function(...paramNames, udf.code)
       return (...args: unknown[]) => {
         // 填充默认值

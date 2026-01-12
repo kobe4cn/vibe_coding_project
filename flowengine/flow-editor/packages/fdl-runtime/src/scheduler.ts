@@ -288,7 +288,7 @@ export class ParallelScheduler {
           } else {
             this.markFailed(nodeId)
           }
-        } catch (error) {
+        } catch {
           results.set(nodeId, { success: false })
           this.markFailed(nodeId)
         }

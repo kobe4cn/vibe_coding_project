@@ -91,6 +91,7 @@ function loadConfig(): StorageConfig {
  * Clear stored config and use defaults
  * Call this to reset to environment-based defaults
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function resetStorageConfig(): void {
   try {
     localStorage.removeItem(CONFIG_STORAGE_KEY)
@@ -143,7 +144,7 @@ export function StorageProviderComponent({
     }
     console.log('[Storage] Using IndexedDBProvider (local storage)')
     return new IndexedDBProvider()
-  }, [config.mode, config.backendUrl, config.token])
+  }, [config])
 
   // Update config and persist
   const setConfig = (newConfig: StorageConfig) => {
@@ -152,8 +153,11 @@ export function StorageProviderComponent({
   }
 
   // Mark as ready after mount
+  // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
   useEffect(() => {
-    setIsReady(true)
+    requestAnimationFrame(() => {
+      setIsReady(true)
+    })
   }, [])
 
   const value: StorageContextValue = {
@@ -172,6 +176,7 @@ export function StorageProviderComponent({
 /**
  * Hook to access storage provider
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useStorage(): StorageProvider {
   const context = useContext(StorageContext)
   if (!context) {
@@ -183,6 +188,7 @@ export function useStorage(): StorageProvider {
 /**
  * Hook to access storage configuration
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useStorageConfig(): {
   mode: StorageMode
   config: StorageConfig
@@ -206,6 +212,7 @@ export function useStorageConfig(): {
 /**
  * Hook to check if storage is ready
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useStorageReady(): boolean {
   const context = useContext(StorageContext)
   return context?.isReady ?? false

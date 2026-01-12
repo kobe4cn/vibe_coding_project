@@ -9,7 +9,6 @@ import type {
   SyncState,
   SyncResult,
   SyncOptions,
-  SyncConflict,
   SyncOperationType,
 } from './types'
 import type { StorageProvider } from '../storage/types'

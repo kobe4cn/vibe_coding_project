@@ -26,21 +26,30 @@ export function useWsClient(config: WsClientConfig | null): {
 
   useEffect(() => {
     if (!config) {
-      setClient(null)
-      setConnectionState('disconnected')
+      // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+      requestAnimationFrame(() => {
+        setClient(null)
+        setConnectionState('disconnected')
+      })
       return
     }
 
     const wsClient = createWsClient(config)
-    setClient(wsClient)
+    // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+    requestAnimationFrame(() => {
+      setClient(wsClient)
+    })
 
-    const unsubscribe = wsClient.onStateChange(setConnectionState)
+    const unsubscribe = wsClient.onStateChange((state) => {
+      // 在回调中调用 setState 是安全的
+      setConnectionState(state)
+    })
 
     return () => {
       unsubscribe()
       wsClient.disconnect()
     }
-  }, [config?.url, config?.token])
+  }, [config])
 
   const connect = useCallback(async () => {
     if (client) {
@@ -76,11 +85,18 @@ export function useExecutionEvents(
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const callbackRef = useRef(callback)
-  callbackRef.current = callback
+
+  // 在 effect 中更新 ref，而不是在 render 期间
+  useEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
 
   useEffect(() => {
     if (!client || !executionId) {
-      setIsSubscribed(false)
+      // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+      requestAnimationFrame(() => {
+        setIsSubscribed(false)
+      })
       return
     }
 
@@ -216,12 +232,15 @@ export function useExecutionProgress(
 
   // Reset state when execution ID changes
   useEffect(() => {
-    setStatus('pending')
-    setProgress(0)
-    setCurrentNode(null)
-    setEvents([])
-    setError(null)
-    setIsCompleted(false)
+    // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+    requestAnimationFrame(() => {
+      setStatus('pending')
+      setProgress(0)
+      setCurrentNode(null)
+      setEvents([])
+      setError(null)
+      setIsCompleted(false)
+    })
   }, [executionId])
 
   return {

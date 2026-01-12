@@ -78,9 +78,12 @@ export function InputsDialog({
           }
         }
       })
-      setFormValues(initialValues)
-      setJsonValue(JSON.stringify(initialValues, null, 2))
-      setJsonError(null)
+      // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+      requestAnimationFrame(() => {
+        setFormValues(initialValues)
+        setJsonValue(JSON.stringify(initialValues, null, 2))
+        setJsonError(null)
+      })
     }
   }, [isOpen, parameters])
 

@@ -125,7 +125,7 @@ export async function migrateFromLegacy(
           versions.push(version)
           flowVersions.set(flowId, versions)
         }
-      } catch (err) {
+      } catch {
         result.errors.push(`读取版本失败: ${key}`)
       }
     }
@@ -242,7 +242,7 @@ export async function cleanupLegacyData(
     })
 
     return { success: true, deletedCount }
-  } catch (err) {
+  } catch {
     return { success: false, deletedCount: 0 }
   }
 }

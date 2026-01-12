@@ -3,7 +3,7 @@
  * 管理 API 服务、数据源和 UDF 配置
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 
 // API 基础地址
@@ -1970,11 +1970,8 @@ export function ToolsPage() {
   const [editingSms, setEditingSms] = useState<SmsConfig | null>(null)
   const [editingSvc, setEditingSvc] = useState<SvcConfig | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  async function loadData() {
+  // 将 loadData 定义为 useCallback，避免在声明前访问
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -2026,7 +2023,15 @@ export function ToolsPage() {
       console.error('Failed to load tools:', e)
     }
     setLoading(false)
-  }
+  }, [])
+
+  // 页面加载时获取数据
+  useEffect(() => {
+    // 使用 requestAnimationFrame 避免在 effect 中同步调用 setState
+    requestAnimationFrame(() => {
+      loadData()
+    })
+  }, [loadData])
 
   // API 服务操作
   async function handleSaveService(data: Partial<ApiService>) {

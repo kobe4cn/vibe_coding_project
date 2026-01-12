@@ -97,7 +97,7 @@ const ERROR_PATTERNS: ErrorPattern[] = [
       '语法错误：GML 使用 = 进行赋值，而非 : 冒号',
     getSuggestions: (_, content, position) => {
       const suggestions: QuickFixSuggestion[] = []
-      let lineStart = content.lastIndexOf('\n', position) + 1
+      const lineStart = content.lastIndexOf('\n', position) + 1
       let lineEnd = content.indexOf('\n', position)
       if (lineEnd === -1) lineEnd = content.length
       const line = content.substring(lineStart, lineEnd)
@@ -126,9 +126,9 @@ const ERROR_PATTERNS: ErrorPattern[] = [
       '字符串错误：GML 请使用单引号 \' 而非双引号 "',
     getSuggestions: (_, content, position) => {
       const suggestions: QuickFixSuggestion[] = []
-      let searchStart = Math.max(0, position - 50)
-      let searchEnd = Math.min(content.length, position + 50)
-      let searchRange = content.substring(searchStart, searchEnd)
+      const searchStart = Math.max(0, position - 50)
+      const searchEnd = Math.min(content.length, position + 50)
+      const searchRange = content.substring(searchStart, searchEnd)
 
       const doubleQuoteRegex = /"([^"\\]|\\.)*"/g
       let match
@@ -168,7 +168,7 @@ const ERROR_PATTERNS: ErrorPattern[] = [
       '语法错误：GML 对象字段请使用 = 而非 :',
     getSuggestions: (_, content, position) => {
       const suggestions: QuickFixSuggestion[] = []
-      let lineStart = content.lastIndexOf('\n', position) + 1
+      const lineStart = content.lastIndexOf('\n', position) + 1
       let lineEnd = content.indexOf('\n', position)
       if (lineEnd === -1) lineEnd = content.length
       const line = content.substring(lineStart, lineEnd)

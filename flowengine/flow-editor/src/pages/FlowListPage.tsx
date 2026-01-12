@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useStorage } from '@/lib/storage'
 import type { FlowEntry, ListOptions } from '@/lib/storage'
-import { exportAndDownloadFlow, exportAndDownloadFlows } from '@/lib/flowExport'
+import { exportAndDownloadFlow } from '@/lib/flowExport'
 import { importFromFile, type ImportResult } from '@/lib/flowImport'
 import { flowTemplates, applyTemplate, type FlowTemplate } from '@/lib/flowTemplates'
 
@@ -533,7 +533,9 @@ export function FlowListPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showImportResult, setShowImportResult] = useState<ImportResult | null>(null)
   const [sortBy, setSortBy] = useState<ListOptions['sortBy']>('updatedAt')
-  const [sortOrder, setSortOrder] = useState<ListOptions['sortOrder']>('desc')
+  // sortOrder 固定为 'desc'，setSortOrder 预留用于未来功能
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [sortOrder, _setSortOrder] = useState<ListOptions['sortOrder']>('desc')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadFlows = useCallback(async () => {

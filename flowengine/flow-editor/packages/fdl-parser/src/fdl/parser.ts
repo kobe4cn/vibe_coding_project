@@ -246,7 +246,10 @@ function parseNode(id: string, raw: FDLNodeRaw, errors: FDLParseError[]): FDLNod
         }
 
       case 'each': {
-        const subNodes = raw.node ? parseNodes(raw.node, errors) : []
+        // 解析子节点用于验证，但结果不直接使用
+        if (raw.node) {
+          parseNodes(raw.node, errors)
+        }
         return {
           ...base,
           type: 'each',
@@ -258,7 +261,10 @@ function parseNode(id: string, raw: FDLNodeRaw, errors: FDLParseError[]): FDLNod
       }
 
       case 'loop': {
-        const subNodes = raw.node ? parseNodes(raw.node, errors) : []
+        // 解析子节点用于验证，但结果不直接使用
+        if (raw.node) {
+          parseNodes(raw.node, errors)
+        }
         return {
           ...base,
           type: 'loop',

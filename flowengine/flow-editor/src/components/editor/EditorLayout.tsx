@@ -3,7 +3,7 @@
  * Material Design 3 Inspired Layout for the Flow Editor
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FlowCanvas } from '@/components/canvas/FlowCanvas'
 import { NodePalette } from '@/components/panels/NodePalette'

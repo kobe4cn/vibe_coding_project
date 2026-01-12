@@ -704,7 +704,7 @@ export const ServiceNode = memo(function ServiceNode({
 })
 
 // Node type mapping for React Flow
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, react-refresh/only-export-components
 export const nodeTypes: Record<string, any> = {
   start: StartNode,
   exec: ExecNode,

@@ -87,7 +87,7 @@ export class WsClient {
           this.handleClose(event)
         }
 
-        this.ws.onerror = (event) => {
+        this.ws.onerror = () => {
           this.setConnectionState('error')
           reject(new Error('WebSocket connection failed'))
         }
