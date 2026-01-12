@@ -1,11 +1,12 @@
 FROM rust:slim AS builder
 WORKDIR /app
 
-# 安装构建依赖：pkg-config 和 OpenSSL 开发库
+# 安装构建依赖：pkg-config、OpenSSL 开发库和 curl（用于下载 Swagger UI）
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         pkg-config \
         libssl-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
