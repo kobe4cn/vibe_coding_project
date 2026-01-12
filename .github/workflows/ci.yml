@@ -298,34 +298,61 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build flow-editor image
-        uses: docker/build-push-action@v6
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Flow-editor image
+      - name: Extract flow-editor image metadata
+        id: meta-flow-editor
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/flowengine-flow-editor
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push flow-editor image
+        uses: docker/build-push-action@v5
         with:
           context: flowengine/flow-editor
           file: flowengine/flow-editor/Dockerfile
-          tags: flowengine/flow-editor:ci-${{ github.sha }}
-          outputs: type=docker,dest=/tmp/flowengine-frontend.tar
+          push: true
+          tags: ${{ steps.meta-flow-editor.outputs.tags }}
+          labels: ${{ steps.meta-flow-editor.outputs.labels }}
           cache-from: type=gha,scope=flowengine-frontend
           cache-to: type=gha,mode=max,scope=flowengine-frontend
 
-      - name: Upload flow-editor image
-        uses: actions/upload-artifact@v4
+      # FDL-runtime image
+      - name: Extract fdl-runtime image metadata
+        id: meta-fdl-runtime
+        uses: docker/metadata-action@v5
         with:
-          name: flowengine-frontend-image
-          path: /tmp/flowengine-frontend.tar
+          images: ghcr.io/${{ github.repository_owner }}/flowengine-fdl-runtime
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build fdl-runtime image
-        uses: docker/build-push-action@v6
+      - name: Build and push fdl-runtime image
+        uses: docker/build-push-action@v5
         with:
           context: flowengine/packages/fdl-rust
           file: flowengine/packages/fdl-rust/Dockerfile
-          tags: flowengine/fdl-runtime:ci-${{ github.sha }}
-          outputs: type=docker,dest=/tmp/flowengine-backend.tar
+          push: true
+          tags: ${{ steps.meta-fdl-runtime.outputs.tags }}
+          labels: ${{ steps.meta-fdl-runtime.outputs.labels }}
           cache-from: type=gha,scope=flowengine-backend
           cache-to: type=gha,mode=max,scope=flowengine-backend
-
-      - name: Upload fdl-runtime image
-        uses: actions/upload-artifact@v4
-        with:
-          name: flowengine-backend-image
-          path: /tmp/flowengine-backend.tar
