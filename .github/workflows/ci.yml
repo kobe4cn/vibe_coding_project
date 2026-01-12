@@ -225,3 +225,107 @@ jobs:
           labels: ${{ steps.meta-a2ui-front.outputs.labels }}
           cache-from: type=gha,scope=a2ui-front
           cache-to: type=gha,mode=max,scope=a2ui-front
+
+  # FlowEngine 前端
+  flowengine_frontend:
+    name: FlowEngine Frontend
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    defaults:
+      run:
+        working-directory: flowengine/flow-editor
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: flowengine/flow-editor/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test:run
+
+      - name: Build
+        run: npm run build
+
+  # FlowEngine 后端
+  flowengine_backend:
+    name: FlowEngine Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flowengine/packages/fdl-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: flowengine/packages/fdl-rust -> target
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Tests
+        run: cargo test --workspace --locked
+
+      - name: Build release
+        run: cargo build --workspace --locked --release
+
+  # FlowEngine 镜像构建
+  flowengine_images:
+    name: FlowEngine Images
+    runs-on: ubuntu-latest
+    needs:
+      - flowengine_frontend
+      - flowengine_backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build flow-editor image
+        uses: docker/build-push-action@v6
+        with:
+          context: flowengine/flow-editor
+          file: flowengine/flow-editor/Dockerfile
+          tags: flowengine/flow-editor:ci-${{ github.sha }}
+          outputs: type=docker,dest=/tmp/flowengine-frontend.tar
+          cache-from: type=gha,scope=flowengine-frontend
+          cache-to: type=gha,mode=max,scope=flowengine-frontend
+
+      - name: Upload flow-editor image
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowengine-frontend-image
+          path: /tmp/flowengine-frontend.tar
+
+      - name: Build fdl-runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: flowengine/packages/fdl-rust
+          file: flowengine/packages/fdl-rust/Dockerfile
+          tags: flowengine/fdl-runtime:ci-${{ github.sha }}
+          outputs: type=docker,dest=/tmp/flowengine-backend.tar
+          cache-from: type=gha,scope=flowengine-backend
+          cache-to: type=gha,mode=max,scope=flowengine-backend
+
+      - name: Upload fdl-runtime image
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowengine-backend-image
+          path: /tmp/flowengine-backend.tar
