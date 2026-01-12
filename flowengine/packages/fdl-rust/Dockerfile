@@ -1,6 +1,13 @@
 FROM rust:slim AS builder
 WORKDIR /app
 
+# 安装构建依赖：pkg-config 和 OpenSSL 开发库
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        pkg-config \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 RUN cargo build --release -p fdl-runtime --locked
 
