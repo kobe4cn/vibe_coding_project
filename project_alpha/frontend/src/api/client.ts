@@ -49,7 +49,38 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error: ApiError = await response.json();
+      // 安全地解析错误响应，处理空响应或非 JSON 响应
+      const contentType = response.headers.get('content-type');
+      let error: ApiError;
+      
+      if (contentType?.includes('application/json')) {
+        const text = await response.text();
+        if (text) {
+          try {
+            error = JSON.parse(text);
+          } catch {
+            // 如果 JSON 解析失败，使用默认错误
+            error = {
+              error: 'parse_error',
+              message: `服务器返回了无效的 JSON 响应 (状态码: ${response.status})`,
+            };
+          }
+        } else {
+          // 空响应体
+          error = {
+            error: 'empty_response',
+            message: `服务器返回了空响应 (状态码: ${response.status})`,
+          };
+        }
+      } else {
+        // 非 JSON 响应（可能是 HTML 错误页面）
+        const text = await response.text();
+        error = {
+          error: 'invalid_response',
+          message: text || `服务器返回了非 JSON 响应 (状态码: ${response.status})`,
+        };
+      }
+      
       throw new ApiClientError(response.status, error);
     }
 
@@ -90,11 +121,50 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error: ApiError = await response.json();
+      // 安全地解析错误响应，处理空响应或非 JSON 响应
+      const contentType = response.headers.get('content-type');
+      let error: ApiError;
+      
+      if (contentType?.includes('application/json')) {
+        const text = await response.text();
+        if (text) {
+          try {
+            error = JSON.parse(text);
+          } catch {
+            // 如果 JSON 解析失败，使用默认错误
+            error = {
+              error: 'parse_error',
+              message: `服务器返回了无效的 JSON 响应 (状态码: ${response.status})`,
+            };
+          }
+        } else {
+          // 空响应体
+          error = {
+            error: 'empty_response',
+            message: `服务器返回了空响应 (状态码: ${response.status})`,
+          };
+        }
+      } else {
+        // 非 JSON 响应（可能是 HTML 错误页面）
+        const text = await response.text();
+        error = {
+          error: 'invalid_response',
+          message: text || `服务器返回了非 JSON 响应 (状态码: ${response.status})`,
+        };
+      }
+      
       throw new ApiClientError(response.status, error);
     }
 
-    return response.json();
+    // 安全地解析成功响应
+    const text = await response.text();
+    if (!text) return {} as T;
+    try {
+      return JSON.parse(text);
+    } catch {
+      // 如果响应不是有效的 JSON，返回空对象
+      return {} as T;
+    }
   }
 
   downloadUrl(path: string): string {

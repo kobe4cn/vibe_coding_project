@@ -159,7 +159,20 @@ export class A2UISurface extends LitElement {
     const selectedPath = `/app/tickets/filters/${id}/selected`;
     const selectedValue = this.dataModel.get(selectedPath);
     // Handle both string "true" and boolean true
-    const isSelected = selectedValue === 'true' || selectedValue === true;
+    let isSelected = selectedValue === 'true' || selectedValue === true;
+
+    // Form priority buttons (create/edit ticket forms)
+    const isFormPriorityButton = id.startsWith('priority-') || id.startsWith('edit-priority-');
+    if (isFormPriorityButton) {
+      const formPath = id.startsWith('edit-priority-')
+        ? '/app/form/edit/priority'
+        : '/app/form/create/priority';
+      const currentPriority = this.dataModel.get(formPath) as string | undefined;
+      const buttonPriority = id
+        .replace('edit-priority-', '')
+        .replace('priority-', '');
+      isSelected = currentPriority === buttonPriority;
+    }
 
     // Check if pagination button is enabled
     let isDisabled = false;

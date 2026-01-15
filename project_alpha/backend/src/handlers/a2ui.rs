@@ -441,29 +441,31 @@ async fn fetch_tickets_with_details(
 ) -> Result<(Vec<ValueMap>, i64), AppError> {
     let offset = (page - 1) * page_size;
 
-    // Build query with filters
-    let mut query = String::from(
-        "SELECT t.*, COALESCE(MAX(th.created_at), t.updated_at) as last_activity FROM tickets t LEFT JOIN ticket_history th ON t.id = th.ticket_id WHERE 1=1",
-    );
-    let mut count_query = String::from("SELECT COUNT(*) FROM tickets WHERE 1=1");
+    // Build query with filters using proper parameter binding
+    let mut query_parts = vec!["SELECT t.*, COALESCE(MAX(th.created_at), t.updated_at) as last_activity FROM tickets t LEFT JOIN ticket_history th ON t.id = th.ticket_id WHERE 1=1".to_string()];
+    let mut count_query_parts = vec!["SELECT COUNT(*) FROM tickets t WHERE 1=1".to_string()];
     let mut params: Vec<String> = Vec::new();
+    let mut param_idx = 1;
 
     if !search.is_empty() {
         params.push(format!("%{}%", search));
-        let param_idx = params.len();
-        query.push_str(&format!(" AND t.title ILIKE ${}", param_idx));
-        count_query.push_str(&format!(" AND title ILIKE ${}", param_idx));
+        query_parts.push(format!(" AND t.title ILIKE ${}", param_idx));
+        count_query_parts.push(format!(" AND t.title ILIKE ${}", param_idx));
+        param_idx += 1;
     }
 
     if !status.is_empty() {
         params.push(status.to_string());
-        let param_idx = params.len();
-        query.push_str(&format!(" AND t.status = ${}", param_idx));
-        count_query.push_str(&format!(" AND status = ${}", param_idx));
+        query_parts.push(format!(" AND t.status = ${}", param_idx));
+        count_query_parts.push(format!(" AND t.status = ${}", param_idx));
+        // 最后一个条件后不再需要递增 param_idx，因为不会再有更多参数
     }
 
-    query.push_str(" GROUP BY t.id ORDER BY t.created_at DESC");
-    query.push_str(&format!(" LIMIT {} OFFSET {}", page_size, offset));
+    query_parts.push(" GROUP BY t.id ORDER BY t.created_at DESC".to_string());
+    query_parts.push(format!(" LIMIT {} OFFSET {}", page_size, offset));
+
+    let query = query_parts.join(" ");
+    let count_query = count_query_parts.join(" ");
 
     // Get total count
     let mut count_q = sqlx::query_scalar::<_, i64>(&count_query);
@@ -869,7 +871,28 @@ pub async fn ticket_edit_action(
 ) -> Result<Json<serde_json::Value>, AppError> {
     info!("Received edit action: {}", action.name);
 
-    Ok(Json(serde_json::json!({ "success": true })))
+    match action.name.as_str() {
+        "select_priority" => {
+            // Update priority in data model for edit form
+            let priority = action
+                .context
+                .get("priority")
+                .and_then(|v| v.as_str())
+                .unwrap_or("medium")
+                .to_string();
+
+            // Return dataUpdate using value format for single field update
+            // This directly sets /app/form/edit/priority instead of /app/form/edit/priority/value
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "dataUpdate": {
+                    "path": "/app/form/edit/priority",
+                    "value": priority
+                }
+            })))
+        }
+        _ => Ok(Json(serde_json::json!({ "success": true }))),
+    }
 }
 
 // ============================================================================
@@ -1612,14 +1635,13 @@ pub async fn ticket_create_action(
                 .unwrap_or("medium")
                 .to_string();
 
-            // Return dataUpdate in format expected by frontend
+            // Return dataUpdate using value format for single field update
+            // This directly sets /app/form/create/priority instead of /app/form/create/priority/value
             Ok(Json(serde_json::json!({
                 "success": true,
                 "dataUpdate": {
-                    "path": "/app/form/create",
-                    "items": [
-                        {"id": "priority", "value": priority}
-                    ]
+                    "path": "/app/form/create/priority",
+                    "value": priority
                 }
             })))
         }

@@ -124,6 +124,51 @@ async fn execute_tool_call(
 // 通用辅助函数
 // ============================================================================
 
+/// 对 URI 中的 ${varName} 或 ${expression} 进行变量插值
+///
+/// 支持的格式：
+/// - `${varName}` - 简单变量引用
+/// - `${obj.field}` - 对象属性访问
+/// - `${expression}` - GML 表达式
+///
+/// # Examples
+/// ```
+/// // URI: oss://bucket/${customerId}/file-${timestamp}.json
+/// // eval_ctx 包含: { customerId: "C001", timestamp: 1234567890 }
+/// // 结果: oss://bucket/C001/file-1234567890.json
+/// ```
+fn interpolate_uri(uri: &str, eval_ctx: &Value) -> String {
+    use regex::Regex;
+
+    // 匹配 ${...} 模式
+    let re = Regex::new(r"\$\{([^}]+)\}").expect("Invalid regex pattern");
+
+    let result = re.replace_all(uri, |caps: &regex::Captures| {
+        let expr = &caps[1];
+        // 尝试作为 GML 表达式求值
+        match fdl_gml::evaluate(expr, eval_ctx) {
+            Ok(value) => match value {
+                Value::String(s) => s,
+                Value::Int(i) => i.to_string(),
+                Value::Float(f) => f.to_string(),
+                Value::Bool(b) => b.to_string(),
+                Value::Null => "null".to_string(),
+                _ => {
+                    // 复杂类型序列化为 JSON
+                    serde_json::to_string(&gml_value_to_json(&value)).unwrap_or_default()
+                }
+            },
+            Err(e) => {
+                tracing::warn!("Failed to evaluate URI variable '{}': {:?}", expr, e);
+                // 保留原始占位符以便调试
+                caps[0].to_string()
+            }
+        }
+    });
+
+    result.to_string()
+}
+
 /// 获取后续节点列表
 fn get_next_nodes(node: &FlowNode) -> Vec<String> {
     let mut next = Vec::new();
@@ -348,28 +393,49 @@ pub async fn execute_oss_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let oss_uri = node.oss.as_ref().ok_or_else(|| {
+    let oss_uri_template = node.oss.as_ref().ok_or_else(|| {
         ExecutorError::InvalidFlow(format!("OSS node '{}' missing OSS URI", node_id))
     })?;
 
     // 构建评估上下文
     let eval_ctx = context.read().await.build_eval_context();
 
-    // 评估参数
+    // 先评估参数（可能包含 URI 插值需要的变量，如 timestamp = timestamp()）
     let args = if let Some(args_expr) = &node.args {
         fdl_gml::evaluate(args_expr, &eval_ctx)?
     } else {
         Value::Object(HashMap::new())
     };
 
+    // 将 args 中的变量合并到 eval_ctx，用于 URI 插值
+    // 这样 URI 中的 ${timestamp} 可以引用 args 中定义的 timestamp = timestamp()
+    let uri_eval_ctx = if let Value::Object(args_map) = &args {
+        let mut ctx_map = eval_ctx.as_object().cloned().unwrap_or_default();
+        for (k, v) in args_map {
+            ctx_map.insert(k.clone(), v.clone());
+        }
+        Value::Object(ctx_map)
+    } else {
+        eval_ctx.clone()
+    };
+
+    // 对 URI 进行变量插值（处理 ${varName} 模式）
+    let oss_uri = interpolate_uri(oss_uri_template, &uri_eval_ctx);
+    tracing::debug!(
+        "OSS URI interpolated: '{}' -> '{}' (node: {})",
+        oss_uri_template,
+        oss_uri,
+        node_id
+    );
+
     // 尝试通过工具注册表执行
     let result =
-        if let Some(tool_result) = execute_tool_call(oss_uri, &args, &context, node_id).await? {
+        if let Some(tool_result) = execute_tool_call(&oss_uri, &args, &context, node_id).await? {
             tool_result
         } else {
             // 没有注册表或工具未找到，使用模拟数据
             Value::object([
-                ("uri", Value::string(oss_uri.clone())),
+                ("uri", Value::string(oss_uri)),
                 ("success", Value::bool(true)),
                 ("operation", Value::string("mock")),
                 ("args", args),
@@ -403,28 +469,48 @@ pub async fn execute_mq_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let mq_uri = node.mq.as_ref().ok_or_else(|| {
+    let mq_uri_template = node.mq.as_ref().ok_or_else(|| {
         ExecutorError::InvalidFlow(format!("MQ node '{}' missing MQ URI", node_id))
     })?;
 
     // 构建评估上下文
     let eval_ctx = context.read().await.build_eval_context();
 
-    // 评估参数
+    // 先评估参数（可能包含 URI 插值需要的变量）
     let args = if let Some(args_expr) = &node.args {
         fdl_gml::evaluate(args_expr, &eval_ctx)?
     } else {
         Value::Object(HashMap::new())
     };
 
+    // 将 args 中的变量合并到 eval_ctx，用于 URI 插值
+    let uri_eval_ctx = if let Value::Object(args_map) = &args {
+        let mut ctx_map = eval_ctx.as_object().cloned().unwrap_or_default();
+        for (k, v) in args_map {
+            ctx_map.insert(k.clone(), v.clone());
+        }
+        Value::Object(ctx_map)
+    } else {
+        eval_ctx.clone()
+    };
+
+    // 对 URI 进行变量插值（处理 ${varName} 模式）
+    let mq_uri = interpolate_uri(mq_uri_template, &uri_eval_ctx);
+    tracing::debug!(
+        "MQ URI interpolated: '{}' -> '{}' (node: {})",
+        mq_uri_template,
+        mq_uri,
+        node_id
+    );
+
     // 尝试通过工具注册表执行
     let result =
-        if let Some(tool_result) = execute_tool_call(mq_uri, &args, &context, node_id).await? {
+        if let Some(tool_result) = execute_tool_call(&mq_uri, &args, &context, node_id).await? {
             tool_result
         } else {
             // 没有注册表或工具未找到，使用模拟数据
             Value::object([
-                ("uri", Value::string(mq_uri.clone())),
+                ("uri", Value::string(mq_uri)),
                 ("success", Value::bool(true)),
                 (
                     "messageId",
@@ -462,7 +548,7 @@ pub async fn execute_mail_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let mail_config = node.mail.as_ref().ok_or_else(|| {
+    let mail_config_template = node.mail.as_ref().ok_or_else(|| {
         ExecutorError::InvalidFlow(format!(
             "Mail node '{}' missing mail configuration",
             node_id
@@ -472,19 +558,41 @@ pub async fn execute_mail_node(
     // 构建评估上下文
     let eval_ctx = context.read().await.build_eval_context();
 
-    // 评估邮件配置参数
-    let mail_params = if mail_config.starts_with('{') || mail_config.contains('=') {
-        fdl_gml::evaluate(mail_config, &eval_ctx)?
-    } else if !mail_config.starts_with("mail://") {
-        // 简单收件人地址
-        Value::object([("to", Value::string(mail_config.clone()))])
+    // 先评估额外参数（可能包含 URI 插值需要的变量）
+    let mut args = if let Some(args_expr) = &node.args {
+        fdl_gml::evaluate(args_expr, &eval_ctx)?
     } else {
         Value::Object(HashMap::new())
     };
 
-    // 评估额外参数并与 mail_params 合并
-    let mut args = if let Some(args_expr) = &node.args {
-        fdl_gml::evaluate(args_expr, &eval_ctx)?
+    // 将 args 中的变量合并到 eval_ctx，用于 URI 插值
+    let uri_eval_ctx = if let Value::Object(args_map) = &args {
+        let mut ctx_map = eval_ctx.as_object().cloned().unwrap_or_default();
+        for (k, v) in args_map {
+            ctx_map.insert(k.clone(), v.clone());
+        }
+        Value::Object(ctx_map)
+    } else {
+        eval_ctx.clone()
+    };
+
+    // 对 URI 进行变量插值（处理 ${varName} 模式）
+    let mail_config = interpolate_uri(mail_config_template, &uri_eval_ctx);
+    if mail_config != *mail_config_template {
+        tracing::debug!(
+            "Mail config interpolated: '{}' -> '{}' (node: {})",
+            mail_config_template,
+            mail_config,
+            node_id
+        );
+    }
+
+    // 评估邮件配置参数
+    let mail_params = if mail_config.starts_with('{') || mail_config.contains('=') {
+        fdl_gml::evaluate(&mail_config, &uri_eval_ctx)?
+    } else if !mail_config.starts_with("mail://") {
+        // 简单收件人地址
+        Value::object([("to", Value::string(mail_config.clone()))])
     } else {
         Value::Object(HashMap::new())
     };
@@ -498,13 +606,13 @@ pub async fn execute_mail_node(
 
     // 如果是 mail:// URI，尝试通过注册表执行
     let result = if mail_config.starts_with("mail://") {
-        if let Some(tool_result) = execute_tool_call(mail_config, &args, &context, node_id).await? {
+        if let Some(tool_result) = execute_tool_call(&mail_config, &args, &context, node_id).await? {
             tool_result
         } else {
             // 没有注册表或工具未找到，使用模拟数据
             Value::object([
                 ("success", Value::bool(true)),
-                ("uri", Value::string(mail_config.clone())),
+                ("uri", Value::string(mail_config)),
                 ("args", args),
                 (
                     "messageId",
@@ -554,16 +662,45 @@ pub async fn execute_sms_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let sms_config = node.sms.as_ref().ok_or_else(|| {
+    let sms_config_template = node.sms.as_ref().ok_or_else(|| {
         ExecutorError::InvalidFlow(format!("SMS node '{}' missing SMS configuration", node_id))
     })?;
 
     // 构建评估上下文
     let eval_ctx = context.read().await.build_eval_context();
 
+    // 先评估额外参数（可能包含 URI 插值需要的变量）
+    let mut args = if let Some(args_expr) = &node.args {
+        fdl_gml::evaluate(args_expr, &eval_ctx)?
+    } else {
+        Value::Object(HashMap::new())
+    };
+
+    // 将 args 中的变量合并到 eval_ctx，用于 URI 插值
+    let uri_eval_ctx = if let Value::Object(args_map) = &args {
+        let mut ctx_map = eval_ctx.as_object().cloned().unwrap_or_default();
+        for (k, v) in args_map {
+            ctx_map.insert(k.clone(), v.clone());
+        }
+        Value::Object(ctx_map)
+    } else {
+        eval_ctx.clone()
+    };
+
+    // 对 URI 进行变量插值（处理 ${varName} 模式）
+    let sms_config = interpolate_uri(sms_config_template, &uri_eval_ctx);
+    if sms_config != *sms_config_template {
+        tracing::debug!(
+            "SMS config interpolated: '{}' -> '{}' (node: {})",
+            sms_config_template,
+            sms_config,
+            node_id
+        );
+    }
+
     // 评估短信配置参数
     let sms_params = if sms_config.starts_with('{') || sms_config.contains('=') {
-        fdl_gml::evaluate(sms_config, &eval_ctx)?
+        fdl_gml::evaluate(&sms_config, &uri_eval_ctx)?
     } else if !sms_config.starts_with("sms://") {
         // 简单手机号
         Value::object([("phone", Value::string(sms_config.clone()))])
@@ -571,30 +708,22 @@ pub async fn execute_sms_node(
         Value::Object(HashMap::new())
     };
 
-    // 评估额外参数并与 sms_params 合并
-    let mut args = if let Some(args_expr) = &node.args {
-        fdl_gml::evaluate(args_expr, &eval_ctx)?
-    } else {
-        Value::Object(HashMap::new())
-    };
-
     // 合并 sms_params 到 args
     if let (Value::Object(args_map), Value::Object(params_map)) = (&mut args, sms_params.clone()) {
         for (k, v) in params_map {
-            //
             args_map.entry(k).or_insert(v);
         }
     }
 
     // 如果是 sms:// URI，尝试通过注册表执行
     let result = if sms_config.starts_with("sms://") {
-        if let Some(tool_result) = execute_tool_call(sms_config, &args, &context, node_id).await? {
+        if let Some(tool_result) = execute_tool_call(&sms_config, &args, &context, node_id).await? {
             tool_result
         } else {
             // 没有注册表或工具未找到，使用模拟数据
             Value::object([
                 ("success", Value::bool(true)),
-                ("uri", Value::string(sms_config.clone())),
+                ("uri", Value::string(sms_config)),
                 ("args", args),
                 (
                     "messageId",
@@ -643,29 +772,49 @@ pub async fn execute_service_node(
     node: &FlowNode,
     context: Arc<RwLock<ExecutionContext>>,
 ) -> ExecutorResult<Vec<String>> {
-    let service_uri = node.service.as_ref().ok_or_else(|| {
+    let service_uri_template = node.service.as_ref().ok_or_else(|| {
         ExecutorError::InvalidFlow(format!("Service node '{}' missing service URI", node_id))
     })?;
 
     // 构建评估上下文
     let eval_ctx = context.read().await.build_eval_context();
 
-    // 评估参数
+    // 先评估参数（可能包含 URI 插值需要的变量）
     let args = if let Some(args_expr) = &node.args {
         fdl_gml::evaluate(args_expr, &eval_ctx)?
     } else {
         Value::Object(HashMap::new())
     };
 
+    // 将 args 中的变量合并到 eval_ctx，用于 URI 插值
+    let uri_eval_ctx = if let Value::Object(args_map) = &args {
+        let mut ctx_map = eval_ctx.as_object().cloned().unwrap_or_default();
+        for (k, v) in args_map {
+            ctx_map.insert(k.clone(), v.clone());
+        }
+        Value::Object(ctx_map)
+    } else {
+        eval_ctx.clone()
+    };
+
+    // 对 URI 进行变量插值（处理 ${varName} 模式）
+    let service_uri = interpolate_uri(service_uri_template, &uri_eval_ctx);
+    tracing::debug!(
+        "Service URI interpolated: '{}' -> '{}' (node: {})",
+        service_uri_template,
+        service_uri,
+        node_id
+    );
+
     // 尝试通过工具注册表执行
     let result = if let Some(tool_result) =
-        execute_tool_call(service_uri, &args, &context, node_id).await?
+        execute_tool_call(&service_uri, &args, &context, node_id).await?
     {
         tool_result
     } else {
         // 没有注册表或工具未找到，使用模拟数据
         Value::object([
-            ("uri", Value::string(service_uri.clone())),
+            ("uri", Value::string(service_uri)),
             ("success", Value::bool(true)),
             ("args", args),
             ("response", Value::Null),
@@ -699,6 +848,98 @@ pub async fn execute_service_node(
 mod tests {
     use super::*;
     use crate::context::ExecutionContext;
+
+    // ========================================================================
+    // interpolate_uri 单元测试
+    // ========================================================================
+
+    #[test]
+    fn test_interpolate_uri_simple_variable() {
+        let eval_ctx = Value::object([
+            ("customerId", Value::string("C001")),
+            ("timestamp", Value::int(1234567890)),
+        ]);
+
+        let uri = "oss://bucket/${customerId}/file-${timestamp}.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, "oss://bucket/C001/file-1234567890.json");
+    }
+
+    #[test]
+    fn test_interpolate_uri_nested_property() {
+        let user = Value::object([
+            ("id", Value::string("U123")),
+            ("name", Value::string("张三")),
+        ]);
+        let eval_ctx = Value::object([("user", user)]);
+
+        let uri = "oss://reports/${user.id}/profile.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, "oss://reports/U123/profile.json");
+    }
+
+    #[test]
+    fn test_interpolate_uri_expression() {
+        let eval_ctx = Value::object([
+            ("orderId", Value::int(100)),
+            ("version", Value::int(2)),
+        ]);
+
+        // 测试简单表达式
+        let uri = "oss://orders/order-${orderId}.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, "oss://orders/order-100.json");
+    }
+
+    #[test]
+    fn test_interpolate_uri_no_variables() {
+        let eval_ctx = Value::Object(HashMap::new());
+        let uri = "oss://static-bucket/fixed-path.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, uri);
+    }
+
+    #[test]
+    fn test_interpolate_uri_undefined_variable() {
+        let eval_ctx = Value::object([("name", Value::string("test"))]);
+
+        // 未定义的变量，GML 会返回 null
+        let uri = "oss://bucket/${undefined_var}/file.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        // 未定义变量求值结果为 null
+        assert_eq!(result, "oss://bucket/null/file.json");
+    }
+
+    #[test]
+    fn test_interpolate_uri_boolean_value() {
+        let eval_ctx = Value::object([("isActive", Value::bool(true))]);
+
+        let uri = "oss://flags/${isActive}.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, "oss://flags/true.json");
+    }
+
+    #[test]
+    fn test_interpolate_uri_float_value() {
+        let eval_ctx = Value::object([("price", Value::float(99.99))]);
+
+        let uri = "oss://prices/${price}.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, "oss://prices/99.99.json");
+    }
+
+    #[test]
+    fn test_interpolate_uri_multiple_same_variable() {
+        let eval_ctx = Value::object([("id", Value::string("ABC"))]);
+
+        let uri = "oss://${id}/path/${id}/file-${id}.json";
+        let result = interpolate_uri(uri, &eval_ctx);
+        assert_eq!(result, "oss://ABC/path/ABC/file-ABC.json");
+    }
+
+    // ========================================================================
+    // 节点执行测试
+    // ========================================================================
 
     #[tokio::test]
     async fn test_guard_node_basic() {
@@ -760,5 +1001,88 @@ mod tests {
         let ctx = context.read().await;
         let output = ctx.get_variable("mq1");
         assert!(output.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_oss_node_with_uri_interpolation() {
+        let mut ctx = ExecutionContext::new();
+        ctx.tenant_id = "test-tenant".to_string();
+        ctx.bu_code = "test-bu".to_string();
+
+        // 设置变量用于插值
+        ctx.set_global("customerId", Value::string("C12345"));
+        ctx.set_global("timestamp", Value::int(1704067200));
+
+        let context = Arc::new(RwLock::new(ctx));
+
+        let node = FlowNode {
+            oss: Some("oss://customer-reports/${customerId}/view-${timestamp}.json".to_string()),
+            args: Some("operation = 'upload', content = 'test data'".to_string()),
+            next: Some("next_node".to_string()),
+            ..Default::default()
+        };
+
+        let result = execute_oss_node("oss1", &node, context.clone()).await;
+        assert!(result.is_ok());
+
+        let ctx = context.read().await;
+        let output = ctx.get_variable("oss1").unwrap();
+
+        // 验证 URI 已被正确插值
+        if let Value::Object(obj) = output {
+            if let Some(Value::String(uri)) = obj.get("uri") {
+                assert!(
+                    uri.contains("C12345"),
+                    "URI should contain customerId 'C12345', got: {}",
+                    uri
+                );
+                assert!(
+                    uri.contains("1704067200"),
+                    "URI should contain timestamp '1704067200', got: {}",
+                    uri
+                );
+                assert!(
+                    !uri.contains("${"),
+                    "URI should not contain unresolved variables, got: {}",
+                    uri
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mq_node_with_uri_interpolation() {
+        let mut ctx = ExecutionContext::new();
+        ctx.tenant_id = "test-tenant".to_string();
+        ctx.bu_code = "test-bu".to_string();
+
+        // 设置变量用于插值
+        ctx.set_global("eventType", Value::string("order_created"));
+
+        let context = Arc::new(RwLock::new(ctx));
+
+        let node = FlowNode {
+            mq: Some("mq://events/${eventType}".to_string()),
+            args: Some("message = 'test message'".to_string()),
+            next: Some("next_node".to_string()),
+            ..Default::default()
+        };
+
+        let result = execute_mq_node("mq1", &node, context.clone()).await;
+        assert!(result.is_ok());
+
+        let ctx = context.read().await;
+        let output = ctx.get_variable("mq1").unwrap();
+
+        // 验证 URI 已被正确插值
+        if let Value::Object(obj) = output {
+            if let Some(Value::String(uri)) = obj.get("uri") {
+                assert!(
+                    uri.contains("order_created"),
+                    "URI should contain eventType 'order_created', got: {}",
+                    uri
+                );
+            }
+        }
     }
 }

@@ -5,7 +5,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { A2UISurface, A2UISurfaceRef, useA2UIContext, useA2UIValue } from '@/a2ui';
+import { A2UISurface, A2UISurfaceRef, useA2UIContext } from '@/a2ui';
 import { TagSelector } from '@/components/tag/TagSelector';
 import { useTags } from '@/hooks/useTicket';
 
@@ -17,8 +17,6 @@ export default function TicketCreatePage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const submitHandledRef = useRef(false);
   
-  // Get current priority value to highlight selected button
-  const formPriority = useA2UIValue<string>('/app/form/create/priority');
   const [isReady, setIsReady] = useState(false);
   const initDoneRef = useRef(false);
 
@@ -41,9 +39,7 @@ export default function TicketCreatePage() {
 
       // Look for A2UI card or priority buttons inside Shadow DOM
       const card = shadowRoot.querySelector('a2ui-card');
-      const btn = shadowRoot.getElementById('priority-medium');
-      
-      if (card && btn) {
+      if (card) {
         initDoneRef.current = true;
         setIsReady(true);
         
@@ -51,9 +47,6 @@ export default function TicketCreatePage() {
         (card as HTMLElement).style.borderBottomLeftRadius = '0';
         (card as HTMLElement).style.borderBottomRightRadius = '0';
         (card as HTMLElement).style.borderBottom = 'none';
-        
-        // Set initial priority highlight
-        btn.setAttribute('data-selected', 'true');
       } else {
         setTimeout(checkReady, 100);
       }
@@ -61,25 +54,6 @@ export default function TicketCreatePage() {
 
     checkReady();
   }, []);
-
-  // Update button highlight when priority changes
-  useEffect(() => {
-    if (!isReady) return;
-    
-    const shadowRoot = getShadowRoot();
-    if (!shadowRoot) return;
-    
-    const priority = formPriority || 'medium';
-    // Remove selected class from all priority buttons
-    shadowRoot.querySelectorAll('[id^="priority-"]').forEach((btn) => {
-      btn.removeAttribute('data-selected');
-    });
-    // Add selected class to current priority button
-    const selectedBtn = shadowRoot.getElementById(`priority-${priority}`);
-    if (selectedBtn) {
-      selectedBtn.setAttribute('data-selected', 'true');
-    }
-  }, [formPriority, isReady]);
 
   const handleAction = (action: { name: string; context?: { key: string; value: unknown }[] }) => {
     switch (action.name) {
@@ -105,7 +79,7 @@ export default function TicketCreatePage() {
     // Get form values from A2UI context
     const title = (getValue('/app/form/create/title') as string) || '';
     const description = (getValue('/app/form/create/description') as string) || '';
-    const priority = formPriority || 'medium';
+    const priority = (getValue('/app/form/create/priority') as string) || 'medium';
 
     if (!title.trim()) {
       alert('标题不能为空');
